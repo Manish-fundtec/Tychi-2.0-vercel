@@ -1,76 +1,81 @@
-'use client' // ✅ Ensure this is a client component
+'use client' // ✅ Ensures this is a client-side component
 
-import dynamic from 'next/dynamic' // ✅ Fix "window is not defined"
-import PageTitle from '@/components/PageTitle'
-import { ToggleBetweenModals } from '@/app/(admin)/base-ui/modals/components/AllModals';
-import IconifyIcon from '@/components/wrappers/IconifyIcon'
-import { getAllReview } from '@/helpers/data'
-import Image from 'next/image'
-import Link from 'next/link'
-import { AgGridReact } from 'ag-grid-react'
-import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community'
-import { useState } from 'react'
-import colmdefs from '@/assets/tychiData/columnDefs'; 
-ModuleRegistry.registerModules([AllCommunityModule])
+// import dynamic from 'next/dynamic' // ✅ Fix "window is not defined"
+import { useEffect, useState } from 'react'
+// import { ToggleBetweenModals } from '@/app/(admin)/base-ui/modals/components/AllModals'
+import colmdefs from '@/assets/tychiData/columnDefs'
+import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community'
 import {
-  Button,
   Card,
   CardBody,
-  CardFooter,
   CardHeader,
   CardTitle,
   Col,
   Dropdown,
-  DropdownItem,
-  DropdownMenu,
-  DropdownToggle,
   Row,
-  Modal,
 } from 'react-bootstrap'
+
+// ✅ Register Ag-Grid Modules
+ModuleRegistry.registerModules([AllCommunityModule])
+
+// ✅ Dynamically Import AgGridReact to Prevent SSR Issues
+const AgGridReact = dynamic(() => import('ag-grid-react').then(mod => mod.AgGridReact), {
+  ssr: false, // ✅ Ensures it only loads on the client-side
+})
+const ToggleBetweenModals = dynamic(
+  () => import('@/app/(admin)/base-ui/modals/components/AllModals').then((mod) => mod.ToggleBetweenModals),
+  { ssr: false } // ✅ Ensures it only loads on the client-side
+);
+
+export const dynamic = "force-dynamic"; // ✅ Prevents Next.js from trying to statically export
 
 
 const ReviewsPage = () => {
-  // Dummy data for rows
+  // ✅ Dummy data for rows
   const dummyRowData = [
     { srNo: 1, month: 'January', date: '2025-01-01', status: 'Pending' },
-  { srNo: 2, month: 'February', date: '2025-02-14', status: 'Completed' },
-  ];
-  const [rowData] = useState(dummyRowData) // Set dummy data as initial state
+    { srNo: 2, month: 'February', date: '2025-02-14', status: 'Completed' },
+  ]
+
+  const [rowData, setRowData] = useState([])
+  const [columnDefs, setColumnDefs] = useState([])
+
+  // ✅ Load Data on Client-Side to Prevent SSR Issues
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setColumnDefs(colmdefs.pricingColDefs);
+    }
+  }, []);
 
   return (
-    <>
-      <Row>
-        <Col xl={12}>
-          <Card>
-            <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
-              <CardTitle as={'h4'}>Valuation</CardTitle>
-              <Dropdown>
+    <Row>
+      <Col xl={12}>
+        <Card>
+          <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
+            <CardTitle as="h4">Valuation</CardTitle>
+            <Dropdown>
               <ToggleBetweenModals />
-              </Dropdown>
-            </CardHeader>
-            <CardBody className="p-2">
-              <div
-                className="ag-theme-alpine"
-                style={{
-                  height: 550,
-                  width: '100%',
-                }}>
+            </Dropdown>
+          </CardHeader>
+          <CardBody className="p-2">
+            <div className="ag-theme-alpine" style={{ height: 550, width: '100%' }}>
+              {/* ✅ Ensure AgGrid only renders when columnDefs are ready */}
+              {columnDefs.length > 0 && (
                 <AgGridReact
-                  rowData={rowData} // Data for rows
-                  columnDefs={colmdefs.pricingColDefs} // Column definitions
-                  pagination={true} // Enable pagination
-                  paginationPageSize={10} // Set page size
-                  defaultColDef={
-                    colmdefs.defaultColDef
-                  }
+                  rowData={rowData}
+                  columnDefs={columnDefs}
+                  pagination={true}
+                  paginationPageSize={10}
+                  defaultColDef={colmdefs.defaultColDef}
                 />
-              </div>
-            </CardBody>
-           
-          </Card>
-        </Col>
-      </Row>
-    </>
+              )}
+            </div>
+          </CardBody>
+        </Card>
+      </Col>
+    </Row>
   )
 }
+
 export default ReviewsPage
+
