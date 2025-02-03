@@ -1,4 +1,6 @@
-'use client'
+'use client' // ✅ Ensure this is a client component
+
+import dynamic from 'next/dynamic' // ✅ Fix "window is not defined"
 import PageTitle from '@/components/PageTitle'
 import { ToggleBetweenModals } from '@/app/(admin)/base-ui/modals/components/AllModals';
 import IconifyIcon from '@/components/wrappers/IconifyIcon'
