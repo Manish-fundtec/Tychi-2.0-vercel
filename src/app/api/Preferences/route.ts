@@ -10,7 +10,15 @@ export async function GET(request: Request) {
     const table = searchParams.get("table");
 
     const userPreferences = await UserPreferences.findOne({ userId, table });
-    const colDefs = userPreferences ? userPreferences.colDefs : tableColDefs[table];
+    // const colDefs = userPreferences ? userPreferences.colDefs : tableColDefs[table];
+    // Ensure `table` is not null before using it as an index
+    if (!table) {
+      throw new Error("Table cannot be null");
+    }
+
+    const colDefs = userPreferences 
+    ? userPreferences.colDefs 
+    : tableColDefs[table as keyof typeof tableColDefs];
 
     return new Response(JSON.stringify({ status: "success", colDefs }), { status: 200 });
   } catch (error) {

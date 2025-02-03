@@ -1,5 +1,5 @@
 import db from "@/lib/mongodb";
-import User from "@/modals/User";
+import User from "../../../modals/user";
 import {NextRequest, NextResponse} from "next/server";
 
 
