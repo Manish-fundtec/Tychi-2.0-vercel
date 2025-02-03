@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community'
-import colmdefs from '@/assets/tychiData/columnDefs'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown } from 'react-bootstrap'
 import { MGLEntryModal } from '../base-ui/modals/components/AllModals'
+import colmdefs from '@/assets/tychiData/columnDefs'
 
-// ✅ Dynamically Import AgGridReact (Prevents SSR Issues)
-const AgGridReact = dynamic(() => import('ag-grid-react').then(mod => mod.AgGridReact), { ssr: false });
+// ✅ Ensure AgGridReact is dynamically imported to prevent SSR issues
+const AgGridReact = dynamic(() => import('ag-grid-react').then(mod => mod.AgGridReact), {
+  ssr: false, // ✅ Disables SSR for this component
+})
 
 ModuleRegistry.registerModules([AllCommunityModule])
 
@@ -17,7 +19,7 @@ const ManualJournalPage = () => {
   const [columnDefs, setColumnDefs] = useState([])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') { // ✅ Prevents SSR issues
       setRowData([
         { srNo: 1, month: 'January', date: '2025-01-01', status: 'Pending' },
         { srNo: 2, month: 'February', date: '2025-02-14', status: 'Completed' },
