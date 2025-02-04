@@ -5,7 +5,7 @@ import { Col, Nav, NavItem, NavLink, Row, Tab, TabContainer, TabContent, TabPane
 import { tabContents } from './data';
 export const NavPills = () => {
     return (
-        <TabContainer defaultActiveKey={'2'}>
+        <TabContainer defaultActiveKey={'1'}>
           <Nav as={'ul'} variant="pills">
             {tabContents.map((tab, idx) => <NavItem as={'li'} key={idx}>
                 <NavLink eventKey={tab.id}>
