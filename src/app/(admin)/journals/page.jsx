@@ -2,29 +2,40 @@
 
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community'
-import colmdefs from '@/assets/tychiData/columnDefs'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown } from 'react-bootstrap'
-import { MGLEntryModal } from '../base-ui/modals/components/AllModals'
 
-// ✅ Dynamically Import AgGridReact (Prevents SSR Issues)
+// ✅ Dynamically Import Components to Prevent SSR Issues
 const AgGridReact = dynamic(() => import('ag-grid-react').then(mod => mod.AgGridReact), { ssr: false });
-
-ModuleRegistry.registerModules([AllCommunityModule])
+const MGLEntryModal = dynamic(() => import('../base-ui/modals/components/AllModals').then(mod => mod.MGLEntryModal), { ssr: false });
 
 const JournalsPage = () => {
-  const [rowData, setRowData] = useState([])
-  const [columnDefs, setColumnDefs] = useState([])
+  const [rowData, setRowData] = useState([]);
+  const [columnDefs, setColumnDefs] = useState([]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') { // ✅ Prevents SSR issues
+    if (typeof window !== 'undefined') {
+      import('@/assets/tychiData/columnDefs')
+        .then((colmdefs) => {
+          setColumnDefs(colmdefs.bookclosureColDefs || []);
+        })
+        .catch((error) => {
+          console.error('Error loading columnDefs:', error);
+          setColumnDefs([]);
+        });
+
       setRowData([
         { srNo: 1, month: 'January', date: '2025-01-01', status: 'Pending' },
         { srNo: 2, month: 'February', date: '2025-02-14', status: 'Completed' },
-      ])
-      setColumnDefs(colmdefs.bookclosureColDefs) // ✅ Ensure the correct columnDefs are used
+      ]);
+
+      // ✅ Move ModuleRegistry inside useEffect
+      import('ag-grid-community')
+        .then(({ ModuleRegistry, AllCommunityModule }) => {
+          ModuleRegistry.registerModules([AllCommunityModule]);
+        })
+        .catch((error) => console.error('Error registering AgGrid modules:', error));
     }
-  }, [])
+  }, []);
 
   return (
     <Row>
@@ -44,7 +55,7 @@ const JournalsPage = () => {
                   columnDefs={columnDefs}
                   pagination={true}
                   paginationPageSize={10}
-                  defaultColDef={colmdefs.defaultColDef}
+                  defaultColDef={{ sortable: true, filter: true }} // ✅ Ensures proper default settings
                 />
               )}
             </div>
@@ -52,7 +63,7 @@ const JournalsPage = () => {
         </Card>
       </Col>
     </Row>
-  )
-}
+  );
+};
 
-export default JournalsPage
+export default JournalsPage;
