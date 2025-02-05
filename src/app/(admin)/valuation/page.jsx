@@ -114,24 +114,33 @@ const ReviewsPage = () => {
         </Col>
       </Row>
 
-      {/* Symbol List Modal */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" centered>
+     {/* Symbol List Modal */}
+     <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" centered>
         <Modal.Header closeButton>
-          <Modal.Title>Symbols for {selectedMonth}</Modal.Title>
+          <Modal.Title>Symbols & Prices for {selectedMonth}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {symbolData[selectedMonth]?.length > 0 ? (
-            <ul className="list-group">
-              {symbolData[selectedMonth].map((symbol, index) => (
-                <li key={index} className="list-group-item d-flex justify-content-between">
-                  <span>
-                    {index + 1}. {symbol}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div className="table-responsive">
+              <table className="table table-bordered table-striped">
+                <thead className="table-light">
+                  <tr>
+                    <th className="text-start">Symbol</th>
+                    <th className="text-end">Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {symbolData[selectedMonth].map((item, index) => (
+                    <tr key={index}>
+                      <td>{item.symbol}</td>
+                      <td className="text-end">${item.price}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-            <p className="text-muted">No symbols available for this month.</p>
+            <p className="text-muted text-center">No symbols available for this month.</p>
           )}
         </Modal.Body>
         <Modal.Footer>
