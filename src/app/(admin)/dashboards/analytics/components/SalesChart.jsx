@@ -11,7 +11,7 @@ const SalesChart = () => {
       <Card className="overflow-hidden">
         <CardHeader className="d-flex justify-content-between align-items-center pb-1">
           <div>
-            <CardTitle as={'h4'}>Sales Analytic</CardTitle>
+            <CardTitle as={'h4'}>Performance Analytics Graph</CardTitle>
           </div>
           <Dropdown>
             <DropdownToggle as={'a'} className="btn btn-sm btn-outline-light rounded content-none icons-center" data-bs-toggle="dropdown" aria-expanded="false">
@@ -27,7 +27,7 @@ const SalesChart = () => {
         <CardBody>
           <div className="text-end">
             <p className="mb-0 fs-18 fw-medium text-dark icons-center">
-              <IconifyIcon icon="ri:wallet-3-fill" className="me-1" /> Earnings : <span className="text-primary fw-bold">&nbsp;{currency}85,934</span>
+              <IconifyIcon icon="ri:wallet-3-fill" className="me-1" />Net Income  : <span className="text-primary fw-bold">&nbsp;{currency}992,895</span>
             </p>
           </div>
           <Row className="align-items-top text-center">
@@ -41,7 +41,7 @@ const SalesChart = () => {
             <Col md={4} className="border-end">
               <p className="text-muted mb-1">Income</p>
               <p className="text-dark fs-18 fw-medium d-flex align-items-center justify-content-center gap-2 mb-0">
-                23,675.00{' '}
+              $ 2,996,908{' '}
                 <span className="badge text-success bg-success-subtle fs-12">
                   <IconifyIcon icon="ri:arrow-up-line" />
                   0.08%
@@ -51,7 +51,7 @@ const SalesChart = () => {
             <Col md={4} className="border-end">
               <p className="text-muted mb-1">Expenses</p>
               <p className="text-dark fs-18 fw-medium d-flex align-items-center justify-content-center gap-2 mb-0">
-                11,562.00{' '}
+              $ 2,004,014{' '}
                 <span className="badge text-danger bg-danger-subtle fs-12">
                   <IconifyIcon icon="ri:arrow-down-line" />
                   5.38%
@@ -59,9 +59,9 @@ const SalesChart = () => {
               </p>
             </Col>
             <Col md={4}>
-              <p className="text-muted mb-1">Balance</p>
+              <p className="text-muted mb-1">Growth (%) </p>
               <p className="text-dark fs-18 fw-medium d-flex align-items-center justify-content-center gap-2 mb-0">
-                67,365.00{' '}
+              7.43%{' '}
                 <span className="badge text-success bg-success-subtle fs-12">
                   <IconifyIcon icon="ri:arrow-up-line" />
                   2.89%

@@ -11,19 +11,19 @@ const BalanceCard = () => {
         <CardBody>
           <Row className="align-items-center justify-content-between">
             <Col xl={7} lg={6} md={6}>
-              <h3 className="text-white fw-bold">{currency}117,000.43</h3>
-              <p className="text-white-50">My Balance</p>
+              <h3 className="text-white fw-bold">{currency}1,200,000.00</h3>
+              <p className="text-white-50">Net Contribution </p>
               <Row className="mt-4">
                 <Col lg={12} className="mb-2" md={6} xs={6}>
                   <div className="d-flex gap-2">
                     <div className="avatar-sm flex-shrink-0">
                       <span className="avatar-title bg-success bg-opacity-50 text-white rounded">
-                        <IconifyIcon icon="ri:arrow-down-line" className=" fs-4" />
+                        <IconifyIcon icon="ri:arrow-up-line" className=" fs-4" />
                       </span>
                     </div>
                     <div className="d-block">
-                      <h5 className="text-white fw-medium mb-0">{currency}13,321.12</h5>
-                      <p className="mb-0 text-white-50">Income</p>
+                      <h5 className="text-white fw-medium mb-0">{currency}2,100,000.00</h5>
+                      <p className="mb-0 text-white-50">Contribution</p>
                     </div>
                   </div>
                 </Col>
@@ -31,12 +31,12 @@ const BalanceCard = () => {
                   <div className="d-flex gap-2">
                     <div className="avatar-sm flex-shrink-0">
                       <span className="avatar-title bg-danger bg-opacity-50 text-white rounded">
-                        <IconifyIcon icon="ri:arrow-up-line" className=" fs-4" />
+                        <IconifyIcon icon="ri:arrow-down-line" className=" fs-4" />
                       </span>
                     </div>
                     <div className="d-block">
-                      <h5 className="text-white fw-medium mb-0">{currency}7,566.11</h5>
-                      <p className="mb-0 text-white-50">Expanse</p>
+                      <h5 className="text-white fw-medium mb-0">{currency}900,000.00</h5>
+                      <p className="mb-0 text-white-50">Redemption</p>
                     </div>
                   </div>
                 </Col>
@@ -44,12 +44,12 @@ const BalanceCard = () => {
               <Row className="mt-3 g-2">
                 <Col xl={6} lg={6} md={6}>
                   <Button variant="warning" size="sm" className="w-100">
-                    Send
+                  Invest
                   </Button>
                 </Col>
                 <Col xl={6} lg={6} md={6}>
                   <Button size="sm" className="bg-light bg-opacity-25 text-white w-100">
-                    Receive
+                  Redeem
                   </Button>
                 </Col>
               </Row>
@@ -72,7 +72,7 @@ const BalanceCard = () => {
                     <IconifyIcon icon={item.icon} width={32} height={32} className={`fs-32 text-${item.variant}`} />
                   </div>
                   <h4 className="text-dark fw-medium">{item.amount}</h4>
-                  <p className="text-muted">{item.progress}% Target</p>
+                  <p className="text-muted">{item.progress}% Complete</p>
                   <ProgressBar animated striped variant={item.variant} now={item.progress} className={`mt-3`} style={{
                 height: 10
               }} role="progressbar" />

@@ -44,14 +44,14 @@
     "moment": "^2.30.1",
     "mongodb": "^6.12.0",
     "mongoose": "^8.9.6",
-    "next": "^14.2.6",
+    "next": "^15.2.2",
     "next-auth": "^4.24.7",
     "nextjs-toploader": "^1.6.12",
     "nouislider-react": "^3.4.2",
-    "react": "^18.3.1",
+    "react": "^19.0.0",
     "react-apexcharts": "^1.4.1",
     "react-bootstrap": "^2.10.4",
-    "react-dom": "^18.3.1",
+    "react-dom": "^19.0.0",
     "react-dropzone": "^14.2.3",
     "react-flatpickr": "^3.10.13",
     "react-hook-form": "^7.53.0",
@@ -76,5 +76,21 @@
     "eslint-config-next": "14.2.6",
     "prettier": "^3.3.3",
     "typescript": "^5.5.4"
-  }
+  },
+  "description": "This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).",
+  "main": "next-env.d.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Manish-fundtec/Tychi-2.0-vercel.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Manish-fundtec/Tychi-2.0-vercel/issues"
+  },
+  "homepage": "https://github.com/Manish-fundtec/Tychi-2.0-vercel#readme"
 }

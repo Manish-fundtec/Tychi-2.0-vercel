@@ -1,36 +1,35 @@
 import { currency } from '@/context/constants';
 export const statisticData = [{
-  icon: 'solar:buildings-2-broken',
-  title: 'No. of Properties',
+  icon: 'solar:users-group-two-rounded-broken',
+  title: 'No. of investors',
   amount: '2,854',
   change: 7.34
 }, {
-  icon: 'solar:users-group-two-rounded-broken',
-  title: 'Regi. Agents',
-  amount: '705',
-  change: 76.89
-}, {
-  icon: 'solar:shield-user-broken',
-  title: 'Customers',
-  amount: '9,431',
-  change: 45.0,
-  variant: 'danger'
-}, {
   icon: 'solar:money-bag-broken',
-  title: 'Revenue',
-  amount: `${currency}78.3M`,
-  change: 8.76
+  title: 'Total Funds',
+  amount: '705',
+  change: 4.5
+}, {
+  icon: 'solar:graph-up-broken',
+  title: 'YTD return',
+  amount: '$12.1M',
+  change: 4.5,
+}, {
+  icon: 'solar:wad-of-money-broken',
+  title: 'AUM ',
+  amount: `${currency}2.8B`,
+  change: 4.21
 }];
 export const propertyData = [{
-  title: 'Property',
-  icon: 'solar:home-bold-duotone',
-  amount: '15,780',
+  title: 'Investor Onboarding: X',
+  icon: 'solar:users-group-two-rounded-broken',
+  amount: '',
   progress: 60,
   variant: 'primary'
 }, {
-  title: 'Revenue',
-  icon: 'solar:money-bag-bold-duotone',
-  amount: `${currency}78.3M`,
+  title: 'Investor Onboarding: Y',
+  icon: 'solar:users-group-two-rounded-broken',
+  amount: ``,
   progress: 80,
   variant: 'success'
 }];
@@ -72,7 +71,7 @@ export const chartOptions = {
     show: !1
   },
   xaxis: {
-    categories: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+    categories: ['J', 'F', 'M', 'A', 'M', 'J', 'J'],
     axisBorder: {
       show: !1
     },
@@ -122,12 +121,13 @@ export const salesChart = {
     width: 2,
     lineCap: 'square'
   },
-  series: [{
+  series: [
+   {
     name: 'Expenses',
-    data: [16800, 16800, 15500, 17000, 14800, 15500, 19000, 16000, 15000, 17000, 14000, 17000]
+    data: [1460923, 1419534, 1536847, 1488031, 1488031, 1499035, 1406878, 1406878, 1406878, 1532504, 1462342, 2004014]
   }, {
     name: 'Income',
-    data: [16500, 17500, 16200, 21500, 17300, 16000, 16000, 17000, 16000, 19000, 18000, 19000]
+    data: [2465812, 2863984, 2163403, 2542326, 2627313, 1967837, 2642830, 2135516,1982322, 3085885, 3085885, 3085885]
   }],
   labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   xaxis: {

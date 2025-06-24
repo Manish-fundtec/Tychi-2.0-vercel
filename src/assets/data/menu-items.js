@@ -5,7 +5,7 @@ const ICON_MAP = {
   Trades: 'ri:exchange-dollar-line',
   Valuation: 'ri:money-dollar-circle-line',
   Reports: 'ri:file-chart-line',
-  'Gernal Ledger': 'ri:contacts-book-3-line',
+  'General Ledger': 'ri:contacts-book-3-line',
   'Chart of Accounts': 'ri:table-alt-line',
   Journals: 'ri:article-line',
   'Manual Journal': 'ri:edit-box-line',
@@ -53,8 +53,8 @@ export const MENU_ITEMS = [
   },
   {
     key: 'customers',
-    label: 'Gernal Ledger',
-    icon: ICON_MAP['Gernal Ledger'],
+    label: 'General Ledger',
+    icon: ICON_MAP['General Ledger'],
     children: [
       {
         key: 'list-view',
