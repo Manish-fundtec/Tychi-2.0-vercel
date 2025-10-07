@@ -49,7 +49,7 @@ export const MENU_ITEMS = [
     key: 'messages',
     label: 'Reports',
     icon: ICON_MAP['Reports'],
-    url: '/reports',
+    url: '/reports-period',
   },
   {
     key: 'customers',

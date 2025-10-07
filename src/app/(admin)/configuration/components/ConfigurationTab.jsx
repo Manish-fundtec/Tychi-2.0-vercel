@@ -1,9 +1,11 @@
 'use client';
-
+import { useDashboardToken } from '@/hooks/useDashboardToken';
+import MappingTab from './MappingTab'; // ✅ import MappingTab here
 import IconifyIcon from '@/components/wrappers/IconifyIcon';
 import { Col, Nav, NavItem, NavLink, Row, Tab, TabContainer, TabContent, TabPane, Tabs } from 'react-bootstrap';
 import { tabContents } from './data';
 export const NavPills = () => {
+  const token = useDashboardToken(); // ✅ correctly inside component
     return (
         <TabContainer defaultActiveKey={'1'}>
           <Nav as={'ul'} variant="pills">
@@ -17,9 +19,15 @@ export const NavPills = () => {
               </NavItem>)} 
           </Nav>
           <TabContent className="pt-2 text-muted">
-            {tabContents.map((tab, idx) => <TabPane eventKey={tab.id} key={idx}>
-                <p className="mb-0">{tab.description}</p>
-              </TabPane>)}
+            {tabContents.map((tab, idx) => (
+              <TabPane eventKey={tab.id} key={idx}>
+                {tab.description === "MAPPING_TAB" ? (
+                  <MappingTab fund_id={token?.fund_id} /> // ✅ Correctly inject fund_id here
+                ) : (
+                  tab.description
+                )}
+              </TabPane>
+            ))}
           </TabContent>
         </TabContainer>
       );

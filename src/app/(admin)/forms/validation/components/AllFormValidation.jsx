@@ -1,13 +1,27 @@
 'use client'
 
 import clsx from 'clsx'
-import { useState } from 'react'
-import { Button, Col, Form, FormCheck, FormControl, FormGroup, FormLabel, FormSelect, InputGroup , Row } from 'react-bootstrap'
+import { useState, useEffect, useMemo } from 'react'
+import { Button, Col, Form, FormCheck, FormControl, FormGroup, FormLabel, FormSelect, InputGroup, Row, Modal } from 'react-bootstrap'
 import Feedback from 'react-bootstrap/esm/Feedback'
 import InputGroupText from 'react-bootstrap/esm/InputGroupText'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { serverSideFormValidate } from '@/helpers/data'
 import ChoicesFormInput from '@/components/from/ChoicesFormInput'
+import { createFund } from '@/lib/api/fund'
+import { useSession } from 'next-auth/react'
+import { useUserToken } from '@/hooks/useUserToken'
+import { useDashboardToken } from '@/hooks/useDashboardToken'
+import Cookies from 'js-cookie'
+import jwt from 'jsonwebtoken'
+import api from '../../../../../lib/api/axios'
+import { uploadTradeFile, createTrade } from '@/lib/api/uploadTrade'
+import { addTrade } from '@/lib/api/trades'
+import currencies from 'currency-formatter/currencies'
+import { jwtDecode } from 'jwt-decode'
+import { fetchChartOfAccounts } from '@/lib/api/reports'
+
+// import {downloadTradeTemplate} from '@/lib/api/trade';
 const BrowserDefault = () => {
   return (
     <ComponentContainerCard
@@ -59,6 +73,7 @@ const BrowserDefault = () => {
     </ComponentContainerCard>
   )
 }
+
 const CustomStyles = () => {
   const [validated, setValidated] = useState(false)
   const handleSubmit = (event) => {
@@ -132,6 +147,7 @@ const CustomStyles = () => {
     </ComponentContainerCard>
   )
 }
+
 const ServerSideValidation = () => {
   const [validated, setValidated] = useState(false)
   const [formErrors, setFormErrors] = useState([])
@@ -304,168 +320,646 @@ const ServerSideValidation = () => {
     </ComponentContainerCard>
   )
 }
-export const Tooltips = () => {
+
+export const AddTrade = ({ onClose, onCreated }) => {
   const [validated, setValidated] = useState(false)
-  const handleSubmit = (event) => {
-    const form = event.currentTarget
-    if (!form.checkValidity()) {
-      event.preventDefault()
-      event.stopPropagation()
+  const [isSaving, setIsSaving] = useState(false)
+  const [brokers, setBrokers] = useState([])
+  const [symbols, setSymbols] = useState([])
+  const [fundId, setFundId] = useState('')
+  const [orgId, setOrgId] = useState('')
+  const [amountLocked, setAmountLocked] = useState(true)
+
+  const [calc, setCalc] = useState({
+    commissionMethod: '',
+    contractSize: 1,
+    updatedUnitPrice: null,
+    finalAmount: null,
+  })
+
+  const [formData, setFormData] = useState({
+    symbol_id: '',
+    trade_date: '',
+    commission: '',
+    price: '',
+    quantity: '',
+    broker_id: '',
+    broker_name: '',
+    description: '',
+  })
+
+  // tiny helper for odd API shapes: [] or { data: [] }
+  const unwrap = (r) => (Array.isArray(r?.data) ? r.data : (r?.data?.data ?? []))
+  const toNum = (v, d = 0) => (v === '' || v == null ? d : Number(v))
+
+  // Grab org_id & fund_id from dashboardToken
+  useEffect(() => {
+    const token = Cookies.get('dashboardToken')
+    if (!token) return
+    try {
+      const decoded = jwt.decode(token)
+      setFundId(decoded?.fund_id || '')
+      setOrgId(decoded?.org_id || '')
+    } catch (err) {
+      console.error('Error decoding token:', err)
     }
-    setValidated(true)
+  }, [])
+
+  // 2) Fetch dropdowns when fundId present
+  useEffect(() => {
+    if (!fundId) return
+    ;(async () => {
+      try {
+        const [b, s] = await Promise.allSettled([api.get(`/api/v1/broker/fund/${fundId}`), api.get(`/api/v1/symbols/fund/${fundId}`)])
+        setBrokers(b.status === 'fulfilled' ? unwrap(b.value) : [])
+        setSymbols(s.status === 'fulfilled' ? unwrap(s.value) : [])
+      } catch (e) {
+        console.error('Dropdown fetch error', e)
+      }
+    })()
+  }, [fundId])
+
+  // derived symbol (gives us contract_size)
+  const selectedSymbol = useMemo(() => symbols.find((s) => String(s.symbol_id) === String(formData.symbol_id)), [symbols, formData.symbol_id])
+  // 🆕 useEffect: Fetch commission method and related symbol/assettype info
+  // 3) Compute commission method + derived price/amount when key inputs change
+  useEffect(() => {
+    if (!formData.symbol_id || !fundId) return
+
+    const qty = toNum(formData.quantity)
+    const price = toNum(formData.price)
+    const commission = toNum(formData.commission)
+    const absQty = Math.abs(qty)
+    const contractSize = Number(selectedSymbol?.contract_size ?? 1)
+
+    if (!absQty || !price || !contractSize) {
+      setCalc((c) => ({ ...c, contractSize, updatedUnitPrice: null, finalAmount: null }))
+      return
+    }
+
+    ;(async () => {
+      try {
+        const res = await api.get('/api/v1/trade/getCommissionMethod', {
+          params: { symbol_id: formData.symbol_id, fund_id: fundId },
+        })
+        // Support multiple response shapes + key aliases
+        const methodRawValue =
+          res?.data?.commission_accounting_method ??
+          res?.data?.commission ??
+          res?.data?.data?.commission_accounting_method ??
+          res?.data?.commissionMethod ??
+          res?.data?.data?.commissionMethod ??
+          'expense'
+        if (!methodRawValue) {
+          console.warn('[getCommissionMethod] Response did not have a method key:', res?.data)
+        }
+        const methodRaw = String(methodRawValue || 'expense').toLowerCase()
+        const isCapital = ['capital', 'capitalize', 'capitalized'].includes(methodRaw)
+
+        const baseNotional = absQty * price * contractSize
+        let finalAmount, updatedUnitPrice
+
+        if (isCapital) {
+          // BUY (+commission), SELL (-commission but not below zero
+          const capitalTotal = qty > 0 ? baseNotional + commission : Math.max(baseNotional - commission, 0)
+          finalAmount = capitalTotal
+          updatedUnitPrice = capitalTotal / (contractSize * absQty)
+        } else {
+          // expense method -> commission is not capitalized into amount
+          finalAmount = baseNotional
+          updatedUnitPrice = price
+        }
+
+        setCalc({
+          commissionMethod: methodRaw,
+          contractSize,
+          updatedUnitPrice: Number(updatedUnitPrice.toFixed(4)),
+          finalAmount: Number(finalAmount.toFixed(2)),
+        })
+      } catch (err) {
+        const status = err?.response?.status
+        const data = err?.response?.data
+        const url = err?.config?.url
+        const params = err?.config?.params
+        console.error('[getCommissionMethod] request failed:', {
+          status,
+          url,
+          params,
+          data,
+          message: err?.message,
+        })
+        // graceful fallback: expense-like behavior
+        const baseNotional = absQty * price * contractSize
+        setCalc({
+          commissionMethod: 'unknown',
+          contractSize,
+          updatedUnitPrice: price,
+          finalAmount: Number(baseNotional.toFixed(2)),
+        })
+      }
+    })()
+    // dependencies trimmed to only what affects computation
+  }, [formData.symbol_id, fundId, formData.quantity, formData.price, formData.commission, selectedSymbol])
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    if (name === 'broker_id') {
+      const b = brokers.find((x) => String(x.broker_uid ?? x.broker_id ?? x.id) === String(value))
+      setFormData((p) => ({
+        ...p,
+        broker_id: value,
+        broker_name: b?.broker_name ?? b?.name ?? '',
+      }))
+    } else {
+      setFormData((p) => ({ ...p, [name]: value }))
+    }
   }
+  useEffect(() => {
+    if (!amountLocked) return
+
+    // use calc.finalAmount when available, else blank
+    if (calc.finalAmount != null && !Number.isNaN(calc.finalAmount)) {
+      setFormData((p) => ({ ...p, amount: String(calc.finalAmount) }))
+    } else {
+      setFormData((p) => ({ ...p, amount: '' }))
+    }
+  }, [calc.finalAmount, amountLocked])
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+
+    // Basic client-side checks
+    if (!orgId || !fundId) {
+      alert('Missing org_id / fund_id in token')
+      return
+    }
+    if (!formData.symbol_id || !formData.trade_date) {
+      setValidated(true)
+      return
+    }
+
+    const price = toNum(formData.price)
+    const commission = toNum(formData.commission)
+    if (price === 0 && commission !== 0) {
+      alert('If price is 0, commission must also be 0.')
+      return
+    }
+
+    const payload = {
+      org_id: orgId, // required by backend
+      fund_id: fundId,
+      symbol_id: formData.symbol_id,
+      broker_id: (formData.broker_id ?? '').toString().trim() || null,
+      broker_name: (formData.broker_name ?? '').toString().trim() || null,
+      trade_date: formData.trade_date || new Date().toISOString(),
+      price: toNum(formData.price),
+      amount: calc.finalAmount ?? null,
+      quantity: toNum(formData.quantity),
+      commission: toNum(formData.commission),
+      description: formData.description?.trim() || null,
+      file_row_no: 1, // always 1 (as requested)
+    }
+
+    try {
+      setIsSaving(true)
+      await addTrade(payload)
+
+      // close modal first
+      // if (onClose) onClose()
+      if (onClose) {
+        console.log('Calling onClose() to close modal...')
+        onClose()
+      }
+
+      // refresh parent after closing
+      if (onCreated) onCreated()
+
+      // optional toast/alert
+      setTimeout(() => alert('Trade created successfully'), 0)
+    } catch (err) {
+      console.error('Create trade failed:', err)
+      alert(err?.response?.data?.error || err.message || 'Server error')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <Form className="row g-5 needs-validation" noValidate validated={validated} onSubmit={handleSubmit}>
-      <FormGroup className="position-relative col-md-6 ">
-        <FormLabel>Symbol name</FormLabel>
-        <ChoicesFormInput
-          options={{
-            shouldSort: false,
-          }}>
-          <option value="Madrid">Madrid</option>
-          <option value="Toronto">Toronto</option>
-          <option value="Vancouver">Vancouver</option>
-          <option value="London">London</option>
-          <option value="Manchester">Manchester</option>
-          <option value="Liverpool">Liverpool</option>
-          <option value="Paris">Paris</option>
-          <option value="Malaga">Malaga</option>
-          <option value="Washington" disabled>
-            Washington
-          </option>
-          <option value="Lyon">Lyon</option>
-          <option value="Marseille">Marseille</option>
-          <option value="Hamburg">Hamburg</option>
-          <option value="Munich">Munich</option>
-          <option value="Barcelona">Barcelona</option>
-          <option value="Berlin">Berlin</option>
-          <option value="Montreal">Montreal</option>
-          <option value="New York">New York</option>
-          <option value="Michigan">Michigan</option>
-        </ChoicesFormInput>
-        <Feedback tooltip>Looks good!</Feedback>
+      <FormGroup className="position-relative col-md-6">
+        <FormLabel>Symbol Name</FormLabel>
+        <Form.Select required name="symbol_id" value={formData.symbol_id} onChange={handleChange}>
+          <option value="">-- Select Symbol --</option>
+          {symbols.map((symbol) => (
+            // store symbol_id as value; show the name in the label
+            <option key={symbol.symbol_id} value={symbol.symbol_id}>
+              {symbol.symbol_name} {symbol.symbol_id}
+            </option>
+          ))}
+        </Form.Select>
         <Feedback type="invalid" tooltip>
-          Please enter first name.
+          Please select a Symbol.
         </Feedback>
       </FormGroup>
-      <FormGroup className="position-relative col-md-6 ">
+
+      <FormGroup className="position-relative col-md-6">
         <FormLabel>Date</FormLabel>
-        <FormControl type="date" required />
-        <Feedback tooltip>Looks good!</Feedback>
+        <FormControl type="date" name="trade_date" value={formData.trade_date} onChange={handleChange} required />
         <Feedback type="invalid" tooltip>
-          Please enter last name.
+          Please enter a Date.
         </Feedback>
       </FormGroup>
+
       <FormGroup className="position-relative col-md-3 mt-3">
         <FormLabel>Commission</FormLabel>
-        <FormControl type="text" placeholder="Commission" required />
+        <FormControl type="text" name="commission" value={formData.commission} onChange={handleChange} required />
         <Feedback type="invalid" tooltip>
-          Please provide a valid city.
+          Please provide a numeric Commission.
         </Feedback>
       </FormGroup>
+
       <FormGroup className="position-relative col-md-3 mt-3">
         <FormLabel>Price</FormLabel>
-        <FormControl type="text" placeholder="Price" required />
+        <FormControl type="text" name="price" value={formData.price} onChange={handleChange} required />
         <Feedback type="invalid" tooltip>
-          Please provide a valid city.
+          Please provide a numeric Price.
         </Feedback>
       </FormGroup>
+
       <FormGroup className="position-relative col-md-3 mt-3">
         <FormLabel>Quantity</FormLabel>
-        <FormControl type="text" placeholder="Quantity" required />
+        <FormControl type="text" name="quantity" value={formData.quantity} onChange={handleChange} required />
         <Feedback type="invalid" tooltip>
-          Please provide a valid city.
+          Please provide a numeric Quantity.
         </Feedback>
       </FormGroup>
+
       <FormGroup className="position-relative col-md-3 mt-3">
         <FormLabel>Amount</FormLabel>
-        <FormControl type="text" placeholder="Amount" required />
-        <Feedback type="invalid" tooltip>
-          Please provide a valid city.
-        </Feedback>
+        <FormControl
+          type="text"
+          readOnly
+          value={calc.finalAmount != null ? String(calc.finalAmount.toFixed(2)) : ''} // never undefined
+        />
       </FormGroup>
+
+      {/* Broker Dropdown */}
       <FormGroup className="position-relative col-md-6 mt-4">
-        <FormLabel>Brokers</FormLabel>
-        <ChoicesFormInput
-          options={{
-            shouldSort: false,
-          }}>
-          <option value="Madrid">Madrid</option>
-          <option value="Toronto">Toronto</option>
-          <option value="Vancouver">Vancouver</option>
-          <option value="London">London</option>
-          <option value="Manchester">Manchester</option>
-          <option value="Liverpool">Liverpool</option>
-          <option value="Paris">Paris</option>
-          <option value="Malaga">Malaga</option>
-          <option value="Washington" disabled>
-            Washington
-          </option>
-          <option value="Lyon">Lyon</option>
-          <option value="Marseille">Marseille</option>
-          <option value="Hamburg">Hamburg</option>
-          <option value="Munich">Munich</option>
-          <option value="Barcelona">Barcelona</option>
-          <option value="Berlin">Berlin</option>
-          <option value="Montreal">Montreal</option>
-          <option value="New York">New York</option>
-          <option value="Michigan">Michigan</option>
-        </ChoicesFormInput>
-        <Feedback tooltip>Looks good!</Feedback>
+        <FormLabel>Broker</FormLabel>
+        <Form.Select required name="broker_id" value={formData.broker_id} onChange={handleChange}>
+          <option value="">-- Select Broker --</option>
+          {brokers.map((b) => {
+            const val = (b.broker_uid ?? b.broker_id ?? b.id ?? '').toString()
+            return (
+              <option key={val} value={val}>
+                {b.broker_name ?? b.name ?? val}
+              </option>
+            )
+          })}
+        </Form.Select>
         <Feedback type="invalid" tooltip>
-          Please enter first name.
+          Please select a Broker.
         </Feedback>
       </FormGroup>
 
       <FormGroup className="position-relative col-md-6 mt-4">
         <FormLabel>Description</FormLabel>
-        <FormControl type="text" placeholder="Description" required />
+        <FormControl type="text" name="description" value={formData.description} onChange={handleChange} required />
         <Feedback type="invalid" tooltip>
-          Please provide a valid state.
+          Please provide a Description.
         </Feedback>
       </FormGroup>
+
+      {calc.commissionMethod && (
+        <div className="col-12 mt-2">
+          <small className="text-muted">
+            Method: <strong>{calc.commissionMethod}</strong> · Contract size: <strong>{calc.contractSize}</strong>
+            <br />
+            Updated unit price: <strong>{calc.updatedUnitPrice ?? '-'}</strong> · Final Amount: <strong>{calc.finalAmount ?? '-'}</strong>
+          </small>
+        </div>
+      )}
+
       <Col xs={12}>
-        <Button variant="primary" type="submit">
-          Submit form
+        <Button variant="primary" type="submit" disabled={isSaving}>
+          {isSaving ? 'Saving…' : 'Submit'}
         </Button>
       </Col>
     </Form>
   )
 }
 
-export const AddGl = () => {
+export const UploadTrade = ({ onClose }) => {
   const [validated, setValidated] = useState(false)
-  const handleSubmit = (event) => {
-    const form = event.currentTarget
-    if (!form.checkValidity()) {
-      event.preventDefault()
+  const [fileError, setFileError] = useState('')
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const tokenData = useDashboardToken()
+  const [showErrorModal, setShowErrorModal] = useState(false)
+  const [errorFileUrl, setErrorFileUrl] = useState('')
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0]
+    setSelectedFile(file)
+    setFileError('')
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+
+    // File not selected
+    if (!selectedFile) {
+      setFileError('Please select a file.')
       event.stopPropagation()
+      setValidated(false)
+      return
+    }
+
+    // Check file extension
+    const fileName = selectedFile.name.toLowerCase()
+    if (!fileName.endsWith('.csv') && !fileName.endsWith('.xlsx')) {
+      setFileError('Only .csv or .xlsx files are allowed.')
+      event.stopPropagation()
+      setValidated(false)
+      return
+    }
+
+    setValidated(true)
+    setIsUploading(true)
+
+    try {
+      const response = await uploadTradeFile(selectedFile) //Call API
+      if (response.data.success) {
+        alert('File uploaded successfully!')
+        onClose?.() // Close modal if provided
+      } else {
+        // Backend returned validation errors with errorFileUrl (S3 link)
+        const errorUrl = response.data.error_file_url
+        if (errorUrl) {
+          console.log('✅ Received error_file_url:', errorUrl)
+          setErrorFileUrl(errorUrl)
+          setTimeout(() => {
+            setShowErrorModal(true) // ✅ Then show error modal
+          }, 300)
+          onClose?.()
+        } else {
+          alert('Validation failed, but no error file URL provided.')
+        }
+      }
+    } catch (error) {
+      console.error('❌ Upload failed:', error.message)
+      alert('File upload failed: ' + error.message)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleErrorModalClose = () => {
+    setShowErrorModal(false)
+    setSelectedFile(null)
+    setValidated(false)
+  }
+
+  return (
+    <>
+      <Form className="row g-5 needs-validation" noValidate validated={validated} onSubmit={handleSubmit}>
+        {/* ✅ Download Template Button */}
+        <Col xs={12} className="d-flex justify-content-end">
+          {tokenData?.fund_id && (
+            <a
+              href={`${process.env.NEXT_PUBLIC_API_URL}/api/v1/trade-template/${tokenData.fund_id}/download`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-end text-primary"
+              style={{ fontSize: '16px', textDecoration: 'underline' }}>
+              Download Template
+            </a>
+          )}
+        </Col>
+
+        {/* File Upload Section */}
+        <FormGroup className="position-relative col-md-12 mt-3">
+          <FormLabel>Choose File</FormLabel>
+          <FormControl type="file" required className="border-bottom" onChange={handleFileChange} isInvalid={!!fileError} />
+          <Feedback type="invalid" tooltip>
+            {fileError || 'Please choose a valid file to upload.'}
+          </Feedback>
+        </FormGroup>
+
+        {/* Upload Button */}
+        <Col xs={12} className="d-flex justify-content-end mt-4">
+          <Button variant="primary" type="submit" disabled={isUploading}>
+            {isUploading ? 'Uploading...' : 'Upload'}
+          </Button>
+        </Col>
+      </Form>
+      {/* Error Modal */}
+      <Modal show={showErrorModal} centered backdrop="static" keyboard={false} onHide={handleErrorModalClose}>
+        <Modal.Header closeButton>
+          <Modal.Title>Validation Errors</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Your file contains validation errors. Please download the error file for details, correct the issues, and re-upload.</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleErrorModalClose}>
+            Close
+          </Button>
+          <a href={errorFileUrl} download style={{ textDecoration: 'none' }}>
+            <Button variant="primary">Download Error File</Button>
+          </a>
+        </Modal.Footer>
+      </Modal>
+    </>
+  )
+}
+
+const CATEGORY_NAME = {
+  10000: 'Asset',
+  20000: 'Liability',
+  30000: 'Equity',
+  40000: 'Income', // If your DB uses 'Revenue', change to 'Revenue'
+  50000: 'Expense',
+}
+
+export const AddGl = ({ onClose }) => {
+  const [validated, setValidated] = useState(false)
+  const [hasParentGL, setHasParentGL] = useState('no')
+  const [category, setCategory] = useState('')
+  const [glNumber, setGlNumber] = useState('')
+  const [glTitle, setGlTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [parentGlAccount, setParentGlAccount] = useState('')
+  const [parentGlAccounts, setParentGlAccounts] = useState([])
+  const [fundId, setFundId] = useState(null)
+  const [balanceType, setBalanceType] = useState('') // New state for balance_type
+  const [loading, setLoading] = useState(false)
+
+  const glMode = hasParentGL === 'yes' ? 'Derived from Parent' : 'Next Block (+1000)'
+
+  // 1) Get fundId from dashboard token
+  useEffect(() => {
+    const getFundIdFromToken = () => {
+      const token = Cookies.get('dashboardToken')
+      if (token) {
+        try {
+          const decoded = jwtDecode(token) // Decode the token to get the fundId
+          setFundId(decoded.fund_id)
+        } catch (error) {
+          console.error('Error decoding token:', error)
+        }
+      } else {
+        console.warn('No dashboardToken found in cookies')
+      }
+    }
+
+    getFundIdFromToken()
+  }, [])
+
+  // 2) If "Has Parent GL" is yes, fetch parent GLs for the category range
+  useEffect(() => {
+    // guard: need fundId, category, and hasParentGL === 'yes'
+    if (hasParentGL !== 'yes' || !fundId || !category) {
+      setParentGlAccounts([])
+      setParentGlAccount('')
+      return
+    }
+
+    const ctrl = new AbortController()
+
+    ;(async () => {
+      try {
+        const catName = CATEGORY_NAME[category] || category // tolerate name/number
+        const res = await api.get(`/api/v1/chart-of-accounts/range/${fundId}`, {
+          params: { category: catName, limit: 500 },
+          signal: ctrl.signal,
+        })
+
+        // API returns: [{ id, code, name }]
+        const rows = Array.isArray(res.data) ? res.data : []
+        setParentGlAccounts(rows)
+        setParentGlAccount('') // reset selection when category changes
+      } catch (error) {
+        if (error.name !== 'CanceledError') {
+          console.error('Error fetching Parent GL Accounts by range:', error)
+        }
+        setParentGlAccounts([])
+      }
+    })()
+
+    return () => ctrl.abort()
+  }, [hasParentGL, fundId, category])
+
+  // 3) Simple auto-fill: when category changes AND hasParentGL = no → fetch next code
+  useEffect(() => {
+    const autofill = async () => {
+      if (!fundId || !category || hasParentGL !== 'no') return
+      try {
+        const catName = CATEGORY_NAME[category] || category // fallback if already a name
+        const res = await api.get(`/api/v1/chart-of-accounts/next-code/${fundId}`, {
+          params: { category: catName }, // ?category=Asset
+        })
+        const nextCode = res.data?.next_code
+        if (nextCode) setGlNumber(String(nextCode))
+      } catch (e) {
+        console.error('Failed to fetch next GL code:', e)
+      }
+    }
+    autofill()
+  }, [category, hasParentGL, fundId])
+
+  // If user flips to YES, allow manual input & clear (optional)
+  useEffect(() => {
+    if (hasParentGL === 'yes') {
+      // optional: clear auto-filled value
+      // setGlNumber('')
+    }
+  }, [hasParentGL])
+
+  // 4) Submit
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const form = e.currentTarget
+    if (!form.checkValidity()) {
+      e.stopPropagation()
+      setValidated(true)
+      return
     }
     setValidated(true)
+
+    const payload = {
+      fund_id: fundId,
+      account_code: glNumber,
+      account_name: glTitle,
+      description,
+      balance_type: balanceType, // 'Dr' | 'Cr'
+      parent_id: hasParentGL === 'yes' ? parentGlAccount : null, // CODE
+      category, // '10000' etc. backend maps to label
+    }
+
+    try {
+      setLoading(true)
+      const resp = await api.post('/api/v1/chart-of-accounts', payload)
+      if (resp.status === 201) {
+        alert('Chart of Account added!')
+        onClose?.()
+      } else {
+        alert(resp.data?.error || 'Failed to add COA')
+      }
+    } catch (err) {
+      console.error(err)
+      alert(err?.response?.data?.error || 'Server error')
+    } finally {
+      setLoading(false)
+    }
   }
+
+  function computeChildCodeFromParent(parentCode) {
+    const codeStr = String(parentCode || '').trim()
+    const n = Number.parseInt(codeStr, 10)
+    if (!Number.isFinite(n)) return ''
+
+    if (codeStr.endsWith('000')) return String(n + 100).padStart(codeStr.length, '0')
+    if (codeStr.endsWith('00')) return String(n + 1).padStart(codeStr.length, '0')
+
+    // fallback (optional): +1 if it doesn't end with 00/000
+    return String(n + 1).padStart(codeStr.length, '0')
+  }
+  useEffect(() => {
+    if (hasParentGL !== 'yes' || !parentGlAccount) return
+    const parent = parentGlAccounts.find((a) => String(a.code) === String(parentGlAccount))
+    if (!parent) return
+    const nextCode = computeChildCodeFromParent(parent.code)
+    if (nextCode) setGlNumber(nextCode)
+  }, [hasParentGL, parentGlAccount, parentGlAccounts])
+
+  useEffect(() => {
+    // Clear on toggle; the other effects will re-compute appropriately
+    setGlNumber('')
+    setParentGlAccount(hasParentGL === 'yes' ? '' : parentGlAccount)
+  }, [hasParentGL])
+
   return (
     <Form className="row g-5 needs-validation" noValidate validated={validated} onSubmit={handleSubmit}>
+      {/* Category Field */}
       <FormGroup className="position-relative col-md-6 mb-n3">
         <FormLabel>Category</FormLabel>
-        <ChoicesFormInput
-          options={{
-            shouldSort: false,
-          }}>
+        <FormControl as="select" value={category} onChange={(e) => setCategory(e.target.value)} required>
           <option value="">Select category</option>
-          <option value="Assets">Assets</option>
-          <option value="Liabilities">Liabilities</option>
-          <option value="Equity">Equity</option>
-          <option value="Revenue">Revenue</option>
-          <option value="Expenses">Expenses</option>
-        </ChoicesFormInput>
-        <Feedback tooltip>Looks good!</Feedback>
-        <Feedback type="invalid" tooltip>
-          Please select caegory.
-        </Feedback>
+          <option value="10000">Assets</option>
+          <option value="20000">Liabilities</option>
+          <option value="30000">Equity</option>
+          <option value="40000">Revenue</option>
+          <option value="50000">Expenses</option>
+        </FormControl>
+        <FormControl.Feedback type="invalid" tooltip>
+          Please select a category.
+        </FormControl.Feedback>
       </FormGroup>
-      <FormGroup className="position-relative col-md-6 mb-n3">
+
+      {/* Parent GL Account Field */}
+      <FormGroup className="position-relative col-md-6 mb-n3 ">
         <FormLabel>Has Parent GL Account?</FormLabel>
-        <FormControl as="select" id="hasParent" defaultValue="no" required>
+        <FormControl as="select" value={hasParentGL} onChange={(e) => setHasParentGL(e.target.value)} required>
           <option value="no">No</option>
           <option value="yes">Yes</option>
         </FormControl>
@@ -474,46 +968,83 @@ export const AddGl = () => {
         </FormControl.Feedback>
       </FormGroup>
 
-      <FormGroup className="position-relative col-md-6 mt-3">
-        <FormLabel>Select Parent GL Account</FormLabel>
-        <FormControl as="select" id="parentGl" defaultValue="no" required>
-          <option value="no">GL account 1</option>
-          <option value="yes">GL account 2</option>
-          <option value="yes">GL account 3</option>
-        </FormControl>
-        <FormControl.Feedback type="invalid" tooltip>
-          Please select a parent GL account.
-        </FormControl.Feedback>
-      </FormGroup>
+      {hasParentGL === 'yes' && (
+        <FormGroup className="position-relative col-md-6 mt-3">
+          <FormLabel>Select Parent GL Account</FormLabel>
+          <FormControl as="select" value={parentGlAccount || ''} onChange={(e) => setParentGlAccount(e.target.value)} required>
+            <option value="">Select Parent GL Account</option>
+            {parentGlAccounts.length > 0 ? (
+              parentGlAccounts.map((acc) => (
+                <option key={acc.code} value={acc.code}>
+                  {acc.code} — {acc.name}
+                </option>
+              ))
+            ) : (
+              <option value="">No Parent GL Accounts available</option>
+            )}
+          </FormControl>
+          <FormControl.Feedback type="invalid" tooltip>
+            Please select a parent GL account.
+          </FormControl.Feedback>
+        </FormGroup>
+      )}
 
-      {/* Other fields */}
+      {/* GL Number */}
       <FormGroup className="position-relative col-md-6 mt-3">
-        <FormLabel>GL Number</FormLabel>
-        <FormControl type="text" id="glNumber" placeholder="Enter GL number" required />
+        <div className="d-flex align-items-center justify-content-between">
+          <FormLabel className="mb-0">GL Number</FormLabel>
+          {/* <small className="text-muted">Mode: {glMode}</small> */}
+        </div>
+
+        <FormControl
+          type="text"
+          placeholder={hasParentGL === 'yes' ? 'Auto from Parent (…000 → +100, …00 → +1)' : 'Auto from Category (max + 1000)'}
+          value={glNumber}
+          onChange={(e) => setGlNumber(e.target.value)}
+          required
+          readOnly // lock in both modes since it’s auto
+        />
         <FormControl.Feedback type="invalid" tooltip>
           Please provide a valid GL number.
         </FormControl.Feedback>
+
+        {/* <small className="text-muted d-block mt-1">
+          {hasParentGL === 'yes'
+            ? 'Rule: if parent ends with 000 → +100; if ends with 00 → +1'
+            : 'Rule: GL = (largest code for fund+category) + 1000'}
+        </small> */}
       </FormGroup>
 
+      {/* GL Title Field */}
       <FormGroup className="position-relative col-md-6 mt-3">
-        <FormLabel htmlFor="glTitle">GL Title</FormLabel>
-        <FormControl type="text" id="glTitle" placeholder="Enter GL title" required />
+        <FormLabel>GL Title</FormLabel>
+        <FormControl type="text" placeholder="Enter GL title" value={glTitle} onChange={(e) => setGlTitle(e.target.value)} required />
         <FormControl.Feedback type="invalid" tooltip>
           Please provide a GL Title.
         </FormControl.Feedback>
       </FormGroup>
+
+      {/* Description Field */}
       <FormGroup className="position-relative col-md-6 mt-3">
-        <FormLabel htmlFor="description">Description</FormLabel>
-        <FormControl as="textarea" id="description" rows={2} placeholder="Enter description" required />
+        <FormLabel>Description</FormLabel>
+        <FormControl
+          as="textarea"
+          rows={2}
+          placeholder="Enter description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          required
+        />
         <FormControl.Feedback type="invalid" tooltip>
           Please provide a description.
         </FormControl.Feedback>
       </FormGroup>
 
+      {/* Submit Button */}
       <Col xs={12}>
         <div className="d-flex justify-content-end">
-          <Button variant="primary" type="submit">
-            Submit
+          <Button variant="primary" type="submit" disabled={loading}>
+            {loading ? 'Submitting...' : 'Submit'}
           </Button>
         </div>
       </Col>
@@ -521,73 +1052,210 @@ export const AddGl = () => {
   )
 }
 
-export const AddManualJournal = () => {
+export const AddManualJournal = ({ onClose }) => {
   const [validated, setValidated] = useState(false)
-  const handleSubmit = (event) => {
+
+  // token values
+  const [fundId, setFundId] = useState(null)
+  const [orgId, setOrgId] = useState(null)
+
+  // dropdown options
+  const [accounts, setAccounts] = useState([])
+
+  // form fields (controlled)
+  const [date, setDate] = useState('')
+  const [debit, setDebit] = useState('')
+  const [credit, setCredit] = useState('')
+  const [amount, setAmount] = useState('')
+  const [desc, setDesc] = useState('')
+
+  const [saving, setSaving] = useState(false)
+
+  const alertAndClose = (msg) => {
+    window.alert(msg)
+    onClose?.() // this will now call toggle() from parent
+  }
+  // 1) decode token
+  useEffect(() => {
+    const token = Cookies.get('dashboardToken')
+    if (!token) return
+    try {
+      const d = jwtDecode(token)
+      setFundId(d.fund_id)
+      setOrgId(d.org_id)
+      console.log('Decoded token →', { fund_id: d.fund_id, org_id: d.org_id })
+    } catch (e) {
+      console.error('jwt decode failed', e)
+    }
+  }, [])
+
+  // 2) fetch postable accounts (hide only 10000/20000/30000/40000/50000)
+  useEffect(() => {
+    if (!fundId) return
+    ;(async () => {
+      try {
+        const res = await api.get(`/api/v1/chart-of-accounts/postable/${fundId}`, {
+          params: { excludeRoots: true, onlyLeaves: false }, // show leaf + headers like 11000 etc.
+        })
+        setAccounts(Array.isArray(res.data) ? res.data : [])
+      } catch (e) {
+        console.error('Failed to load accounts:', e)
+        setAccounts([])
+      }
+    })()
+  }, [fundId])
+
+  // 3) prevent same account on both sides
+  useEffect(() => {
+    if (debit && debit === credit) setCredit('')
+  }, [debit])
+
+  const handleSubmit = async (event) => {
     const form = event.currentTarget
+
     if (!form.checkValidity()) {
       event.preventDefault()
       event.stopPropagation()
+      setValidated(true)
+      return
     }
+    event.preventDefault()
     setValidated(true)
+
+    // Use state; fall back to form controls just in case
+    const finalDate = date || form.elements['journal_date']?.value || ''
+    const rawAmount = amount || form.elements['amount']?.value || ''
+    const amt = Number(rawAmount)
+
+    const roots = new Set(['10000', '20000', '30000', '40000', '50000'])
+
+    // Guards (match your backend rules)
+    if (!fundId) return window.alert('Missing fund id')
+    if (!orgId) return window.alert('Missing org id') // DB requires NOT NULL as per your error
+    if (!finalDate) return window.alert('Pick a date')
+    if (!Number.isFinite(amt) || amt <= 0) return window.alert('Amount must be > 0')
+    if (!debit || !credit) return window.alert('Pick both debit and credit')
+    if (debit === credit) return window.alert('Debit and Credit must be different')
+    if (roots.has(String(debit)) || roots.has(String(credit))) {
+      return window.alert('Cannot post to category root codes (10000/20000/30000/40000/50000)')
+    }
+
+    const payload = {
+      fund_id: fundId,
+      org_id: orgId, // REQUIRED by DB (NOT NULL)
+      journal_date: finalDate, // YYYY-MM-DD
+      amount: amt, // number
+      dr_account: debit,
+      cr_account: credit,
+      description: desc || null,
+      journal_type: 'Manual',
+    }
+    console.log('POST /manualjournal payload →', payload)
+
+    try {
+      setSaving(true)
+
+      // Use full URL to avoid baseURL mixups
+      const r = await api.post('http://localhost:5000/api/v1/manualjournal', payload, {
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (r.status === 201) {
+        // reset (optional)
+        setDate('')
+        setDebit('')
+        setCredit('')
+        setAmount('')
+        setDesc('')
+        setValidated(false)
+        // success & close
+        return alertAndClose('Manual journal created successfully ✅')
+      }
+      window.alert(r.data?.message || 'Failed to create manual journal')
+    } catch (err) {
+      const status = err?.response?.status
+      const data = err?.response?.data
+      console.error('POST /manualjournal failed', { status, data, err })
+      alertAndClose(data?.message || data?.error || `Request failed (${status || 'unknown'})`)
+    } finally {
+      setSaving(false)
+    }
   }
+
   return (
     <Form className="row g-5 needs-validation" noValidate validated={validated} onSubmit={handleSubmit}>
-     {/* Date Field */}
-     <FormGroup className="position-relative col-md-6 mb-n2">
+      {/* Date */}
+      <FormGroup className="position-relative col-md-6 mb-n2">
         <FormLabel>Date (mm/dd/yyyy)</FormLabel>
-        <FormControl type="date" placeholder="mm/dd/yyyy" required />
-        <Feedback type="valid" tooltip>Looks good!</Feedback>
-        <Feedback type="invalid" tooltip>Please select a valid date.</Feedback>
+        <FormControl type="date" name="journal_date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        <Feedback type="invalid" tooltip>
+          Please select a valid date.
+        </Feedback>
       </FormGroup>
 
-      {/* Debit Account Field */}
+      {/* Debit */}
       <FormGroup className="position-relative col-md-6 mb-n2">
         <FormLabel>Debit Account</FormLabel>
-        <FormControl as="select" required>
+        <FormControl as="select" value={debit} onChange={(e) => setDebit(e.target.value)} required autoComplete="off">
           <option value="">--Select--</option>
-          <option value="Cash">Cash</option>
-          <option value="Accounts Receivable">Accounts Receivable</option>
-          <option value="Inventory">Inventory</option>
+          {accounts.map((a) => (
+            <option key={`dr-${a.id}`} value={a.code}>
+              {a.code} — {a.name}
+            </option>
+          ))}
         </FormControl>
-        <Feedback type="valid" tooltip>Looks good!</Feedback>
-        <Feedback type="invalid" tooltip>Please select a debit account.</Feedback>
+        <Feedback type="invalid" tooltip>
+          Please select a debit account.
+        </Feedback>
       </FormGroup>
 
-      {/* Credit Account Field */}
+      {/* Credit */}
       <FormGroup className="position-relative col-md-6 mt-3">
         <FormLabel>Credit Account</FormLabel>
-        <FormControl as="select" required>
+        <FormControl as="select" value={credit} onChange={(e) => setCredit(e.target.value)} required autoComplete="off">
           <option value="">--Select--</option>
-          <option value="Revenue">Revenue</option>
-          <option value="Accounts Payable">Accounts Payable</option>
-          <option value="Equity">Equity</option>
+          {accounts.map((a) => (
+            <option key={`cr-${a.id}`} value={a.code}>
+              {a.code} — {a.name}
+            </option>
+          ))}
         </FormControl>
-        <Feedback type="valid" tooltip>Looks good!</Feedback>
-        <Feedback type="invalid" tooltip>Please select a credit account.</Feedback>
+        <Feedback type="invalid" tooltip>
+          Please select a credit account.
+        </Feedback>
       </FormGroup>
-
       {/* Amount Field */}
+      {/* Amount */}
       <FormGroup className="position-relative col-md-6 mt-3">
         <FormLabel>Amount</FormLabel>
-        <FormControl type="number" placeholder="Enter amount" required />
-        <Feedback type="valid" tooltip>Looks good!</Feedback>
-        <Feedback type="invalid" tooltip>Please enter a valid amount.</Feedback>
+        <FormControl
+          type="number"
+          name="amount"
+          min="0.01"
+          step="0.01"
+          placeholder="Enter amount"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          required
+        />
+        <Feedback type="invalid" tooltip>
+          Please enter a valid amount.
+        </Feedback>
       </FormGroup>
 
-      {/* Description Field */}
+      {/* Description */}
       <FormGroup className="position-relative col-md-12 mt-3">
         <FormLabel>Description</FormLabel>
-        <FormControl as="textarea" rows={3} placeholder="Enter description" required />
-        <Feedback type="valid" tooltip>Looks good!</Feedback>
-        <Feedback type="invalid" tooltip>Please provide a description.</Feedback>
+        <FormControl as="textarea" rows={3} placeholder="Enter description" value={desc} onChange={(e) => setDesc(e.target.value)} required />
+        <Feedback type="invalid" tooltip>
+          Please provide a description.
+        </Feedback>
       </FormGroup>
-
 
       <Col xs={12}>
         <div className="d-flex justify-content-end">
-          <Button variant="primary" type="submit">
-            Submit
+          <Button variant="primary" type="submit" disabled={saving}>
+            {saving ? 'Saving…' : 'Submit'}
           </Button>
         </div>
       </Col>
@@ -666,145 +1334,185 @@ const SupportedElements = () => {
   )
 }
 
-export const AddFund= () => {
+export const AddFund = ({ onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    fund_name: '',
+    fund_description: '',
+    fund_address: '',
+    incorp_date: '',
+    reporting_start_date: '',
+    fy_starts_on: '',
+    fy_ends_on: '',
+    reporting_frequency: '',
+    reporting_currency: '',
+    reporting_currency: '',
+    commission_accounting_method: '',
+    fund_status: 'Active',
+    decimal_precision: 2,
+    reporting_mtd: false,
+    reporting_qtd: false,
+    reporting_ytd: false,
+    reporting_itd: false,
+    enable_report_email: false,
+    date_format: 'MM/DD/YYYY',
+  })
+
+  const useeTokenData = useUserToken()
+  const fmt = formData.date_format || 'MM/DD/YYYY'
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }))
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+
+    try {
+      const created = await createFund(formData)
+      onSuccess?.(created)
+      onClose?.()
+    } catch (error) {
+      console.error('❌ Error creating fund:', error.response?.data || error.message)
+    }
+  }
 
   return (
-    <Form>
-      {/* Row 1 */}
+    <Form onSubmit={handleSubmit}>
       <Row className="mb-3">
         <FormGroup as={Col} md={3}>
           <FormLabel>Fund Status</FormLabel>
-          <FormControl type="text" placeholder="Active" readOnly />
+          <FormControl type="text" name="fund_status" value={formData.fund_status} readOnly />
         </FormGroup>
         <FormGroup as={Col} md={3}>
           <FormLabel>Fund Name</FormLabel>
-          <FormControl type="text" placeholder="Enter Fund Name" required />
+          <FormControl type="text" name="fund_name" value={formData.fund_name} onChange={handleChange} required />
+        </FormGroup>
+        <FormGroup as={Col} md={3}>
+          <FormLabel>Fund Description</FormLabel>
+          <FormControl type="text" name="fund_description" value={formData.fund_description} onChange={handleChange} required />
         </FormGroup>
         <FormGroup as={Col} md={3}>
           <FormLabel>Address</FormLabel>
-          <FormControl type="text" placeholder="Enter Address" required />
-        </FormGroup>
-        <FormGroup as={Col} md={3}>
-          <FormLabel>Incorporation Date</FormLabel>
-          <FormControl type="date" required />
+          <FormControl type="text" name="fund_address" value={formData.fund_address} onChange={handleChange} required />
         </FormGroup>
       </Row>
 
-      {/* Row 2 */}
       <Row className="mb-3">
         <FormGroup as={Col} md={3}>
-          <FormLabel>Reporting Start Date</FormLabel>
-          <FormControl type="date" required />
+          <FormLabel>Incorporation Date</FormLabel>
+          <FormControl type="date" name="incorp_date" value={formData.incorp_date} onChange={handleChange} required />
         </FormGroup>
         <FormGroup as={Col} md={3}>
+          <FormLabel>Reporting Start Date</FormLabel>
+          <FormControl type="date" name="reporting_start_date" value={formData.reporting_start_date} onChange={handleChange} required />
+        </FormGroup>
+        {/* <FormGroup as={Col} md={3}>
+          <FormLabel>FY Starts On</FormLabel>
+          <FormControl type="date" name="fy_starts_on" value={formData.fy_starts_on} onChange={handleChange} required />
+        </FormGroup> */}
+        <FormGroup as={Col} md={3}>
           <FormLabel>Financial Year Ends On</FormLabel>
-          <FormControl as="select" required>
+          {/* <FormControl type="date" name="fy_ends_on" value={formData.fy_ends_on} onChange={handleChange} required /> */}
+          <FormControl as="select" name="fy_ends_on" value={formData.fy_ends_on} onChange={handleChange} required>
             <option value="">Select</option>
+            <option value="January">January</option>
+            <option value="February">February</option>
             <option value="March">March</option>
+            <option value="April">April</option>
+            <option value="May">May</option>
+            <option value="June">June</option>
+            <option value="July">July</option>
+            <option value="August">August</option>
+            <option value="September">September</option>
+            <option value="October">October</option>
+            <option value="November">November</option>
             <option value="December">December</option>
           </FormControl>
         </FormGroup>
         <FormGroup as={Col} md={3}>
           <FormLabel>Reporting Frequency</FormLabel>
-          <FormControl as="select" required>
+          <FormControl as="select" name="reporting_frequency" value={formData.reporting_frequency} onChange={handleChange} required>
             <option value="">Select</option>
+            <option value="Daily">Daily</option>
             <option value="Monthly">Monthly</option>
             <option value="Quarterly">Quarterly</option>
-            <option value="Yearly">Yearly</option>
-          </FormControl>
-        </FormGroup>
-        <FormGroup as={Col} md={3}>
-          <FormLabel>Reporting Currency</FormLabel>
-          <FormControl as="select" required>
-            <option value="">Select</option>
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
+            <option value="Annually">Annually</option>
           </FormControl>
         </FormGroup>
       </Row>
 
-      {/* Row 3 */}
       <Row className="mb-3">
         <FormGroup as={Col} md={3}>
-          <FormLabel>Decimal Precision</FormLabel>
-          <FormControl as="select" required>
+          <FormLabel>Reporting Currency</FormLabel>
+          <FormControl as="select" name="reporting_currency" value={formData.reporting_currency} onChange={handleChange} required>
             <option value="">Select</option>
+            {currencies
+              .slice()
+              .sort((a, b) => a.code.localeCompare(b.code))
+              .map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} — {c.name} {c.symbol ? `(${c.symbol})` : ''}
+                </option>
+              ))}
+          </FormControl>
+        </FormGroup>
+        <FormGroup as={Col} md={3}>
+          <FormLabel>Decimal Precision</FormLabel>
+          <FormControl as="select" name="decimal_precision" value={formData.decimal_precision} onChange={handleChange}>
+            <option value="1">1</option>
             <option value="2">2</option>
+            <option value="3">3</option>
             <option value="4">4</option>
           </FormControl>
         </FormGroup>
-        <FormGroup as={Col} md={3}>
-          <FormLabel>Contribution Timing</FormLabel>
-          <FormControl as="select" required>
+        <FormGroup as={Col} md={4}>
+          <FormLabel>Commission Accounting method</FormLabel>
+          {/* <FormControl type="date" name="fy_ends_on" value={formData.fy_ends_on} onChange={handleChange} required /> */}
+          <FormControl as="select" name="commission_accounting_method" value={formData.commission_accounting_method} onChange={handleChange} required>
             <option value="">Select</option>
-            <option value="End of Month">End of Month</option>
-            <option value="Start of Month">Start of Month</option>
+            <option value="Capital">Capitalize</option>
+            <option value="Expense">Expense</option>
           </FormControl>
         </FormGroup>
-        <FormGroup as={Col} md={3}>
-          <FormLabel>Withdraw Timing</FormLabel>
-          <FormControl as="select" required>
-            <option value="">Select</option>
-            <option value="Immediate">Immediate</option>
-            <option value="End of Month">End of Month</option>
-          </FormControl>
-        </FormGroup>
-        <FormGroup as={Col} md={3}>
-          <FormLabel>Reinvestment Timing</FormLabel>
-          <FormControl as="select" required>
-            <option value="">Select</option>
-            <option value="Monthly">Monthly</option>
-            <option value="Quarterly">Quarterly</option>
-          </FormControl>
+        <FormGroup as={Col} md={2}>
+          <FormLabel>Email Notification</FormLabel>
+          <FormCheck type="checkbox" label="Enable" name="enable_report_email" checked={formData.enable_report_email} onChange={handleChange} />
         </FormGroup>
       </Row>
 
-      {/* Row 4 */}
       <Row className="mb-3">
         <FormGroup as={Col} md={3}>
-          <FormLabel>Withdrawals (For Report)</FormLabel>
-          <FormControl as="select" required>
-            <option value="">Select</option>
-            <option value="Detailed">Detailed</option>
-            <option value="Summary">Summary</option>
+          <FormLabel>Date Format</FormLabel>
+          <FormControl as="select" name="date_format" value={formData.date_format} onChange={handleChange} required>
+            <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+            <option value="DD/MM/YYYY">DD/MM/YYYY</option>
           </FormControl>
         </FormGroup>
-        <FormGroup as={Col} md={3}>
-          <FormLabel>Commission Accounting Method</FormLabel>
-          <FormControl as="select" required>
-            <option value="">Select</option>
-            <option value="Accrual">Accrual</option>
-            <option value="Cash">Cash</option>
-          </FormControl>
-        </FormGroup>
-        <FormGroup as={Col} md={3}>
-          <FormLabel>Reporting Component</FormLabel>
+        <FormGroup as={Col} md={6}>
+          <FormLabel>Reporting Components</FormLabel>
           <div>
-            <FormCheck inline label="MTD" type="checkbox" />
-            <FormCheck inline label="QTD" type="checkbox" />
-            <FormCheck inline label="YTD" type="checkbox" />
-            <FormCheck inline label="ITD" type="checkbox" />
+            <FormCheck inline label="MTD" type="checkbox" name="reporting_mtd" checked={formData.reporting_mtd} onChange={handleChange} />
+            <FormCheck inline label="QTD" type="checkbox" name="reporting_qtd" checked={formData.reporting_qtd} onChange={handleChange} />
+            <FormCheck inline label="YTD" type="checkbox" name="reporting_ytd" checked={formData.reporting_ytd} onChange={handleChange} />
+            <FormCheck inline label="ITD" type="checkbox" name="reporting_itd" checked={formData.reporting_itd} onChange={handleChange} />
           </div>
-        </FormGroup>
-        <FormGroup as={Col} md={3}>
-          <FormLabel>Enable Report Email Notification</FormLabel>
-          <FormCheck label="Yes" type="checkbox" />
         </FormGroup>
       </Row>
 
-      {/* Submit Button */}
       <div className="d-flex justify-content-end">
-        <Button variant="primary" type="submit">
+        <Button type="submit" variant="primary">
           Submit
         </Button>
       </div>
     </Form>
-
-  );
+  )
 }
+
 export const AddStatementBalance = () => {
   const [validated, setValidated] = useState(false)
-
 
   const handleSubmit = (event) => {
     const form = event.currentTarget
@@ -814,7 +1522,6 @@ export const AddStatementBalance = () => {
     }
     setValidated(true)
   }
-
 
   return (
     <Form className="row g-5 needs-validation" noValidate validated={validated} onSubmit={handleSubmit}>
@@ -827,7 +1534,6 @@ export const AddStatementBalance = () => {
         </FormControl.Feedback>
       </FormGroup>
 
-
       {/* GL Name */}
       <FormGroup className="position-relative col-md-6 mb-3">
         <FormLabel>GL Name</FormLabel>
@@ -837,7 +1543,6 @@ export const AddStatementBalance = () => {
         </FormControl.Feedback>
       </FormGroup>
 
-
       {/* Statement Balance */}
       <FormGroup className="position-relative col-md-6 mb-3">
         <FormLabel>Statement Balance</FormLabel>
@@ -846,7 +1551,6 @@ export const AddStatementBalance = () => {
           Please provide a valid statement balance.
         </FormControl.Feedback>
       </FormGroup>
-
 
       <Col xs={12}>
         <div className="d-flex justify-content-end">
@@ -858,6 +1562,7 @@ export const AddStatementBalance = () => {
     </Form>
   )
 }
+
 const AllFormValidation = () => {
   return (
     <>
@@ -869,16 +1574,17 @@ const AllFormValidation = () => {
 
       <SupportedElements />
 
-      <Tooltips />
+      <AddTrade />
 
       <AddGl />
 
-      <AddManualJournal/>
+      <AddManualJournal />
 
-      <AddFund/>
+      <AddFund />
 
-      <AddStatementBalance/>
+      <AddStatementBalance />
     </>
   )
 }
+
 export default AllFormValidation

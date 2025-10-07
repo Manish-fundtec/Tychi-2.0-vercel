@@ -22,6 +22,6 @@
     },
     "target": "ES2017",
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/api/userPreference/saveUserPreference.js", "src/app/api/users/route.ts"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/api/userPreference/saveUserPreference.js", "src/app/api/users/route.ts", "src/lib/api/authService.jsx", "src/lib/api/authService.js"],
   "exclude": ["node_modules"]
 }

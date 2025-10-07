@@ -1,5 +1,5 @@
 import { MENU_ITEMS } from '@/assets/data/menu-items';
-export const getMenuItems = () => {
+export const getMenuItems  = (tokenData) =>  {
   return MENU_ITEMS;
 };
 export const findAllParent = (menuItems, menuItem) => {

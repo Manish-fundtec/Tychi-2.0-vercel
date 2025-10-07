@@ -5,6 +5,7 @@ import SalesChart from './components/SalesChart';
 import SocialSource from './components/SocialSource';
 import Statistics from './components/Statistics';
 import Transaction from './components/Transaction';
+import SetTokenFromUrl from '@/components/SetTokenFromUrl';
 export const metadata = {
   title: 'Analytics'
 };

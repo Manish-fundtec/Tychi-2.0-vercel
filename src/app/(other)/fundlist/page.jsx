@@ -1,80 +1,110 @@
-import PageTitle from '@/components/PageTitle'
-import IconifyIcon from '@/components/wrappers/IconifyIcon'
-import { getAllReview } from '@/helpers/data'
-import Image from 'next/image'
-import Link from 'next/link'
-import ComponentContainerCard from '@/components/ComponentContainerCard'
-import {
-  Button,
-  Card,
-  CardBody,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  Col,
-  Dropdown,
-  DropdownItem,
-  DropdownMenu,
-  DropdownToggle,
-  Row,
-  Modal,
-} from 'react-bootstrap'
-import { AddFundModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
+'use client'
 
-const ReviewsPage = async () => {
-  const reviewData = await getAllReview()
+import React, { useEffect, useState, useCallback } from 'react'
+import dynamic from 'next/dynamic'
+import { Card, CardBody, CardFooter, CardHeader, CardTitle, Col, Dropdown, Row } from 'react-bootstrap'
+
+import PageTitle from '@/components/PageTitle'
+import ComponentContainerCard from '@/components/ComponentContainerCard'
+import { AddFundModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
+import { fetchFunds } from '@/lib/api/fund' 
+// ----------- AG Grid-related imports -----------
+
+// IMPORTANT: import ClientSideRowModelModule
+import { ClientSideRowModelModule } from 'ag-grid-community'
+
+// Dynamically import AgGridReact to avoid SSR issues in Next.js
+const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
+
+const FundListPage = () => {
+  const [columnDefs, setColumnDefs] = useState([])
+  const [rowData, setRowData] = useState([])
+  const [funds, setFunds] = useState([])
+
+  // Make sure this is declared in the same component scope and BEFORE JSX uses it
+  const refreshFunds = useCallback(async () => {
+    try {
+      const data = await fetchFunds()
+      if (data?.funds) {
+        setRowData(data.funds)
+      } else {
+        console.error('Unexpected API response structure:', data)
+        setRowData([])
+      }
+    } catch (error) {
+      console.error('Error fetching funds data:', error)
+      setRowData([])
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      import('@/assets/tychiData/columnDefs')
+        .then((module) => setColumnDefs(module.fundColDefs || []))
+        .catch((err) => {
+          console.error('Error loading column definitions:', err)
+          setColumnDefs([])
+        })
+
+      // initial load
+      refreshFunds()
+    }
+  }, [refreshFunds])
+
+  const defaultColDef = { resizable: true, sortable: true, filter: true }
 
   return (
-   
-    <ComponentContainerCard id="static-backdrop" >
-    <PageTitle title="Fundadmin" subName="Tychi" />
-
-      {/* Button to trigger the modal */}
-
+    <ComponentContainerCard id="static-backdrop">
+      <PageTitle title="Fundadmin" subName="Tychi" />
       <Row>
         <Col xl={12}>
           <Card>
             <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
-              <CardTitle as={'h4'}>Fundadmin</CardTitle>
+              <CardTitle as="h4">Fundadmin</CardTitle>
               <Dropdown>
-               <AddFundModal/>
+                <AddFundModal
+                  onFundCreated={() => {
+                    refreshFunds() 
+                  }}
+                />
               </Dropdown>
             </CardHeader>
+
             <CardBody className="p-0">
-              <div className="table-responsive">
-                <table className="table align-middle text-nowrap table-hover table-centered border-bottom mb-0">
-                  <thead className="bg-light-subtle"></thead>
-                  <tbody></tbody>
-                </table>
+              <div className="ag-theme-alpine" style={{ width: '100%', height: '400px' }}>
+                <AgGridReact
+                  // Register the client-side row model module
+                  modules={[ClientSideRowModelModule]}
+                  // If you explicitly set rowModelType, keep it as "clientSide" or omit if you prefer the default
+                  rowModelType="clientSide"
+                  columnDefs={columnDefs}
+                  defaultColDef={defaultColDef}
+                  rowData={rowData}
+                  pagination={true}
+                  paginationPageSize={10}
+                />
               </div>
             </CardBody>
+
             <CardFooter>
+              {/* Custom pagination UI (optional) 
+                  If you prefer AG Grid’s built-in pagination, you can remove or hide this. */}
               <nav aria-label="Page navigation example">
                 <ul className="pagination justify-content-end mb-0">
                   <li className="page-item">
-                    <Link className="page-link" href="">
-                      Previous
-                    </Link>
+                    <a className="page-link">Previous</a>
                   </li>
                   <li className="page-item active">
-                    <Link className="page-link" href="">
-                      1
-                    </Link>
+                    <a className="page-link">1</a>
                   </li>
                   <li className="page-item">
-                    <Link className="page-link" href="">
-                      2
-                    </Link>
+                    <a className="page-link">2</a>
                   </li>
                   <li className="page-item">
-                    <Link className="page-link" href="">
-                      3
-                    </Link>
+                    <a className="page-link">3</a>
                   </li>
                   <li className="page-item">
-                    <Link className="page-link" href="">
-                      Next
-                    </Link>
+                    <a className="page-link">Next</a>
                   </li>
                 </ul>
               </nav>
@@ -82,9 +112,8 @@ const ReviewsPage = async () => {
           </Card>
         </Col>
       </Row>
-
     </ComponentContainerCard>
-
   )
 }
-export default ReviewsPage
+
+export default FundListPage

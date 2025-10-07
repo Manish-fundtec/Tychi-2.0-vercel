@@ -1,35 +1,48 @@
-'use client';
-
+import React, { useEffect, useRef } from 'react';
 import Choices from 'choices.js';
-import { useEffect, useRef } from 'react';
-const ChoicesFormInput = ({
-  children,
-  multiple,
-  className,
-  onChange,
-  allowInput,
-  options,
-  ...props
-}) => {
-  const choicesRef = useRef(null);
+
+const ChoicesFormInput = ({ name, value, onChange, children }) => {
+  const selectRef = useRef(null);
+  const choicesInstance = useRef(null);
+
   useEffect(() => {
-    if (choicesRef.current) {
-      const choices = new Choices(choicesRef.current, {
-        ...options,
-        placeholder: true,
-        allowHTML: true,
-        shouldSort: false
+    if (selectRef.current && !choicesInstance.current) {
+      choicesInstance.current = new Choices(selectRef.current, {
+        searchEnabled: false,
+        shouldSort: false,
+        itemSelectText: '',
       });
-      choices.passedElement.element.addEventListener('change', e => {
-        if (!(e.target instanceof HTMLSelectElement)) return;
-        if (onChange) {
-          onChange(e.target.value);
-        }
+
+      // 👇 Register a manual event to simulate React onChange
+      selectRef.current.addEventListener('change', (e) => {
+        const syntheticEvent = {
+          target: {
+            name,
+            value: e.target.value,
+          },
+        };
+        onChange(syntheticEvent);
       });
     }
-  }, [choicesRef]);
-  return allowInput ? <input ref={choicesRef} multiple={multiple} className={className} {...props} /> : <select ref={choicesRef} multiple={multiple} className={className} {...props}>
+
+    return () => {
+      if (choicesInstance.current) {
+        choicesInstance.current.destroy();
+        choicesInstance.current = null;
+      }
+    };
+  }, []);
+
+  return (
+    <select
+      ref={selectRef}
+      name={name}
+      defaultValue={value}
+      className="form-select"
+    >
       {children}
-    </select>;
+    </select>
+  );
 };
+
 export default ChoicesFormInput;

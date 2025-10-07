@@ -1,49 +1,110 @@
-'use client'; // ✅ Ensures this is a Client Component
+'use client' // ✅ Ensures this is a Client Component
 
-import { useEffect, useState } from 'react';
-import dynamic from 'next/dynamic';
-import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown } from 'react-bootstrap';
-
-// ✅ Dynamically import MGLEntryModal to avoid SSR issues
-const MGLEntryModal = dynamic(() => import('../base-ui/modals/components/AllModals').then(mod => mod.MGLEntryModal), {
-  ssr: false,
-});
-
-// ✅ Dynamically import AgGridReact to prevent SSR issues
-const AgGridReact = dynamic(() => import('ag-grid-react').then(mod => mod.AgGridReact), {
-  ssr: false,
-});
+import { useEffect, useState, useMemo } from 'react'
+import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown } from 'react-bootstrap'
+import { MGLEntryModal } from '../base-ui/modals/components/AllModals'
+import { AgGridReact } from 'ag-grid-react'
+import Cookies from 'js-cookie'
+import { jwtDecode } from 'jwt-decode'
+import api from '@/lib/api/axios'
+import { formatYmd } from '@/lib/dateFormat'
+import {useDashboardToken} from '@/hooks/useDashboardToken'
 
 const ManualJournalPage = () => {
-  const [rowData, setRowData] = useState([]);
-  const [columnDefs, setColumnDefs] = useState([]);
+  const [fundId, setFundId] = useState(null)
+  // grid data
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(false)
+  // simple pagination (client-side, since you asked for GET '/')
+  const [pageSize, setPageSize] = useState(20)
+
+  // decode token to get fund_id
+  useEffect(() => {
+    const token = Cookies.get('dashboardToken')
+    if (!token) return
+    try {
+      const d = jwtDecode(token)
+      setFundId(d.fund_id)
+    } catch (e) {
+      console.error('jwt decode failed', e)
+    }
+  }, [])
+
+  // register AG Grid modules (handles different versions)
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const mod = await import('ag-grid-community')
+        const toRegister = []
+
+        // v31+ (module-based)
+        if (mod.ClientSideRowModelModule) toRegister.push(mod.ClientSideRowModelModule)
+        if (mod.AllCommunityModule) toRegister.push(mod.AllCommunityModule)
+
+        if (mod.ModuleRegistry && toRegister.length) {
+          mod.ModuleRegistry.registerModules(toRegister)
+        }
+      } catch (err) {
+        console.warn('AG Grid module registration skipped:', err)
+      }
+    })()
+  }, [])
+
+  // fetch journals
+  const fetchJournals = async () => {
+    if (!fundId) return
+    setLoading(true)
+    try {
+      // ✅ Your route: router.get('/', getManualJournals)
+      // If your backend expects fund_id as a query param:
+      const res = await api.get(`/api/v1/manualjournal/${fundId}`)
+      const data = Array.isArray(res.data?.data) ? res.data.data : res.data || []
+      setRows(data)
+    } catch (e) {
+      console.error('fetch manual journals failed:', e)
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // ✅ Import colmdefs safely & handle errors
-      import('@/assets/tychiData/columnDefs')
-        .then((colmdefs) => {
-          setColumnDefs(colmdefs.manualJournalColDefs || []);
-        })
-        .catch((error) => {
-          console.error('Error loading columnDefs:', error);
-          setColumnDefs([]);
-        });
+    fetchJournals()
+  }, [fundId])
 
-      // ✅ Set row data
-      setRowData([
-        { srNo: 1, month: 'January', date: '2025-01-01', status: 'Pending' },
-        { srNo: 2, month: 'February', date: '2025-02-14', status: 'Completed' },
-      ]);
+  const dashboard = useDashboardToken()
+  const fmt = dashboard?.date_format || 'MM/DD/YYYY'
 
-      // ✅ Dynamically import and register AgGrid Modules (fixes SSR issue)
-      import('ag-grid-community')
-        .then(({ ModuleRegistry, AllCommunityModule }) => {
-          ModuleRegistry.registerModules([AllCommunityModule]);
-        })
-        .catch((error) => console.error('Error registering AgGrid modules:', error));
-    }
-  }, []);
+  // columns (safe defaults)
+  const columnDefs = useMemo(
+    () => [
+      {
+        headerName: 'Date',
+        field: 'journal_date',
+        sortable: true,
+        filter: true,
+        flex: 1,
+        valueFormatter: (p) => {
+          const raw = p?.value ? String(p.value).slice(0, 10) : ''
+          return raw ? formatYmd(raw, fmt) : ''
+        },
+      },
+      { headerName: 'Dr Account', field: 'dr_account', sortable: true, filter: true, flex: 1 },
+      { headerName: 'Cr Account', field: 'cr_account', sortable: true, filter: true, flex: 1 },
+      {
+        headerName: 'Amount',
+        field: 'amount',
+        sortable: true,
+        filter: true,
+        width: 120,
+        valueFormatter: (p) => (p.value != null ? Number(p.value).toLocaleString() : ''),
+        cellClass: 'text-end',
+        flex: 1,
+      },
+      { headerName: 'Description', field: 'description', flex: 1 },
+    ],
+    [],
+  )
 
   return (
     <Row>
@@ -57,21 +118,24 @@ const ManualJournalPage = () => {
           </CardHeader>
           <CardBody className="p-2">
             <div className="ag-theme-alpine" style={{ height: 550, width: '100%' }}>
-              {columnDefs.length > 0 && (
+              {/* Guard so we don’t mount grid before columns */}
+              {columnDefs.length > 0 ? (
                 <AgGridReact
-                  rowData={rowData}
+                  rowData={rows}
                   columnDefs={columnDefs}
                   pagination={true}
-                  paginationPageSize={10}
-                  defaultColDef={{ sortable: true, filter: true }} // Ensure default settings
+                  paginationPageSize={pageSize}
+                  defaultColDef={{ sortable: true, filter: true, resizable: true }}
                 />
+              ) : (
+                <div className="d-flex justify-content-center align-items-center h-100">Loading grid…</div>
               )}
             </div>
           </CardBody>
         </Card>
       </Col>
     </Row>
-  );
-};
+  )
+}
 
-export default ManualJournalPage;
+export default ManualJournalPage

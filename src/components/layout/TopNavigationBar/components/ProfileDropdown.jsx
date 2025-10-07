@@ -1,12 +1,42 @@
-import avatar1 from '@/assets/images/users/avatar-1.jpg'
 import IconifyIcon from '@/components/wrappers/IconifyIcon'
-import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import Link from 'next/link'
 import { Dropdown, DropdownHeader, DropdownItem, DropdownMenu, DropdownToggle } from 'react-bootstrap'
+
 const ProfileDropdown = () => {
   const fundName = 'Celestia Capital Fund' // Your Fund Name
   const fundInitial = fundName.charAt(0).toUpperCase() // Extract First Letter
+  const router = useRouter()
+  const [loggingOut, setLoggingOut] = useState(false)
 
+  const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      const res = await fetch('/api/logout', {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const logoutJson = await res.json().catch(() => ({}))
+      console.log('🔒 Logout response:', logoutJson)
+
+      // Clear any client-side leftovers (only if you ever set them)
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      sessionStorage.clear()
+
+      // Redirect to sign-in
+      router.replace('/auth/sign-in')
+    } catch (e) {
+      console.error('Logout failed:', e)
+      router.replace('/auth/sign-in')
+    } finally {
+      setLoggingOut(false)
+    }
+  }
 
   return (
     <Dropdown className="topbar-item" drop="down">
@@ -38,22 +68,19 @@ const ProfileDropdown = () => {
           Celestia Capital Fund
         </DropdownHeader>
 
-
         {/* "Switch Fund" Option */}
         <DropdownItem as={Link} href="/fundlist">
           <IconifyIcon icon="ri:swap-line" className="align-middle me-2 fs-18" />
           <span className="align-middle">Switch Fund</span>
         </DropdownItem>
 
-
         {/* Divider */}
         <div className="dropdown-divider my-1" />
 
-
         {/* Logout Option */}
-        <DropdownItem as={Link} className="text-danger" href="/auth/sign-in">
+        <DropdownItem as="button" className="text-danger w-100 text-start" onClick={handleLogout} disabled={loggingOut}>
           <IconifyIcon icon="ri:logout-box-line" className="align-middle me-2 fs-18" />
-          <span className="align-middle">Logout</span>
+          <span className="align-middle">{loggingOut ? 'Logging out…' : 'Logout'}</span>
         </DropdownItem>
       </DropdownMenu>
     </Dropdown>

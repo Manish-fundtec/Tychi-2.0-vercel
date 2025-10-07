@@ -7,6 +7,7 @@ import { Tooltips } from '@/app/(admin)/forms/validation/components/AllFormValid
 import { BrokerForm } from '@/app/(admin)/forms/validation/components/ConfigurationForm';
 import { BankForm } from '@/app/(admin)/forms/validation/components/ConfigurationForm';
 import { ExchangeForm } from '@/app/(admin)/forms/validation/components/ConfigurationForm';
+import { AssetTypeForm } from '@/app/(admin)/forms/validation/components/ConfigurationForm';
 import { SymbolForm } from '@/app/(admin)/forms/validation/components/ConfigurationForm';
 import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalTitle } from 'react-bootstrap';
 export const DefaultModal = () => {
@@ -69,140 +70,139 @@ export const BadaModal = () => {
       </>
   );
 };
-export const BrokerModal = () => {
-  const {
-    isTrue,
-    toggle
-  } = useToggle();
+export const AssetTypeModal = ({ show, onClose, assetType, onSuccess }) => {
   return (
-    <>
-      <Button variant="primary" type="button" onClick={toggle}>
-        Add Broker
-      </Button>
-
-      <Modal show={isTrue} onHide={toggle} className="fade" id="exampleModal" tabIndex={-1}>
-        <ModalHeader>
-          <h5 className="modal-title" id="exampleModalLabel">
-            Add Broker
-          </h5>
-          <button type="button" className="btn-close" onClick={toggle} />
-        </ModalHeader>
-        <ModalBody>
-          <BrokerForm/>
-        </ModalBody>
-        {/* <ModalFooter>
-          <Button type="button" variant="secondary" onClick={toggle}>
-            Close
-          </Button>
-          <Button type="button" variant="primary">
-            Save changes
-          </Button>
-        </ModalFooter> */}
-      </Modal>
-      </>
-    );
+    <Modal show={show} onHide={onClose} centered>
+      <ModalHeader closeButton>
+        <h5 className="modal-title">Activate Asset Type</h5>
+      </ModalHeader>
+      <ModalBody>
+        <AssetTypeForm
+          assetType={assetType}
+          onSuccess={onSuccess}
+          onClose={onClose}
+        />
+      </ModalBody>
+    </Modal>
+  );
 };
-export const BankModal = () => {
-  const {
-    isTrue,
-    toggle
-  } = useToggle();
+export const BrokerModal = ({ show, onClose, broker, onSuccess }) => {
   return (
-    <>
-      <Button variant="primary" type="button" onClick={toggle}>
-        Add Bank
-      </Button>
-
-      <Modal show={isTrue} onHide={toggle} className="fade" id="exampleModal" tabIndex={-1}>
-        <ModalHeader>
-          <h5 className="modal-title" id="exampleModalLabel">
-            Add Bank
-          </h5>
-          <button type="button" className="btn-close" onClick={toggle} />
-        </ModalHeader>
-        <ModalBody>
-          <BankForm/>
-        </ModalBody>
-        {/* <ModalFooter>
-          <Button type="button" variant="secondary" onClick={toggle}>
-            Close
-          </Button>
-          <Button type="button" variant="primary">
-            Save changes
-          </Button>
-        </ModalFooter> */}
-      </Modal>
-      </>
-    );
+    <Modal show={show} onHide={onClose} centered>
+      <ModalHeader closeButton>
+        <h5 className="modal-title">{broker ? 'Edit Broker' : 'Add Broker'}</h5>
+      </ModalHeader>
+      <ModalBody>
+        <BrokerForm broker={broker} onSuccess={onSuccess} onClose={onClose} />
+      </ModalBody>
+    </Modal>
+  );
 };
-export const ExchangeModal = () => {
-  const {
-    isTrue,
-    toggle
-  } = useToggle();
+export const BankModal = ({ show, onClose, bank, onSuccess }) => {
   return (
-    <>
-      <Button variant="primary" type="button" onClick={toggle}>
-        Add Exchange
-      </Button>
-
-      <Modal show={isTrue} onHide={toggle} className="fade" id="exampleModal" tabIndex={-1}>
-        <ModalHeader>
-          <h5 className="modal-title" id="exampleModalLabel">
-            Add Exchange
-          </h5>
-          <button type="button" className="btn-close" onClick={toggle} />
-        </ModalHeader>
-        <ModalBody>
-          <ExchangeForm/>
-        </ModalBody>
-        {/* <ModalFooter>
-          <Button type="button" variant="secondary" onClick={toggle}>
-            Close
-          </Button>
-          <Button type="button" variant="primary">
-            Save changes
-          </Button>
-        </ModalFooter> */}
-      </Modal>
-      </>
-    );
+    <Modal show={show} onHide={onClose} centered>
+      <ModalHeader closeButton>
+        <h5 className="modal-title">{bank ? "Edit Bank" : "Add Bank"}</h5>
+      </ModalHeader>
+      <ModalBody>
+        <BankForm bank={bank} onSuccess={onSuccess} onClose={onClose} />
+      </ModalBody>
+    </Modal>
+  );
 };
-export const SymbolModal = () => {
-  const {
-    isOpen,
-    size,
-    className,
-    toggleModal,
-    openModalWithSize
-
-  } = useModal();
+export const ExchangeModal = ({ show, onClose, exchange, onSuccess }) => {
   return (
-    <>
-      <Button variant="primary" type="button" onClick={() => openModalWithSize('lg')}>
-        Add Symbol
-      </Button>
+    <Modal show={show} onHide={onClose} centered>
+      <ModalHeader closeButton>
+        <h5 className="modal-title">{exchange ? "Edit Exchange" : "Add Exchange"}</h5>
+      </ModalHeader>
+      <ModalBody>
+        <ExchangeForm exchange={exchange} onSuccess={onSuccess} onClose={onClose} />
+      </ModalBody>
+    </Modal>
+  );
+};
 
-      <Modal className="fade" show={isOpen} onHide={toggleModal} dialogClassName={className} size={size} centered>
-        <ModalHeader onHide={toggleModal} closeButton>
-          <h5 className="modal-title" id="exampleModalLabel">
-            Symbol-Add Symbol
-          </h5>
-        </ModalHeader>
-        <ModalBody>
-          <SymbolForm/>
-        </ModalBody>
-        {/* <ModalFooter>
-          <Button type="button" variant="secondary" onHide={toggleModal} closeButton>
-            Close
-          </Button>
-          <Button type="button" variant="primary">
-            Save changes
-          </Button>
-        </ModalFooter> */}
-      </Modal>
-      </>
-    );
+// export const ExchangeModal = () => {
+//   const {
+//     isTrue,
+//     toggle
+//   } = useToggle();
+//   return (
+//     <>
+//       <Button variant="primary" type="button" onClick={toggle}>
+//         Add Exchange
+//       </Button>
+
+//       <Modal show={isTrue} onHide={toggle} className="fade" id="exampleModal" tabIndex={-1}>
+//         <ModalHeader>
+//           <h5 className="modal-title" id="exampleModalLabel">
+//             Add Exchange
+//           </h5>
+//           <button type="button" className="btn-close" onClick={toggle} />
+//         </ModalHeader>
+//         <ModalBody>
+//           <ExchangeForm/>
+//         </ModalBody>
+//         {/* <ModalFooter>
+//           <Button type="button" variant="secondary" onClick={toggle}>
+//             Close
+//           </Button>
+//           <Button type="button" variant="primary">
+//             Save changes
+//           </Button>
+//         </ModalFooter> */}
+//       </Modal>
+//       </>
+//     );
+// };
+// export const SymbolModal = () => {
+//   const {
+//     isOpen,
+//     size,
+//     className,
+//     toggleModal,
+//     openModalWithSize
+
+//   } = useModal();
+//   return (
+//     <>
+//       <Button variant="primary" type="button" onClick={() => openModalWithSize('lg')}>
+//         Add Symbol
+//       </Button>
+
+//       <Modal className="fade" show={isOpen} onHide={toggleModal} dialogClassName={className} size={size} centered>
+//         <ModalHeader onHide={toggleModal} closeButton>
+//           <h5 className="modal-title" id="exampleModalLabel">
+//             Symbol-Add Symbol
+//           </h5>
+//         </ModalHeader>
+//         <ModalBody>
+//           <SymbolForm/>
+//         </ModalBody>
+//         {/* <ModalFooter>
+//           <Button type="button" variant="secondary" onHide={toggleModal} closeButton>
+//             Close
+//           </Button>
+//           <Button type="button" variant="primary">
+//             Save changes
+//           </Button>
+//         </ModalFooter> */}
+//       </Modal>
+//       </>
+//     );
+// };
+export const SymbolModal = ({ show, onClose, symbol, onSuccess }) => {
+  return (
+    <Modal show={show} onHide={onClose} centered>
+      <ModalHeader closeButton>
+        <h5 className="modal-title">{symbol ? 'Edit Symbol' : 'Add Symbol'}</h5>
+      </ModalHeader>
+      <ModalBody>
+        <SymbolForm symbol={symbol} onClose={onClose} onSuccess={onSuccess} />
+      </ModalBody>
+    </Modal>
+  );
 };
 
 const AllModals = () => {
@@ -213,6 +213,7 @@ const AllModals = () => {
       <BankModal />
       <BrokerModal />
       <BadaModal />
+      <AssetTypeModal/>
     </>;
 };
 export default AllModals;
