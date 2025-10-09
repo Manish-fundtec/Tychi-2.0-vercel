@@ -3,7 +3,7 @@
 import ComponentContainerCard from '@/components/ComponentContainerCard';
 import useModal from '@/hooks/useModal';
 import useToggle from '@/hooks/useToggle';
-import { Tooltips } from '@/app/(admin)/forms/validation/components/AllFormValidation';
+// Removed import of Tooltips (not exported from source)
 import { BrokerForm } from '@/app/(admin)/forms/validation/components/ConfigurationForm';
 import { BankForm } from '@/app/(admin)/forms/validation/components/ConfigurationForm';
 import { ExchangeForm } from '@/app/(admin)/forms/validation/components/ConfigurationForm';
@@ -63,9 +63,7 @@ export const BadaModal = () => {
             Add Trades
           </h5>
         </ModalHeader>
-        <ModalBody>
-          <Tooltips />
-        </ModalBody>
+        <ModalBody></ModalBody>
       </Modal>
       </>
   );

@@ -8,7 +8,10 @@ import { ExchangeModal } from '@/app/(admin)/base-ui/modals/components/Configura
 import { AgGridReact } from 'ag-grid-react'; // React Data Grid Component
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { Accordion, AccordionBody, AccordionHeader, AccordionItem } from 'react-bootstrap';
-import { BrokerageTableColDefs ,bankTableColDefs, exchangeTableColDefs, assetTypeColDefs, symbolColDefs} from "@/assets/tychiData/columnDefs"
+import { BrokerageTableColDefs , assetTypeColDefs, symbolColDefs} from "@/assets/tychiData/columnDefs"
+// Fallback empty col defs for demos if not exported from columnDefs
+const bankTableColDefs = []
+const exchangeTableColDefs = []
 import TradesData from '@/app/(admin)/mapping/component/mapData';
 // Register all Community features
 ModuleRegistry.registerModules([AllCommunityModule]);
