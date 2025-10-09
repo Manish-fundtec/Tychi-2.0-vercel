@@ -1,3 +1,4 @@
+"use client";
 import React, { useEffect, useMemo, useState } from "react";
 // Note: For AG Grid, install deps in your project: `npm i ag-grid-community ag-grid-react`
 // and make sure Tailwind is enabled. This file is a demo scaffold you can copy into Next.js.
