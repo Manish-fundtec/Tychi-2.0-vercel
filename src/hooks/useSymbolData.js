@@ -22,7 +22,7 @@ export const useSymbolData = (fundId) => {
     }
     try {
       setLoading(true)
-      // console.log('[useSymbolData] fundId=', fundId); // ← debug
+      // Debug logging removed
       const res = await getSymbolsByFundId(fundId)
       setSymbols(normalize(res))
     } catch (err) {

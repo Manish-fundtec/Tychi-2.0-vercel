@@ -21,7 +21,7 @@ export const useBankData = () => {
     refetchBanks();
   }, [refetchBanks]);
   const handleEdit = (bank) => {
-    console.log('Edit clicked for:', bank);
+    // Edit functionality removed
     setEditingBank(bank);
     setShowModal(true);
   };

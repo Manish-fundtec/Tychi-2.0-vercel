@@ -15,7 +15,7 @@ export const defaultColDef = {
 
 const now = new Date()
 const date = parseISO(now.toISOString())
-console.log(date)
+// Debug logging removed
 
 // Specific column definitions
 export const manualJournalColDefs = [
@@ -143,7 +143,7 @@ export const BankTableColDefs = [
           <button
             className="btn btn-sm btn-warning"
             onClick={() => {
-              console.log('Clicked Edit') // ✅ Log here
+              // Edit functionality removed
               handleEdit(params.data) // ✅ This triggers modal
             }}>
             Edit

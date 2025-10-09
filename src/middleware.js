@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
+
 export function middleware(request) {
-  const response = NextResponse.next();
+  // Redirect root path to sign-in
   if (request.nextUrl.pathname === '/') {
-    return NextResponse.redirect(new URL('/dashboards/analytics', request.url));
+    return NextResponse.redirect(new URL('/auth/sign-in', request.url));
   }
-  return response;
+  
+  return NextResponse.next();
 }
 
-// See "Matching Paths" below to learn more
 export const config = {
   matcher: '/'
 };
-export { default } from 'next-auth/middleware';

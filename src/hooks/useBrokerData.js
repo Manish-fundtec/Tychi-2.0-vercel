@@ -30,7 +30,7 @@
 //   }, [])
 
 //   const handleEdit = (broker) => {
-//     console.log('Edit clicked for:', broker)
+    // Edit functionality removed
 //     setEditingBroker(broker)
 //     setShowModal(true)
 //   }

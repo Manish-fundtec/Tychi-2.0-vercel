@@ -1,10 +1,3 @@
-// import api from './axios';
-
-// // Fetch trades for a given fund
-// export const getTradesByFundId = (fund_id) => {
-//   return api.get(`/api/v1/trade/fund/${fund_id}`);
-// };
-
 import api from './axios'
 import Cookies from 'js-cookie'
 
