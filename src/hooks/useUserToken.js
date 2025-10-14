@@ -1,44 +1,35 @@
-// hooks/useUserToken.js
-"use client";
-import { useEffect, useState } from "react";
-import { jwtDecode } from "jwt-decode";
-import Cookies from "js-cookie";
+'use client';
+import { useEffect, useState } from 'react';
+import Cookies from 'js-cookie';
+import { jwtDecode } from 'jwt-decode';
 
 export const useUserToken = () => {
-  const [tokenData, setTokenData] = useState(null);
+  const [tokenData, setTokenData] = useState<any>(null);
 
   useEffect(() => {
-    let token = null;
+    const cookieToken = Cookies.get('userToken');
+    const lsToken = typeof window !== "undefined" ? localStorage.getItem("userToken") : null;
+    const token = cookieToken || lsToken;
 
-    // Prefer localStorage (since cookies aren’t passing cross-site)
-    if (typeof window !== "undefined") {
-      token = localStorage.getItem("userToken");
-    }
+    console.log('🔐 userToken (cookie/localStorage):', token);
 
-    // Fallback to cookie if present (for legacy flows)
-    if (!token) {
-      token = Cookies.get("userToken");
-    }
-
-    console.log("🔐 token for decode (storage>cookie):", token ? "[present]" : "[missing]");
-
-    if (!token) {
-      setTokenData(null);
-      return;
-    }
-
-    try {
-      const decoded = jwtDecode(token);
-      console.log("🧩 Decoded userToken:", decoded);
-      setTokenData(decoded);
-    } catch (err) {
-      console.warn("⚠️ Invalid userToken:", err);
-      setTokenData(null);
+    if (token) {
+      try {
+        const decoded = jwtDecode(token);
+        console.log('🧩 Decoded userToken:', decoded);
+        setTokenData(decoded);
+      } catch (err) {
+        console.warn('⚠️ Invalid userToken:', err);
+        setTokenData(null);
+      }
+    } else {
+      console.warn('⚠️ No userToken found');
     }
   }, []);
 
   return tokenData;
 };
+
 
 
 // 'use client';
