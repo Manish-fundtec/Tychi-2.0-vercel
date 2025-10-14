@@ -3,7 +3,6 @@ import api from './axios'
 
 export const fetchFunds = async () => {
   const response = await api.get('/api/v1/fund', {
-    headers: { Authorization: `Bearer ${token}` },
     params: { t: Date.now() },
   })
   return response.data
