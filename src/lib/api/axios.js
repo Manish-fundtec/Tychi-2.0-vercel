@@ -17,11 +17,11 @@ const api = axios.create({
   withCredentials: false, // important: we're not using cookies
 });
 
+// read token per-request (no top-level variable!)
 api.interceptors.request.use((config) => {
-  const token = getAuthToken();
-  if (token) {
-    config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${token}`;
+  if (typeof window !== 'undefined') {
+    const t = localStorage.getItem('userToken');
+    if (t) (config.headers ||= {}).Authorization = `Bearer ${t}`;
   }
   return config;
 });
