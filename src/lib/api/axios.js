@@ -11,30 +11,32 @@ api.interceptors.request.use((config) => {
     let token = null;
     let tokenType = null;
     if (typeof window !== 'undefined') {
-      // Try tokens from localStorage first
-      const idToken = localStorage.getItem('idToken');
-      const accessToken = localStorage.getItem('accessToken');
-      // Prefer idToken (usually carries user/org claims), else accessToken
-      if (idToken) {
-        token = idToken;
-        tokenType = 'idToken';
-      } else if (accessToken) {
-        token = accessToken;
-        tokenType = 'accessToken';
+      // Prefer legacy cookie tokens first (aligns with hooks)
+      const cookieString = document.cookie || '';
+      const getCookie = (name) => {
+        const match = cookieString.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
+        return match ? decodeURIComponent(match[1]) : null;
+      };
+      const cookieUser = getCookie('userToken');
+      const cookieDash = getCookie('dashboardToken');
+      if (cookieUser) {
+        token = cookieUser;
+        tokenType = 'userToken';
+      } else if (cookieDash) {
+        token = cookieDash;
+        tokenType = 'dashboardToken';
       }
 
-      // Fallback: try cookie tokens if present
+      // Fallback to localStorage tokens if cookies missing
       if (!token) {
-        const cookieString = document.cookie || '';
-        const getCookie = (name) => {
-          const match = cookieString.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
-          return match ? decodeURIComponent(match[1]) : null;
-        };
-        if (!token) {
-          const cookieUser = getCookie('userToken');
-          const cookieDash = getCookie('dashboardToken');
-          token = cookieUser || cookieDash;
-          tokenType = cookieUser ? 'userToken' : (cookieDash ? 'dashboardToken' : null);
+        const idToken = localStorage.getItem('idToken');
+        const accessToken = localStorage.getItem('accessToken');
+        if (idToken) {
+          token = idToken;
+          tokenType = 'idToken';
+        } else if (accessToken) {
+          token = accessToken;
+          tokenType = 'accessToken';
         }
       }
     }
