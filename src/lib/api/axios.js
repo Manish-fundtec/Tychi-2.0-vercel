@@ -9,10 +9,19 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   try {
     let token = null;
+    let tokenType = null;
     if (typeof window !== 'undefined') {
       // Try tokens from localStorage first
-      token = localStorage.getItem('accessToken')
-        || localStorage.getItem('idToken');
+      const idToken = localStorage.getItem('idToken');
+      const accessToken = localStorage.getItem('accessToken');
+      // Prefer idToken (usually carries user/org claims), else accessToken
+      if (idToken) {
+        token = idToken;
+        tokenType = 'idToken';
+      } else if (accessToken) {
+        token = accessToken;
+        tokenType = 'accessToken';
+      }
 
       // Fallback: try cookie tokens if present
       if (!token) {
@@ -21,7 +30,12 @@ api.interceptors.request.use((config) => {
           const match = cookieString.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
           return match ? decodeURIComponent(match[1]) : null;
         };
-        token = getCookie('userToken') || getCookie('dashboardToken');
+        if (!token) {
+          const cookieUser = getCookie('userToken');
+          const cookieDash = getCookie('dashboardToken');
+          token = cookieUser || cookieDash;
+          tokenType = cookieUser ? 'userToken' : (cookieDash ? 'dashboardToken' : null);
+        }
       }
     }
 
@@ -30,8 +44,11 @@ api.interceptors.request.use((config) => {
       config.headers.Authorization = `Bearer ${token}`;
       if (process.env.NODE_ENV !== 'production' && !config.headers['X-Auth-Debug']) {
         config.headers['X-Auth-Debug'] = '1';
+        if (tokenType) {
+          config.headers['X-Token-Type'] = tokenType;
+        }
         // eslint-disable-next-line no-console
-        console.debug('[axios] Authorization header attached');
+        console.debug('[axios] Authorization header attached', tokenType ? `(type=${tokenType})` : '');
       }
     }
   } catch (_) {
