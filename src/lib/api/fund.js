@@ -1,18 +1,8 @@
 // import axios from '@/lib/api/axios';
 import api from './axios'
-import Cookies from 'js-cookie';
-
-document.cookie = `dashboardToken=${token}; path=/; secure; samesite=strict`;
-console.log('🔐 dashboardToken cookie set:', token);
-
 
 export const fetchFunds = async () => {
   const response = await api.get('/api/v1/fund', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${dashboardToken}`, // Send dashboard token here
-    },
-    body: formData,
     params: { t: Date.now() },
   })
   return response.data
