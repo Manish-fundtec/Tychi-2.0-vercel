@@ -6,7 +6,11 @@ export const uploadTradeFile = (file) => {
   formData.append('file', file);
 
   return api.post('/api/v1/trade/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    // headers: { 'Content-Type': 'multipart/form-data' },
+    headers: {
+      'Authorization': `Bearer ${Cookies.get('dashboardToken')}`, // Send dashboard token here
+    },
+    withCredentials: true,
   });
 };
 
