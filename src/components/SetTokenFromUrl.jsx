@@ -15,6 +15,7 @@ const SetTokenFromUrl = () => {
         path: '/',
         sameSite: 'Lax',
         secure: process.env.NODE_ENV === 'production',
+        domain: 'api.dev.tychi.co',
       });
     
       const cleanUrl = window.location.origin + window.location.pathname;

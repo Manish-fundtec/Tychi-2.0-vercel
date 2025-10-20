@@ -21,6 +21,7 @@ const CustomArrowButton = (params) => {
           path: '/',
           sameSite: 'Lax',
           secure: process.env.NODE_ENV === 'production',
+          domain: 'api.dev.tychi.co',
         });
 
         // // ✅ Trigger signIn to register token with next-auth session
