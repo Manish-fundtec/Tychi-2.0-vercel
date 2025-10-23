@@ -11,7 +11,7 @@ export const uploadTradeFile = (file) => {
  
   return api.post('/api/v1/trade/upload', formData, {
     headers: {
-      'Authorization': `Bearer ${token}`, // manually attach token
+      'dashboard': `Bearer ${token}`, // manually attach token
       'Content-Type': 'multipart/form-data', // optional but good
     },
   });
