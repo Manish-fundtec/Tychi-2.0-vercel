@@ -4,7 +4,7 @@ import api from './axios'
 export const fetchFunds = async () => {
   const response = await api.get('/api/v1/fund', {
     params: { t: Date.now() },
-  })
+  }) 
   return response.data
 }
 export const createFund = async (formData) => {
