@@ -20,7 +20,6 @@ const CustomArrowButton = (params) => {
         Cookies.set('dashboardToken', token, {
           path: '/',
           sameSite: 'none',
-          httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           
         });
