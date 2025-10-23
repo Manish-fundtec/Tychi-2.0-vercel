@@ -13,7 +13,7 @@ const SetTokenFromUrl = () => {
       console.log('🪝 Setting dashboardToken from URL query');
       Cookies.set('dashboardToken', token, {
         path: '/',
-        sameSite: 'Lax',
+        sameSite: 'none',
         secure: process.env.NODE_ENV === 'production',
       });
     
