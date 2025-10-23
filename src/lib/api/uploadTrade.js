@@ -1,16 +1,27 @@
-// lib/api/uploadTrade.js
+import Cookies from 'js-cookie'; // ✅ Add this
 import api from './axios';
-
+ 
 export const uploadTradeFile = (file) => {
   const formData = new FormData();
   formData.append('file', file);
-  console.log(`Bearer ${Cookies.get('dashboardToken')}`);
+ 
+  // ✅ Make sure token exists
+  const token = Cookies.get('dashboardToken');
+  console.log('Bearer token:', token);
+ 
   return api.post('/api/v1/trade/upload', formData, {
-    // headers: { 'Content-Type': 'multipart/form-data' },
     headers: {
-      'Authorization': `Bearer ${Cookies.get('dashboardToken')}`, // Send dashboard token here
+      'Authorization': `Bearer ${token}`, // manually attach token
+      'Content-Type': 'multipart/form-data', // optional but good
     },
   });
 };
-
-export const createTrade = (payload) => api.post('/api/v1/trade', payload);
+ 
+export const createTrade = (payload) => {
+  const token = Cookies.get('dashboardToken');
+  return api.post('/api/v1/trade', payload, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+};
