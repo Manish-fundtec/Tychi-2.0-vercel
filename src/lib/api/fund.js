@@ -3,8 +3,11 @@ import api from './axios'
 
 export const fetchFunds = async () => {
   const response = await api.get('/api/v1/fund', {
+    headers: {
+      'Authorization': `Bearer ${Cookies.get('dashboardToken')}`, // Send dashboard token here
+    },
     params: { t: Date.now() },
-  }) 
+  })
   return response.data
 }
 export const createFund = async (formData) => {
