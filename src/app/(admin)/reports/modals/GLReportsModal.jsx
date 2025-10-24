@@ -1,19 +1,9 @@
-// corrected 10/3/2025
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
 import Cookies from 'js-cookie';
-import { Button, Modal, Form, Row, Col } from 'react-bootstrap';
-import { ModuleRegistry } from 'ag-grid-community';
+import { Modal, Button, Form, Row, Col, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
-
-// ✅ Use full community module (v32+ safe)
-import { AllCommunityModule } from 'ag-grid-community';
-ModuleRegistry.registerModules([AllCommunityModule]);
-
-// ✅ Dynamically import AgGridReact to avoid SSR timing issues
-const AgGridReact = dynamic(() => import('ag-grid-react').then(m => m.AgGridReact), { ssr: false });
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -27,6 +17,12 @@ function getAuthHeaders() {
 const fmt = (v) =>
   Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/**
+ * A lightweight, sales/purchase style GL Report modal (no ag-grid).
+ * - Summary cards (Opening, DR Total, CR Total, Closing)
+ * - Clean, responsive table with sticky header
+ * - Client-side pagination
+ */
 export default function GLReportsModal({ show, handleClose, fundId, date }) {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
@@ -37,50 +33,19 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
   const [accLoading, setAccLoading] = useState(false);
   const [err, setErr] = useState('');
 
-  const [pinnedTop, setPinnedTop] = useState([]);
-  const [pinnedBottom, setPinnedBottom] = useState([]);
-  const [gridApi, setGridApi] = useState(null);
+  const [opening, setOpening] = useState(0);
+  const [drTotal, setDrTotal] = useState(0);
+  const [crTotal, setCrTotal] = useState(0);
+  const [closing, setClosing] = useState(0);
 
-  const columnDefs = useMemo(
-    () => [
-      {
-        headerName: 'S.no',
-        width: 90,
-        sortable: false,
-        filter: false,
-        valueGetter: (p) => (p.node.rowPinned ? '' : p.node.rowIndex + 1),
-      },
-      { headerName: 'Date', field: 'date', sortable: true, filter: true, flex: 1 },
-      { headerName: 'Journal ID', field: 'journalid', sortable: true, filter: true, flex: 1 },
-      { headerName: 'Account Name', field: 'accountname', sortable: true, filter: true, flex: 1 },
-      { headerName: 'Description', field: 'description', sortable: true, filter: true, flex: 1 },
-      {
-        headerName: 'Dr Amount',
-        field: 'dramount',
-        sortable: true,
-        filter: true,
-        flex: 1,
-        valueFormatter: (p) => (p.value == null ? '' : fmt(p.value)),
-      },
-      {
-        headerName: 'Cr Amount',
-        field: 'cramount',
-        sortable: true,
-        filter: true,
-        flex: 1,
-        valueFormatter: (p) => (p.value == null ? '' : fmt(p.value)),
-      },
-      {
-        headerName: 'Running Balance',
-        field: 'runningbalance',
-        sortable: true,
-        filter: true,
-        flex: 1,
-        valueFormatter: (p) => (p.value == null ? '' : fmt(p.value)),
-      },
-    ],
-    []
-  );
+  // pagination
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, page]);
 
   // Load COA on open
   useEffect(() => {
@@ -114,13 +79,14 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show, fundId]);
 
-  // Load GL rows + compute pinned rows when filters change
+  // Load GL rows + compute summaries
   useEffect(() => {
     if (!show || !fundId || !date) return;
     (async () => {
       try {
         setLoading(true);
         setErr('');
+        setPage(1);
 
         const params = new URLSearchParams();
         params.set('date', date);
@@ -130,7 +96,6 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
         const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl?${params.toString()}`;
         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
         const json = await resp.json();
 
         const mapped = (json?.rows || []).map((r) => ({
@@ -144,88 +109,60 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
         }));
         setRows(mapped);
 
-        // Build pinned rows
-        const opening = Number(json?.opening_balance ?? 0);
-        const drTotal =
-          Number(json?.totals?.dr_total ?? mapped.reduce((s, r) => s + (r.dramount || 0), 0));
-        const crTotal =
-          Number(json?.totals?.cr_total ?? mapped.reduce((s, r) => s + (r.cramount || 0), 0));
+        const openingBal = Number(json?.opening_balance ?? 0);
+        const drT = Number(json?.totals?.dr_total ?? mapped.reduce((s, r) => s + (r.dramount || 0), 0));
+        const crT = Number(json?.totals?.cr_total ?? mapped.reduce((s, r) => s + (r.cramount || 0), 0));
 
-        let closing;
+        let closingBal;
         if (selectedAccount) {
-          const lastRB = mapped.length ? mapped[mapped.length - 1].runningbalance : opening;
-          closing = lastRB == null ? opening + (drTotal - crTotal) : lastRB;
+          const lastRB = mapped.length ? mapped[mapped.length - 1].runningbalance : openingBal;
+          closingBal = lastRB == null ? openingBal + (drT - crT) : lastRB;
         } else {
-          closing = opening + (drTotal - crTotal);
+          closingBal = openingBal + (drT - crT);
         }
 
-        const top = [
-          {
-            date: null,
-            journalid: null,
-            accountname: 'Opening Balance',
-            description: null,
-            dramount: null,
-            cramount: null,
-            runningbalance: opening,
-          },
-        ];
-
-        const bottom = [
-          {
-            date: null,
-            journalid: null,
-            accountname: 'Total',
-            description: null,
-            dramount: drTotal,
-            cramount: crTotal,
-            runningbalance: null,
-          },
-          {
-            date: null,
-            journalid: null,
-            accountname: 'Closing Balance',
-            description: null,
-            dramount: null,
-            cramount: null,
-            runningbalance: closing,
-          },
-        ];
-
-        setPinnedTop(top);
-        setPinnedBottom(bottom);
+        setOpening(openingBal);
+        setDrTotal(drT);
+        setCrTotal(crT);
+        setClosing(closingBal);
       } catch (e) {
         console.error('[GLReportsModal] gl rows load failed', e);
         setErr('Failed to load journal entries.');
         setRows([]);
-        setPinnedTop([]);
-        setPinnedBottom([]);
+        setOpening(0);
+        setDrTotal(0);
+        setCrTotal(0);
+        setClosing(0);
       } finally {
         setLoading(false);
       }
     })();
   }, [show, fundId, date, selectedAccount, scope]);
 
-  // ✅ Ensure pinned rows are applied once grid is ready AND any time they change
-  useEffect(() => {
-    if (!gridApi) return;
-    const anyApi = gridApi;
-    if (typeof anyApi.setGridOption === 'function') {
-      anyApi.setGridOption('pinnedTopRowData', pinnedTop);
-      anyApi.setGridOption('pinnedBottomRowData', pinnedBottom);
-    }
-  }, [gridApi, pinnedTop, pinnedBottom]);
+  const exportCsv = () => {
+    const headers = ['Date','Journal ID','Account Name','Description','Dr Amount','Cr Amount','Running Balance'];
+    const lines = rows.map(r => [
+      r.date, r.journalid, r.accountname, (r.description||'').replaceAll('\n',' '), r.dramount, r.cramount, r.runningbalance ?? ''
+    ].join(','));
+    const csv = [headers.join(','), ...lines].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `GL-Report-${date}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Modal show={show} onHide={handleClose} size="xl" centered>
       <Modal.Header closeButton>
-        <Modal.Title>
-          <Eye className="me-2" size={20} /> GL Report — <span className="text-muted">{date || '-'}</span>
+        <Modal.Title className="d-flex align-items-center gap-2">
+          <Eye size={20} /> GL Report — <span className="text-muted">{date || '-'}</span>
         </Modal.Title>
       </Modal.Header>
 
       <Modal.Body>
-        <Form className="mb-2">
+        {/* Filters */}
+        <Form className="mb-3">
           <Row className="g-3 align-items-end">
             <Col md={5}>
               <Form.Label>Select Chart Of Accounts</Form.Label>
@@ -255,51 +192,437 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
               <Form.Text muted>Period is computed from the selected date ({scope}).</Form.Text>
             </Col>
 
-            <Col md={2} className="d-flex align-items-center justify-content-end">
+            <Col md={2} className="d-flex align-items-center justify-content-end gap-2">
               <Button variant="outline-secondary" size="sm" onClick={() => setSelectedAccount('')}>
                 Show All
+              </Button>
+              <Button variant="outline-primary" size="sm" onClick={exportCsv} disabled={!rows.length}>
+                Export CSV
               </Button>
             </Col>
           </Row>
         </Form>
 
-        {err && <div className="text-danger mb-2">{err}</div>}
+        {/* Summary cards */}
+        <Row className="g-3 mb-3">
+          <Col md={3}>
+            <div className="p-3 rounded-3 border bg-light">
+              <div className="text-muted small">Opening Balance</div>
+              <div className="fw-bold fs-5">₹ {fmt(opening)}</div>
+            </div>
+          </Col>
+          <Col md={3}>
+            <div className="p-3 rounded-3 border bg-light">
+              <div className="text-muted small">Total Debit</div>
+              <div className="fw-bold fs-5 text-success">₹ {fmt(drTotal)}</div>
+            </div>
+          </Col>
+          <Col md={3}>
+            <div className="p-3 rounded-3 border bg-light">
+              <div className="text-muted small">Total Credit</div>
+              <div className="fw-bold fs-5 text-danger">₹ {fmt(crTotal)}</div>
+            </div>
+          </Col>
+          <Col md={3}>
+            <div className="p-3 rounded-3 border bg-light">
+              <div className="text-muted small">Closing Balance</div>
+              <div className="fw-bold fs-5">₹ {fmt(closing)}</div>
+            </div>
+          </Col>
+        </Row>
 
-        <div style={{ height: 460, width: '100%', minWidth: '900px' }}>
-          <AgGridReact
-            rowData={rows}
-            columnDefs={columnDefs}
-            rowModelType="clientSide"
-            pagination
-            paginationPageSize={10}
-            defaultColDef={{ resizable: true }}
-            overlayLoadingTemplate={
-              loading ? '<span class="ag-overlay-loading-center">Loading…</span>' : undefined
-            }
-            // Provide as props (so they show on client nav)…
-            pinnedTopRowData={pinnedTop}
-            pinnedBottomRowData={pinnedBottom}
-            // …and re-apply once the grid is really ready (fixes full refresh)
-            onGridReady={(params) => setGridApi(params.api)}
-            onFirstDataRendered={(params) => {
-              const api = params.api;
-              if (typeof api.setGridOption === 'function') {
-                api.setGridOption('pinnedTopRowData', pinnedTop);
-                api.setGridOption('pinnedBottomRowData', pinnedBottom);
-              }
-            }}
-          />
+        {/* Table */}
+        <div className="table-responsive" style={{ maxHeight: 420, overflow: 'auto' }}>
+          <table className="table table-sm align-middle">
+            <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+              <tr>
+                <th style={{ width: 100 }}>Date</th>
+                <th style={{ width: 140 }}>Journal ID</th>
+                <th>Account Name</th>
+                <th>Description</th>
+                <th className="text-end" style={{ width: 140 }}>Dr Amount</th>
+                <th className="text-end" style={{ width: 140 }}>Cr Amount</th>
+                <th className="text-end" style={{ width: 160 }}>Running Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="fw-semibold">
+                <td colSpan={6}>Opening Balance</td>
+                <td className="text-end">₹ {fmt(opening)}</td>
+              </tr>
+
+              {loading && (
+                <tr>
+                  <td colSpan={7} className="text-center py-5">
+                    <Spinner animation="border" size="sm" className="me-2" /> Loading…
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !pagedRows.length && (
+                <tr>
+                  <td colSpan={7} className="text-center py-4 text-muted">No entries found.</td>
+                </tr>
+              )}
+
+              {!loading && pagedRows.map((r, idx) => (
+                <tr key={`${r.journalid}-${idx}`}>
+                  <td>{r.date}</td>
+                  <td>{r.journalid}</td>
+                  <td>{r.accountname}</td>
+                  <td style={{ whiteSpace: 'pre-wrap' }}>{r.description}</td>
+                  <td className="text-end">{r.dramount ? `₹ ${fmt(r.dramount)}` : ''}</td>
+                  <td className="text-end">{r.cramount ? `₹ ${fmt(r.cramount)}` : ''}</td>
+                  <td className="text-end">{r.runningbalance != null ? `₹ ${fmt(r.runningbalance)}` : ''}</td>
+                </tr>
+              ))}
+
+              {/* Totals */}
+              {!loading && (
+                <>
+                  <tr className="fw-semibold">
+                    <td colSpan={4}>Total</td>
+                    <td className="text-end">₹ {fmt(drTotal)}</td>
+                    <td className="text-end">₹ {fmt(crTotal)}</td>
+                    <td />
+                  </tr>
+                  <tr className="fw-semibold">
+                    <td colSpan={6}>Closing Balance</td>
+                    <td className="text-end">₹ {fmt(closing)}</td>
+                  </tr>
+                </>
+              )}
+            </tbody>
+          </table>
         </div>
+
+        {rows.length > pageSize && (
+          <div className="d-flex justify-content-between align-items-center mt-2">
+            <div className="small text-muted">
+              Page {page} of {pageCount} • Showing {Math.min(page * pageSize, rows.length)} of {rows.length}
+            </div>
+            <div className="d-flex gap-2">
+              <Button size="sm" variant="outline-secondary" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                Prev
+              </Button>
+              <Button size="sm" variant="outline-secondary" disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))}>
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal.Body>
 
       <Modal.Footer>
-        <Button variant="secondary" onClick={handleClose}>
-          Close
-        </Button>
+        <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>
     </Modal>
   );
 }
+
+
+// // corrected 10/3/2025
+// 'use client';
+
+// import { useEffect, useMemo, useState } from 'react';
+// import dynamic from 'next/dynamic';
+// import Cookies from 'js-cookie';
+// import { Button, Modal, Form, Row, Col } from 'react-bootstrap';
+// import { ModuleRegistry } from 'ag-grid-community';
+// import { Eye } from 'lucide-react';
+
+// // ✅ Use full community module (v32+ safe)
+// import { AllCommunityModule } from 'ag-grid-community';
+// ModuleRegistry.registerModules([AllCommunityModule]);
+
+// // ✅ Dynamically import AgGridReact to avoid SSR timing issues
+// const AgGridReact = dynamic(() => import('ag-grid-react').then(m => m.AgGridReact), { ssr: false });
+
+// const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+
+// function getAuthHeaders() {
+//   const token = Cookies.get('dashboardToken');
+//   const h = { Accept: 'application/json' };
+//   if (token) h.Authorization = `Bearer ${token}`;
+//   return h;
+// }
+
+// const fmt = (v) =>
+//   Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// export default function GLReportsModal({ show, handleClose, fundId, date }) {
+//   const [accounts, setAccounts] = useState([]);
+//   const [selectedAccount, setSelectedAccount] = useState('');
+//   const [scope, setScope] = useState('MTD');
+
+//   const [rows, setRows] = useState([]);
+//   const [loading, setLoading] = useState(false);
+//   const [accLoading, setAccLoading] = useState(false);
+//   const [err, setErr] = useState('');
+
+//   const [pinnedTop, setPinnedTop] = useState([]);
+//   const [pinnedBottom, setPinnedBottom] = useState([]);
+//   const [gridApi, setGridApi] = useState(null);
+
+//   const columnDefs = useMemo(
+//     () => [
+//       {
+//         headerName: 'S.no',
+//         width: 90,
+//         sortable: false,
+//         filter: false,
+//         valueGetter: (p) => (p.node.rowPinned ? '' : p.node.rowIndex + 1),
+//       },
+//       { headerName: 'Date', field: 'date', sortable: true, filter: true, flex: 1 },
+//       { headerName: 'Journal ID', field: 'journalid', sortable: true, filter: true, flex: 1 },
+//       { headerName: 'Account Name', field: 'accountname', sortable: true, filter: true, flex: 1 },
+//       { headerName: 'Description', field: 'description', sortable: true, filter: true, flex: 1 },
+//       {
+//         headerName: 'Dr Amount',
+//         field: 'dramount',
+//         sortable: true,
+//         filter: true,
+//         flex: 1,
+//         valueFormatter: (p) => (p.value == null ? '' : fmt(p.value)),
+//       },
+//       {
+//         headerName: 'Cr Amount',
+//         field: 'cramount',
+//         sortable: true,
+//         filter: true,
+//         flex: 1,
+//         valueFormatter: (p) => (p.value == null ? '' : fmt(p.value)),
+//       },
+//       {
+//         headerName: 'Running Balance',
+//         field: 'runningbalance',
+//         sortable: true,
+//         filter: true,
+//         flex: 1,
+//         valueFormatter: (p) => (p.value == null ? '' : fmt(p.value)),
+//       },
+//     ],
+//     []
+//   );
+
+//   // Load COA on open
+//   useEffect(() => {
+//     if (!show || !fundId) return;
+//     (async () => {
+//       try {
+//         setAccLoading(true);
+//         setErr('');
+//         const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/chart-of-accounts`;
+//         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
+//         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+//         const json = await resp.json();
+//         const list = (json?.rows || []).map((a) => ({
+//           gl_code: a.gl_code || a.account_code,
+//           account_name: a.account_name,
+//           label: a.label || `${a.gl_code || a.account_code} — ${a.account_name}`,
+//         }));
+//         const withAll = [{ gl_code: '', account_name: 'All Accounts', label: 'All Accounts' }, ...list];
+//         setAccounts(withAll);
+//         const keep = withAll.find((x) => x.gl_code === selectedAccount);
+//         setSelectedAccount(keep ? keep.gl_code : '');
+//       } catch (e) {
+//         console.error('[GLReportsModal] accounts load failed', e);
+//         setErr('Failed to load chart of accounts.');
+//         setAccounts([{ gl_code: '', account_name: 'All Accounts', label: 'All Accounts' }]);
+//         setSelectedAccount('');
+//       } finally {
+//         setAccLoading(false);
+//       }
+//     })();
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
+//   }, [show, fundId]);
+
+//   // Load GL rows + compute pinned rows when filters change
+//   useEffect(() => {
+//     if (!show || !fundId || !date) return;
+//     (async () => {
+//       try {
+//         setLoading(true);
+//         setErr('');
+
+//         const params = new URLSearchParams();
+//         params.set('date', date);
+//         if (selectedAccount) params.set('account', selectedAccount);
+//         params.set('scope', String(scope).toUpperCase());
+
+//         const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl?${params.toString()}`;
+//         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
+//         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+//         const json = await resp.json();
+
+//         const mapped = (json?.rows || []).map((r) => ({
+//           date: r.date || date,
+//           journalid: r.journalid,
+//           accountname: r.accountname,
+//           description: r.description,
+//           dramount: Number(r.dramount ?? 0),
+//           cramount: Number(r.cramount ?? 0),
+//           runningbalance: r.runningbalance != null ? Number(r.runningbalance) : null,
+//         }));
+//         setRows(mapped);
+
+//         // Build pinned rows
+//         const opening = Number(json?.opening_balance ?? 0);
+//         const drTotal =
+//           Number(json?.totals?.dr_total ?? mapped.reduce((s, r) => s + (r.dramount || 0), 0));
+//         const crTotal =
+//           Number(json?.totals?.cr_total ?? mapped.reduce((s, r) => s + (r.cramount || 0), 0));
+
+//         let closing;
+//         if (selectedAccount) {
+//           const lastRB = mapped.length ? mapped[mapped.length - 1].runningbalance : opening;
+//           closing = lastRB == null ? opening + (drTotal - crTotal) : lastRB;
+//         } else {
+//           closing = opening + (drTotal - crTotal);
+//         }
+
+//         const top = [
+//           {
+//             date: null,
+//             journalid: null,
+//             accountname: 'Opening Balance',
+//             description: null,
+//             dramount: null,
+//             cramount: null,
+//             runningbalance: opening,
+//           },
+//         ];
+
+//         const bottom = [
+//           {
+//             date: null,
+//             journalid: null,
+//             accountname: 'Total',
+//             description: null,
+//             dramount: drTotal,
+//             cramount: crTotal,
+//             runningbalance: null,
+//           },
+//           {
+//             date: null,
+//             journalid: null,
+//             accountname: 'Closing Balance',
+//             description: null,
+//             dramount: null,
+//             cramount: null,
+//             runningbalance: closing,
+//           },
+//         ];
+
+//         setPinnedTop(top);
+//         setPinnedBottom(bottom);
+//       } catch (e) {
+//         console.error('[GLReportsModal] gl rows load failed', e);
+//         setErr('Failed to load journal entries.');
+//         setRows([]);
+//         setPinnedTop([]);
+//         setPinnedBottom([]);
+//       } finally {
+//         setLoading(false);
+//       }
+//     })();
+//   }, [show, fundId, date, selectedAccount, scope]);
+
+//   // ✅ Ensure pinned rows are applied once grid is ready AND any time they change
+//   useEffect(() => {
+//     if (!gridApi) return;
+//     const anyApi = gridApi;
+//     if (typeof anyApi.setGridOption === 'function') {
+//       anyApi.setGridOption('pinnedTopRowData', pinnedTop);
+//       anyApi.setGridOption('pinnedBottomRowData', pinnedBottom);
+//     }
+//   }, [gridApi, pinnedTop, pinnedBottom]);
+
+//   return (
+//     <Modal show={show} onHide={handleClose} size="xl" centered>
+//       <Modal.Header closeButton>
+//         <Modal.Title>
+//           <Eye className="me-2" size={20} /> GL Report — <span className="text-muted">{date || '-'}</span>
+//         </Modal.Title>
+//       </Modal.Header>
+
+//       <Modal.Body>
+//         <Form className="mb-2">
+//           <Row className="g-3 align-items-end">
+//             <Col md={5}>
+//               <Form.Label>Select Chart Of Accounts</Form.Label>
+//               <Form.Select
+//                 disabled={accLoading || accounts.length === 0}
+//                 value={selectedAccount}
+//                 onChange={(e) => setSelectedAccount(e.target.value)}
+//               >
+//                 {accounts.map((a) => (
+//                   <option key={a.gl_code || 'ALL'} value={a.gl_code}>
+//                     {a.label}
+//                   </option>
+//                 ))}
+//               </Form.Select>
+//               <Form.Text muted>
+//                 {selectedAccount ? `Filtering by ${selectedAccount}` : 'Showing all accounts'}
+//               </Form.Text>
+//             </Col>
+
+//             <Col md={5}>
+//               <Form.Label>Select Category</Form.Label>
+//               <Form.Select value={scope} onChange={(e) => setScope(e.target.value)}>
+//                 <option value="MTD">MTD</option>
+//                 <option value="QTD">QTD</option>
+//                 <option value="YTD">YTD</option>
+//               </Form.Select>
+//               <Form.Text muted>Period is computed from the selected date ({scope}).</Form.Text>
+//             </Col>
+
+//             <Col md={2} className="d-flex align-items-center justify-content-end">
+//               <Button variant="outline-secondary" size="sm" onClick={() => setSelectedAccount('')}>
+//                 Show All
+//               </Button>
+//             </Col>
+//           </Row>
+//         </Form>
+
+//         {err && <div className="text-danger mb-2">{err}</div>}
+
+//         <div style={{ height: 460, width: '100%', minWidth: '900px' }}>
+//           <AgGridReact
+//             rowData={rows}
+//             columnDefs={columnDefs}
+//             rowModelType="clientSide"
+//             pagination
+//             paginationPageSize={10}
+//             defaultColDef={{ resizable: true }}
+//             overlayLoadingTemplate={
+//               loading ? '<span class="ag-overlay-loading-center">Loading…</span>' : undefined
+//             }
+//             // Provide as props (so they show on client nav)…
+//             pinnedTopRowData={pinnedTop}
+//             pinnedBottomRowData={pinnedBottom}
+//             // …and re-apply once the grid is really ready (fixes full refresh)
+//             onGridReady={(params) => setGridApi(params.api)}
+//             onFirstDataRendered={(params) => {
+//               const api = params.api;
+//               if (typeof api.setGridOption === 'function') {
+//                 api.setGridOption('pinnedTopRowData', pinnedTop);
+//                 api.setGridOption('pinnedBottomRowData', pinnedBottom);
+//               }
+//             }}
+//           />
+//         </div>
+//       </Modal.Body>
+
+//       <Modal.Footer>
+//         <Button variant="secondary" onClick={handleClose}>
+//           Close
+//         </Button>
+//       </Modal.Footer>
+//     </Modal>
+//   );
+// }
 
 // export default GLReportsModal;
 
