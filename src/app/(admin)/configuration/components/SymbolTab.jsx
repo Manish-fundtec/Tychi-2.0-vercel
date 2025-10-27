@@ -3,8 +3,9 @@
 import { AgGridReact } from 'ag-grid-react'
 import { useSymbolData } from '@/hooks/useSymbolData'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
-import { SymbolModal } from '@/app/(admin)/base-ui/modals/components/ConfigurationModal'
-import { Card, CardBody, CardHeader, CardTitle, Col, Dropdown, Button, Row ,Alert} from 'react-bootstrap'
+import { UploadSymbolModal } from '@/app/(admin)/base-ui/modals/components/ConfigurationModal'
+import {SymbolModal} from '@/app/(admin)/base-ui/modals/components/ConfigurationModal'
+import { Card, CardBody, CardHeader, CardTitle, Col, Dropdown, Button, Row, Alert } from 'react-bootstrap'
 import { symbolColDefs } from '@/assets/tychiData/columnDefs'
 
 const SymbolTab = () => {
@@ -28,9 +29,18 @@ const SymbolTab = () => {
                 fundId={fund_id}
                 onSuccess={refetchSymbols}
               />
-              <Button onClick={() => setShowModal(true)} disabled={!fund_id}>
-                Add Symbol
-              </Button>
+
+              <div className="d-flex gap-2">
+                <Button onClick={() => setShowModal(true)} disabled={!fund_id}>
+                  Add
+                </Button>
+                <UploadSymbolModal 
+                  buttonLabel="Upload" 
+                  modalTitle="Upload Symbol" 
+                  fundId={fund_id}
+                  onSuccess={refetchSymbols}
+                />
+              </div>
             </Dropdown>
           </CardHeader>
           <CardBody className="p-2">

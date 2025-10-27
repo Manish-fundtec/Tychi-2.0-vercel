@@ -1,14 +1,33 @@
 'use client'
 
 import clsx from 'clsx'
-import { useState, useEffect } from 'react'
-import { Button, Col, Form, FormCheck, FormControl, FormFeedback, FormGroup, FormLabel, FormSelect, InputGroup } from 'react-bootstrap'
+import { useState, useEffect, useRef ,useMemo} from 'react'
+import {
+  Button,
+  Col,
+  Form,
+  FormCheck,
+  FormControl,
+  FormFeedback,
+  FormGroup,
+  FormLabel,
+  FormSelect,
+  InputGroup,
+  Spinner,
+  Alert,
+  Row,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalTitle,
+} from 'react-bootstrap'
 import Feedback from 'react-bootstrap/esm/Feedback'
 import InputGroupText from 'react-bootstrap/esm/InputGroupText'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { serverSideFormValidate } from '@/helpers/data'
 import ChoicesFormInput from '@/components/from/ChoicesFormInput'
-import { getFundDetails } from '@/lib/api/fund' // ✅ Your API call
+import { getFundDetails } from '@/lib/api/fund' 
 import { useSearchParams } from 'next/navigation'
 import { createBroker, updateBroker } from '@/lib/api/broker'
 import { createBank, updateBank } from '@/lib/api/bank'
@@ -18,22 +37,66 @@ import { getExchanges } from '@/lib/api/exchange'
 import { getAssetTypesActive } from '@/lib/api/assetType'
 import { updateAssetType } from '@/lib/api/assetType'
 import { updateFund, getTradeCount } from '@/lib/api/fund'
-import currencies from 'currency-formatter/currencies' // or your own currency list
-// import jwtDecode from 'jwt-decode';
+import { useDashboardToken } from '@/hooks/useDashboardToken'
+import api from '@/lib/api/axios'
+import currencies from 'currency-formatter/currencies'
 import Cookies from 'js-cookie'
 import { jwtDecode } from 'jwt-decode'
 import axios from 'axios'
+import { toast } from 'react-toastify'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
-export const BrokerForm = ({ broker, onSuccess, onClose }) => {
+const MAX_SIZE_MB = 5
+export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate }) => {
   const isEdit = !!broker
   const [validated, setValidated] = useState(false)
+  const [rsd, setRsd] = useState(null) // Reporting Start Date from token
 
   const [form, setForm] = useState({
     broker_name: '',
     start_date: '',
   })
+
+  // Get RSD from token on component mount
+  useEffect(() => {
+    try {
+      const token = Cookies.get('dashboardToken')
+      console.log('🔑 Token exists:', !!token)
+      
+      if (token) {
+        const payload = jwtDecode(token) || {}
+        console.log('📦 Decoded payload BrokerForm:', payload)
+        
+        // Try to get reporting start date from fund object first
+        const raw = payload.fund?.reporting_start_date || payload.reporting_start_date || payload.reportingStartDate || payload.RSD || payload.fund_start_date
+        console.log('📅 Raw reporting start date value:', raw)
+        
+        if (raw) {
+          // Normalize to YYYY-MM-DD (strip time if present)
+          const match = String(raw).match(/^(\d{4}-\d{2}-\d{2})/)
+          const normalized = match ? match[1] : null
+          console.log('✅ Normalized reporting start date:', normalized)
+          setRsd(normalized)
+        } else {
+          console.log('❌ No reporting_start_date found in token.')
+          console.log('Available keys:', Object.keys(payload))
+          console.log('Fund object keys:', payload.fund ? Object.keys(payload.fund) : 'No fund object')
+        }
+      } else {
+        console.log('❌ No dashboardToken found in cookies')
+      }
+    } catch (error) {
+      console.error('❌ Error decoding token:', error)
+    }
+    
+    console.log('API Base URL:', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000')
+  }, [])
+
+  // Helper: check if start_date is less than or equal to RSD (should be > RSD)
+  const isBeforeOrEqualRSD = useMemo(() => {
+    if (!rsd || !form.start_date) return false
+    return form.start_date <= rsd
+  }, [form.start_date, rsd])
 
   useEffect(() => {
     if (broker) {
@@ -53,30 +116,60 @@ export const BrokerForm = ({ broker, onSuccess, onClose }) => {
     e.preventDefault()
     const formEl = e.currentTarget
 
+    // 1) Native HTML validation
     if (!formEl.checkValidity()) {
       e.stopPropagation()
-    } else {
-      try {
-        const token = Cookies.get('dashboardToken')
-        const decoded = jwtDecode(token)
+      setValidated(true)
+      return
+    }
 
-        const payload = {
-          ...form,
-          user_id: decoded.user_id,
-          org_id: decoded.org_id,
-          fund_id: decoded.fund_id,
-        }
+    // 2) Frontend guard: start_date must be greater than RSD
+    if (rsd && form.start_date && form.start_date <= rsd) {
+      toast.error(`Start Date must be greater than Reporting Start Date (${rsd}).`)
+      setValidated(true)
+      return
+    }
 
-        if (isEdit) {
-          await updateBroker(broker.broker_id, payload)
-        } else {
-          await createBroker(payload)
-        }
+    // 3) One-line guard (YYYY-MM-DD strings compare correctly) - keep existing logic
+    if (reportingStartDate && form.start_date < reportingStartDate) {
+      toast.error(`Broker date cannot be earlier than ${reportingStartDate}`)
+      setValidated(true)
+      return
+    }
 
-        onSuccess?.()
-        onClose?.()
-      } catch (err) {
-        console.error('❌ Failed to submit broker form:', err)
+    try {
+      const token = Cookies.get('dashboardToken')
+      const decoded = jwtDecode(token)
+
+      const payload = {
+        ...form,
+        user_id: decoded.user_id,
+        org_id: decoded.org_id,
+        fund_id: decoded.fund_id,
+      }
+
+      if (isEdit) {
+        await updateBroker(broker.broker_id, payload)
+      } else {
+        await createBroker(payload)
+      }
+
+      onSuccess?.()
+      onClose?.()
+    } catch (err) {
+      console.error('❌ Failed to submit broker form:', err)
+      
+      // Handle different types of errors
+      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+        toast.error('Cannot connect to server. Please check if the backend is running.')
+      } else if (err.response?.status === 401) {
+        toast.error('Unauthorized. Please log in again.')
+      } else if (err.response?.status === 403) {
+        toast.error('Forbidden. You do not have permission to perform this action.')
+      } else if (err.response?.status >= 500) {
+        toast.error('Server error. Please try again later.')
+      } else {
+        toast.error(err.response?.data?.message || err.message || 'Failed to submit broker form')
       }
     }
 
@@ -91,14 +184,31 @@ export const BrokerForm = ({ broker, onSuccess, onClose }) => {
         <Feedback type="invalid">Please enter broker name</Feedback>
       </FormGroup>
 
-      <FormGroup className="col-md-6">
-        <FormLabel>Start Date</FormLabel>
-        <FormControl name="start_date" type="date" required value={form.start_date} onChange={handleChange} />
+                   <FormGroup className="col-md-6">
+        <FormLabel>
+          Start Date {rsd ? <span className="text-muted small">(must be &gt; {rsd})</span> : null}
+        </FormLabel>
+        <FormControl 
+          name="start_date" 
+          type="date" 
+          required 
+          value={form.start_date} 
+          onChange={handleChange} 
+          min={rsd ? `${rsd.split('-')[0]}-${rsd.split('-')[1]}-${String(Number(rsd.split('-')[2]) + 1).padStart(2, '0')}` : reportingStartDate || undefined}
+          isInvalid={isBeforeOrEqualRSD}
+        />
         <Feedback type="invalid">Please provide a valid start date</Feedback>
+        {isBeforeOrEqualRSD && (
+          <div className="text-danger mt-1" role="alert">
+            Start date must be greater than Reporting Start Date ({rsd})
+          </div>
+        )}
       </FormGroup>
 
       <Col xs={12}>
-        <Button type="submit">{isEdit ? 'Update' : 'Submit'}</Button>
+        <Button type="submit" disabled={isBeforeOrEqualRSD}>
+          {isEdit ? 'Update' : 'Submit'}
+        </Button>
       </Col>
     </Form>
   )
@@ -1283,6 +1393,160 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
     </Form>
   )
 }
+const MAX_MB = 10
+export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
+  const dashboard = useDashboardToken()
+  const currentFundId = fundId || dashboard?.fund_id
+  const [file, setFile] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+  const [ok, setOk] = useState('')
+  const [errorFileUrl, setErrorFileUrl] = useState('')
+  const inputRef = useRef(null)
+  const [msg, setMsg] = useState('')
+
+  const close = () => {
+    setFile(null)
+    setErr('')
+    setOk('')
+    setErrorFileUrl('')
+    if (inputRef.current) inputRef.current.value = ''
+    if (onClose) onClose()
+  }
+
+  const onPick = (e) => {
+    const f = e.target.files?.[0]
+    setMsg('')
+    if (!f) return
+    if (!f.name.toLowerCase().endsWith('.xlsx')) return setMsg('Only .xlsx files are allowed.')
+    if (f.size > MAX_MB * 1024 * 1024) return setMsg(`Max ${MAX_MB} MB.`)
+    setFile(f)
+  }
+
+  const downloadTemplate = async () => {
+    try {
+      // same route shape you set: /api/v1/symbol-loader/template/:fundId?
+      const url = currentFundId ? `/api/v1/symbols/template/${currentFundId}` : `/api/v1/symbols/template`
+      const res = await api.get(url, { responseType: 'blob' })
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `symbol-loader-template${currentFundId ? '-' + currentFundId : ''}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(a.href)
+    } catch {
+      setErr('Template download failed. Try again.')
+    }
+  }
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!file) return setMsg('Choose a .xlsx file.')
+    if (!fundId) return setMsg('Missing fundId.')
+
+    setLoading(true)
+    setMsg('')
+    try {
+      const form = new FormData()
+      form.append('file', file) // Multer expects 'file'
+      form.append('fund_id', String(fundId))
+
+      const res = await api.post(`/api/v1/symbols/upload/${fundId}`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+
+      setMsg(res.data?.success ? 'Processing started.' : res.data?.error || 'Upload failed.')
+      if (res.data?.success && inputRef.current) {
+        inputRef.current.value = ''
+        setFile(null)
+      }
+    } catch (err) {
+      setMsg(err?.response?.data?.error || 'Upload failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Form onSubmit={submit}>
+      <Row className="mb-2">
+        <Col className="text-end">
+          <Button variant="link" className="text-primary text-decoration-underline p-0" onClick={downloadTemplate} size="sm">
+            Download Symbol Template (.xlsx)
+          </Button>
+        </Col>
+      </Row>
+
+      <Form.Group className="mb-3">
+        <Form.Label>Select .xlsx file</Form.Label>
+        <Form.Control
+          ref={inputRef}
+          type="file"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          onChange={onPick}
+          disabled={loading}
+        />
+        <Form.Text className="mt-1 d-inline-block text-decoration-underline">Allowed: .xlsx , Max size: {MAX_SIZE_MB} MB</Form.Text>
+      </Form.Group>
+
+      {file && (
+        <Alert variant="info" className="py-2">
+          Selected: <strong>{file.name}</strong>
+          <Button
+            variant="link"
+            size="sm"
+            className="ms-2 p-0 align-baseline"
+            onClick={() => {
+              setFile(null)
+              if (inputRef.current) inputRef.current.value = ''
+            }}>
+            remove
+          </Button>
+        </Alert>
+      )}
+
+      {err && (
+        <Alert variant="danger" className="py-2">
+          {err}
+          {errorFileUrl && (
+            <>
+              {' — '}
+              <a href={errorFileUrl} target="_blank" rel="noreferrer">
+                Download error file
+              </a>
+            </>
+          )}
+        </Alert>
+      )}
+
+      {ok && (
+        <Alert variant="success" className="py-2">
+          {ok}
+        </Alert>
+      )}
+
+      <div className="d-flex justify-content-end gap-2">
+        <Button variant="secondary" onClick={close} disabled={loading}>
+          Close
+        </Button>
+        <Button type="submit" variant="primary" disabled={!file || loading}>
+          {loading ? (
+            <>
+              <Spinner animation="border" size="sm" className="me-2" /> Uploading…
+            </>
+          ) : (
+            'Upload'
+          )}
+        </Button>
+      </div>
+    </Form>
+  )
+}
+
 const AllFormValidation = () => {
   return (
     <>
@@ -1293,7 +1557,7 @@ const AllFormValidation = () => {
       <ServerSideValidation />
 
       <SymbolForm />
-
+      <UploadSymbols />
       <ExchangeForm />
 
       <BrokerForm />
@@ -1308,4 +1572,5 @@ const AllFormValidation = () => {
     </>
   )
 }
+
 export default AllFormValidation

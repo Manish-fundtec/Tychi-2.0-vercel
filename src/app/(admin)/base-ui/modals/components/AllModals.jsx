@@ -6,12 +6,13 @@ import useModal from '@/hooks/useModal'
 import useToggle from '@/hooks/useToggle'
 import { AgGridReact } from 'ag-grid-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade } from '@/app/(admin)/forms/validation/components/AllFormValidation'
+import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { AddManualJournal } from '@/app/(admin)/forms/validation/components/AllFormValidation'
-// import {ModalBody, ModalFooter, Modal.Header, ModalTitle, Dropdown, Form } from 'react-bootstrap'
-import { Button, Modal, Dropdown } from 'react-bootstrap'
+import { Button, Modal, Dropdown, } from 'react-bootstrap'
 import Cookies from 'js-cookie'
 import jwt from 'jsonwebtoken'
+import { formatYmd } from '@/lib/dateFormat'
+import { useDashboardToken } from '@/hooks/useDashboardToken'
 import {
   parseISO,
   isValid,
@@ -484,7 +485,7 @@ export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload 
 }
 
 export function MGLEntryModal({
-  buttonLabel = 'Add Manual Journal',
+  buttonLabel = 'Add',
   modalTitle = 'Add Manual Journal',
   modalBody = <p> Add - Manual Journal</p>,
   onSave,
@@ -664,6 +665,10 @@ export const ToggleBetweenModals = ({
   const [metaError, setMetaError] = useState('')
   const [reportingFrequency, setReportingFrequency] = useState(tokenData?.fund?.reporting_frequency || tokenData?.reporting_frequency || '')
   const [reportingStartDate, setReportingStartDate] = useState(tokenData?.fund?.reporting_start_date || tokenData?.reporting_start_date || '')
+  
+  // Dashboard token for date formatting
+  const dashboard = useDashboardToken()
+  const fmt = dashboard?.date_format || 'MM/DD/YYYY'
 
   // ── ADHOC (custom) state
   const [startDate, setStartDate] = useState('')
@@ -761,8 +766,8 @@ export const ToggleBetweenModals = ({
   )
 
   const freqLabel = reportingFrequency || '—'
-  const periodLabel = windowInfo ? `${ymdUTC(windowInfo.start)} → ${ymdUTC(windowInfo.lastDayInclusive)}` : '—'
-  const pricingDateLabel = windowInfo ? ymdUTC(windowInfo.lastDayInclusive) : '—'
+  const periodLabel = windowInfo ? `${formatYmd(ymdUTC(windowInfo.start), fmt)} → ${formatYmd(ymdUTC(windowInfo.lastDayInclusive), fmt)}` : '—'
+  const pricingDateLabel = windowInfo ? formatYmd(ymdUTC(windowInfo.lastDayInclusive), fmt) : '—'
 
   // Manual grid
   const manualCols = useMemo(
@@ -845,8 +850,11 @@ export const ToggleBetweenModals = ({
           throw new Error(`Upload failed (HTTP ${resp.status})${text ? ` - ${text}` : ''}`)
         }
       }
+      // Close ALL modals after successful upload
       setUploadOpen(false)
-      setChooserOpen(true)
+      setChooserOpen(false)
+      setManualOpen(false)
+      setAdhocOpen(false)
       setFile(null)
       setFileError('')
     } catch (e) {
@@ -957,8 +965,11 @@ export const ToggleBetweenModals = ({
 
       await postManualPricing(entries)
 
+      // Close ALL modals after successful save
       setManualOpen(false)
-      setChooserOpen(true)
+      setChooserOpen(false)
+      setUploadOpen(false)
+      setAdhocOpen(false)
 
       // refresh last pricing date
       try {
@@ -1171,7 +1182,11 @@ export const ToggleBetweenModals = ({
       setSavingCustom(true)
       await postCustomPricing({ pricing_date, entries /*, file_id*/ })
 
+      // Close ALL modals after successful save
       setAdhocOpen(false)
+      setChooserOpen(false)
+      setManualOpen(false)
+      setUploadOpen(false)
       setCustomRows([])
       setStartDate('')
       setEndDate('')
@@ -1744,6 +1759,39 @@ export function AddStatementBalanceModal({
     </>
   )
 }
+
+export function UploadManualJournalModal({
+  buttonLabel = 'Upload',
+  modalTitle = 'Upload Manual Journal',
+  onClose,
+}) {
+  const [show, setShow] = useState(false);
+
+  const handleOpen = () => setShow(true);
+  const handleClose = () => {
+    setShow(false);
+    onClose?.();
+  };
+
+  return (
+    <>
+      <Button variant="primary" onClick={handleOpen}>
+        {buttonLabel}
+      </Button>
+
+      <Modal show={show} onHide={handleClose} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>{modalTitle}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <UploadManualJournal onClose={handleClose} />
+        </Modal.Body>
+      </Modal>
+    </>
+  );
+}
+
+
 const AllModals = () => {
   return (
     <>
@@ -1759,6 +1807,7 @@ const AllModals = () => {
       <GLEntryModal />
       <AddFundModal />
       <AddStatementBalanceModal />
+      <UploadManualJournalModal />
     </>
   )
 }

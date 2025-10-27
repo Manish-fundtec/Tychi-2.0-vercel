@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown } from 'react-bootstrap'
-import { MGLEntryModal } from '../base-ui/modals/components/AllModals'
+import { MGLEntryModal , UploadManualJournalModal } from '../base-ui/modals/components/AllModals'
 import { AgGridReact } from 'ag-grid-react'
 import Cookies from 'js-cookie'
 import { jwtDecode } from 'jwt-decode'
@@ -31,24 +31,24 @@ const ManualJournalPage = () => {
   }, [])
 
   // register AG Grid modules (handles different versions)
-  useEffect(() => {
-    ;(async () => {
-      try {
-        const mod = await import('ag-grid-community')
-        const toRegister = []
+  // useEffect(() => {
+  //   ;(async () => {
+  //     try {
+  //       const mod = await import('ag-grid-community')
+  //       const toRegister = []
 
-        // v31+ (module-based)
-        if (mod.ClientSideRowModelModule) toRegister.push(mod.ClientSideRowModelModule)
-        if (mod.AllCommunityModule) toRegister.push(mod.AllCommunityModule)
+  //       // v31+ (module-based)
+  //       if (mod.ClientSideRowModelModule) toRegister.push(mod.ClientSideRowModelModule)
+  //       if (mod.AllCommunityModule) toRegister.push(mod.AllCommunityModule)
 
-        if (mod.ModuleRegistry && toRegister.length) {
-          mod.ModuleRegistry.registerModules(toRegister)
-        }
-      } catch (err) {
-        console.warn('AG Grid module registration skipped:', err)
-      }
-    })()
-  }, [])
+  //       if (mod.ModuleRegistry && toRegister.length) {
+  //         mod.ModuleRegistry.registerModules(toRegister)
+  //       }
+  //     } catch (err) {
+  //       console.warn('AG Grid module registration skipped:', err)
+  //     }
+  //   })()
+  // }, [])
 
   // fetch journals
   const fetchJournals = async () => {
@@ -112,9 +112,10 @@ const ManualJournalPage = () => {
         <Card>
           <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
             <CardTitle as="h4">Manual Journal</CardTitle>
-            <Dropdown>
+            <div className="d-flex gap-2">
               <MGLEntryModal />
-            </Dropdown>
+              <UploadManualJournalModal />
+            </div>
           </CardHeader>
           <CardBody className="p-2">
             <div className="ag-theme-alpine" style={{ height: 550, width: '100%' }}>

@@ -20,7 +20,7 @@ export const getBrokers = async (fund_id) => {
 };
 
 
-export const updateBroker = (id, data) => api.put(`api/v1/broker/update/${id}`, data);
+export const updateBroker = (id, data) => api.put(`api/v1/broker/${id}`, data);
 export const deleteBroker = (id) => {
   return api.delete(`/api/v1/broker/${id}`)
 }

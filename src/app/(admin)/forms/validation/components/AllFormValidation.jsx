@@ -1,8 +1,8 @@
 'use client'
 
 import clsx from 'clsx'
-import { useState, useEffect, useMemo } from 'react'
-import { Button, Col, Form, FormCheck, FormControl, FormGroup, FormLabel, FormSelect, InputGroup, Row, Modal } from 'react-bootstrap'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { Button, Col, Form, FormCheck, FormControl, FormGroup, FormLabel, FormSelect, InputGroup, Row, Modal, Spinner, Alert } from 'react-bootstrap'
 import Feedback from 'react-bootstrap/esm/Feedback'
 import InputGroupText from 'react-bootstrap/esm/InputGroupText'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
@@ -440,7 +440,7 @@ export const AddTrade = ({ onClose, onCreated }) => {
         const status = err?.response?.status
         const data = err?.response?.data
         const url = err?.config?.url
-        const params = err?.config?.params
+        // const params = err?.config?.params
         console.error('[getCommissionMethod] request failed:', {
           status,
           url,
@@ -1563,6 +1563,180 @@ export const AddStatementBalance = () => {
   )
 }
 
+const ALLOWED_EXT = ['.xlsx']
+const MAX_SIZE_MB = 10
+
+export const UploadManualJournal = ({ onClose }) => {
+  const dashboard = useDashboardToken()
+  const fundId = dashboard?.fund_id ?? null
+  const [file, setFile] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [resp, setResp] = useState(null)
+  const inputRef = useRef(null)
+
+  const isValidExt = (name = '') => {
+    const lower = name.toLowerCase()
+    return ALLOWED_EXT.some((ext) => lower.endsWith(ext))
+  }
+
+  const humanSize = (bytes) => `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+
+  const canSubmit = useMemo(() => !!file && !!fundId && !submitting, [file, fundId, submitting])
+
+  useEffect(() => {
+    // clear messages when file changes
+    setMsg('')
+    setResp(null)
+  }, [file])
+
+  const handlePick = (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+
+    if (!isValidExt(f.name)) {
+      setMsg(`Unsupported file type. Allowed: ${ALLOWED_EXT.join(', ')}`)
+      setFile(null)
+      return
+    }
+    if (f.size > MAX_SIZE_MB * 1024 * 1024) {
+      setMsg(`File is too large (${humanSize(f.size)}). Max ${MAX_SIZE_MB} MB`)
+      setFile(null)
+      return
+    }
+    setFile(f)
+    setMsg('')
+  }
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await api.get(`/api/v1/manualjournal/template/${fundId}`, { responseType: 'blob' })
+      const blobUrl = URL.createObjectURL(new Blob([res.data]))
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = 'manual-journal-template.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(blobUrl)
+    } catch (e) {
+      console.error('Template download failed:', e)
+      setMsg('Failed to download template. Please try again.')
+    }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!fundId || !file) {
+      setMsg('Provide Fund ID and select an .xlsx file')
+      return
+    }
+
+    setSubmitting(true)
+    setMsg('')
+
+    try {
+      const form = new FormData()
+      form.append('file', file)
+
+      const res = await api.post(`/api/v1/manualjournal/upload/${fundId}`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+
+      const data = res?.data || {}
+      setResp(data)
+      
+      if (data?.success) {
+        setMsg('Processing started.')
+        // Clear file input after successful upload
+        if (inputRef.current) {
+          inputRef.current.value = ''
+          setFile(null)
+        }
+        // Auto-close after short delay
+        setTimeout(() => {
+          onClose?.()
+        }, 2000)
+      } else {
+        setMsg(data?.error || 'Upload failed.')
+      }
+    } catch (error) {
+      console.error('Upload failed:', error)
+      const errorData = error?.response?.data || {}
+      setResp(errorData)
+      setMsg(errorData?.error || 'Upload failed. Please check your file and try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const clearFile = () => {
+    setFile(null)
+    setMsg('')
+    setResp(null)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  return (
+    <Form onSubmit={handleSubmit}>
+      <Row className="mb-2">
+        <Col className="text-end">
+          <Button variant="link" className="text-primary text-decoration-underline p-0" onClick={handleDownloadTemplate} size="md">
+            Download manual journal Template
+          </Button>
+        </Col>
+      </Row>
+
+      <Form.Group controlId="mjFile" className="mb-3">
+        <Form.Label>Upload Manual Journal File</Form.Label>
+        <Form.Control ref={inputRef} type="file" accept={ALLOWED_EXT.join(',')} onChange={handlePick} disabled={submitting} />
+        <Form.Text className="mt-1 d-inline-block">
+          Allowed: {ALLOWED_EXT.join(', ')} , Max size: {MAX_SIZE_MB} MB
+        </Form.Text>
+      </Form.Group>
+
+      {file && (
+        <Alert variant="info" className="py-2">
+          Selected: <strong>{file.name}</strong> ({humanSize(file.size)})
+          <Button variant="link" size="sm" className="ms-2 p-0 align-baseline" onClick={clearFile}>
+            remove
+          </Button>
+        </Alert>
+      )}
+
+      {msg && (
+        <Alert variant={msg.includes('failed') || msg.includes('error') ? 'danger' : 'success'} className="py-2">
+          {msg}
+        </Alert>
+      )}
+
+      {resp && (
+        <Alert variant="info" className="py-2">
+          <strong>Response:</strong>
+          <pre className="mt-2 text-sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {JSON.stringify(resp, null, 2)}
+          </pre>
+        </Alert>
+      )}
+
+      <div className="d-flex justify-content-end gap-2">
+        <Button variant="secondary" onClick={() => onClose?.()} disabled={submitting}>
+          Close
+        </Button>
+        <Button type="submit" variant="primary" disabled={!file || submitting}>
+          {submitting ? (
+            <>
+              <Spinner animation="border" size="sm" className="me-2" /> Uploading…
+            </>
+          ) : (
+            'Upload & Queue'
+          )}
+        </Button>
+      </div>
+    </Form>
+  )
+}
+
 const AllFormValidation = () => {
   return (
     <>
@@ -1583,6 +1757,8 @@ const AllFormValidation = () => {
       <AddFund />
 
       <AddStatementBalance />
+
+      <UploadManualJournal />
     </>
   )
 }
