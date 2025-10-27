@@ -60,6 +60,7 @@ const BrokerageTab = () => {
                 }}
                 broker={editingBroker}
                 onSuccess={refetchBrokers}
+                existingBrokers={brokers}
               />
               <Button variant="primary" onClick={() => setShowModal(true)}>
                 Add Broker

@@ -97,7 +97,7 @@ const pickReportingStartFromToken = (payload) => {
   return payload?.reporting_start_date ?? payload?.reportingStartDate ?? ''
 }
 
-export const BrokerModal = ({ show, onClose, broker, onSuccess }) => {
+export const BrokerModal = ({ show, onClose, broker, onSuccess, existingBrokers = [] }) => {
   const [reportingStartDate, setReportingStartDate] = useState('')
   useEffect(() => {
     try {
@@ -119,7 +119,13 @@ export const BrokerModal = ({ show, onClose, broker, onSuccess }) => {
         <h5 className="modal-title">{broker ? 'Edit Broker' : 'Add Broker'}</h5>
       </ModalHeader>
       <ModalBody>
-        <BrokerForm broker={broker} onSuccess={onSuccess} onClose={onClose} reportingStartDate={reportingStartDate} />
+        <BrokerForm 
+          broker={broker} 
+          onSuccess={onSuccess} 
+          onClose={onClose} 
+          reportingStartDate={reportingStartDate}
+          existingBrokers={existingBrokers}
+        />
       </ModalBody>
     </Modal>
   )

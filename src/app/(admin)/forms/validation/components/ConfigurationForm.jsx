@@ -47,10 +47,11 @@ import { toast } from 'react-toastify'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 const MAX_SIZE_MB = 5
-export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate }) => {
+export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, existingBrokers = [] }) => {
   const isEdit = !!broker
   const [validated, setValidated] = useState(false)
   const [rsd, setRsd] = useState(null) // Reporting Start Date from token
+  const [duplicateError, setDuplicateError] = useState('')
 
   const [form, setForm] = useState({
     broker_name: '',
@@ -110,6 +111,22 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate }) =
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
+    
+    // Check for duplicate broker name (case-insensitive)
+    if (name === 'broker_name' && value.trim()) {
+      const trimmedValue = value.trim().toLowerCase()
+      const isDuplicate = existingBrokers.some(b => {
+        // For edit, exclude current broker from check
+        if (isEdit && broker?.broker_id === b.broker_id) return false
+        return b.broker_name?.toLowerCase() === trimmedValue
+      })
+      
+      if (isDuplicate) {
+        setDuplicateError('Broker name already exists in this fund')
+      } else {
+        setDuplicateError('')
+      }
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -133,6 +150,13 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate }) =
     // 3) One-line guard (YYYY-MM-DD strings compare correctly) - keep existing logic
     if (reportingStartDate && form.start_date < reportingStartDate) {
       toast.error(`Broker date cannot be earlier than ${reportingStartDate}`)
+      setValidated(true)
+      return
+    }
+
+    // 4) Check for duplicate broker name
+    if (duplicateError) {
+      toast.error(duplicateError)
       setValidated(true)
       return
     }
@@ -180,8 +204,22 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate }) =
     <Form noValidate validated={validated} onSubmit={handleSubmit} className="row g-3 m-1">
       <FormGroup className="col-md-6">
         <FormLabel>Broker Name</FormLabel>
-        <FormControl name="broker_name" type="text" required value={form.broker_name} onChange={handleChange} />
-        <Feedback type="invalid">Please enter broker name</Feedback>
+        <FormControl 
+          name="broker_name" 
+          type="text" 
+          required 
+          value={form.broker_name} 
+          onChange={handleChange}
+          isInvalid={!!duplicateError}
+        />
+        <Feedback type="invalid">
+          {duplicateError || 'Please enter broker name'}
+        </Feedback>
+        {/* {duplicateError && (
+          <div className="text-danger mt-1" role="alert">
+            {duplicateError}
+          </div>
+        )} */}
       </FormGroup>
 
                    <FormGroup className="col-md-6">
