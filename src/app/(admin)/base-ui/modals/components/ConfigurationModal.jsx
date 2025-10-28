@@ -114,7 +114,7 @@ export const BrokerModal = ({ show, onClose, broker, onSuccess, existingBrokers 
     }
   }, [])
   return (
-    <Modal show={show} onHide={onClose} centered>
+    <Modal show={show} onHide={onClose} centered size="md-lg">
       <ModalHeader closeButton>
         <h5 className="modal-title">{broker ? 'Edit Broker' : 'Add Broker'}</h5>
       </ModalHeader>

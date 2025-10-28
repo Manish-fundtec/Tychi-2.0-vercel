@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getAssetTypes, updateAssetTypeStatus, deleteCoaSeedByAssetType } from '../lib/api/assetType';
+import { getSymbolsByFundId } from '../lib/api/symbol';
 import Cookies from 'js-cookie';
 import { jwtDecode } from 'jwt-decode';
 
@@ -16,7 +17,36 @@ export const useAssetTypeData = () => {
     }
   };
 
+  // Helper function to check if asset type has associated symbols
+  const checkAssetTypeHasSymbols = async (assetTypeId) => {
+    if (!fundId || !assetTypeId) return false;
+    
+    try {
+      const res = await getSymbolsByFundId(fundId);
+      const symbols = Array.isArray(res?.data) ? res.data : [];
+      
+      // Check if any symbol uses this asset type
+      return symbols.some(symbol => 
+        symbol.assettype_id === assetTypeId || 
+        symbol.asset_type_id === assetTypeId
+      );
+    } catch (error) {
+      console.error('Error checking asset type symbols:', error);
+      return false;
+    }
+  };
+
   const toggleAssetTypeStatus = async (assetTypeUid, newStatus) => {
+    // Check if trying to deactivate and asset type has associated symbols
+    if (newStatus === 'Inactive') {
+      const hasSymbols = await checkAssetTypeHasSymbols(assetTypeUid);
+      
+      if (hasSymbols) {
+        alert('Cannot deactivate asset type: This asset type is associated with symbols. Please delete or reassign the symbols first.');
+        return;
+      }
+    }
+    
     try {
       await updateAssetTypeStatus(assetTypeUid, newStatus, fundId);
 

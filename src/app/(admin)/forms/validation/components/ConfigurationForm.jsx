@@ -93,10 +93,10 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
     console.log('API Base URL:', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000')
   }, [])
 
-  // Helper: check if start_date is less than or equal to RSD (should be > RSD)
-  const isBeforeOrEqualRSD = useMemo(() => {
+  // Helper: check if start_date is greater than RSD (should be <= RSD)
+  const isAfterRSD = useMemo(() => {
     if (!rsd || !form.start_date) return false
-    return form.start_date <= rsd
+    return form.start_date > rsd
   }, [form.start_date, rsd])
 
   useEffect(() => {
@@ -140,16 +140,16 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
       return
     }
 
-    // 2) Frontend guard: start_date must be greater than RSD
-    if (rsd && form.start_date && form.start_date <= rsd) {
-      toast.error(`Start Date must be greater than Reporting Start Date (${rsd}).`)
+    // 2) Frontend guard: start_date must be less than or equal to RSD
+    if (rsd && form.start_date && form.start_date > rsd) {
+      toast.error(`Start Date must be less than or equal to Reporting Start Date (${rsd}).`)
       setValidated(true)
       return
     }
 
     // 3) One-line guard (YYYY-MM-DD strings compare correctly) - keep existing logic
-    if (reportingStartDate && form.start_date < reportingStartDate) {
-      toast.error(`Broker date cannot be earlier than ${reportingStartDate}`)
+    if (reportingStartDate && form.start_date > reportingStartDate) {
+      toast.error(`Broker date cannot be later than ${reportingStartDate}`)
       setValidated(true)
       return
     }
@@ -224,7 +224,7 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
 
                    <FormGroup className="col-md-6">
         <FormLabel>
-          Start Date {rsd ? <span className="text-muted small">(must be &gt; {rsd})</span> : null}
+          Start Date 
         </FormLabel>
         <FormControl 
           name="start_date" 
@@ -232,19 +232,19 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
           required 
           value={form.start_date} 
           onChange={handleChange} 
-          min={rsd ? `${rsd.split('-')[0]}-${rsd.split('-')[1]}-${String(Number(rsd.split('-')[2]) + 1).padStart(2, '0')}` : reportingStartDate || undefined}
-          isInvalid={isBeforeOrEqualRSD}
+          max={rsd || reportingStartDate || undefined}
+          isInvalid={isAfterRSD}
         />
         <Feedback type="invalid">Please provide a valid start date</Feedback>
-        {isBeforeOrEqualRSD && (
+        {isAfterRSD && (
           <div className="text-danger mt-1" role="alert">
-            Start date must be greater than Reporting Start Date ({rsd})
+            Start date must be less than or equal to Reporting Start Date ({rsd})
           </div>
         )}
       </FormGroup>
 
       <Col xs={12}>
-        <Button type="submit" disabled={isBeforeOrEqualRSD}>
+        <Button type="submit" disabled={isAfterRSD}>
           {isEdit ? 'Update' : 'Submit'}
         </Button>
       </Col>
