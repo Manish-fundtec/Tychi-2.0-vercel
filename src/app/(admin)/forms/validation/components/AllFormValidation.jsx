@@ -1155,7 +1155,7 @@ export const AddManualJournal = ({ onClose }) => {
       setSaving(true)
 
       // Use full URL to avoid baseURL mixups
-      const r = await api.post('http://localhost:5000/api/v1/manualjournal', payload, {
+      const r = await api.post('/api/v1/manualjournal', payload, {
         headers: { 'Content-Type': 'application/json' },
       })
 
