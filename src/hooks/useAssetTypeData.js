@@ -22,14 +22,24 @@ export const useAssetTypeData = () => {
     if (!fundId || !assetTypeId) return false;
     
     try {
+      console.log('🔍 Checking symbols for asset type:', assetTypeId, 'in fund:', fundId);
       const res = await getSymbolsByFundId(fundId);
       const symbols = Array.isArray(res?.data) ? res.data : [];
       
+      console.log('📊 Found symbols:', symbols.length);
+      console.log('📋 Symbols data:', symbols);
+      
       // Check if any symbol uses this asset type
-      return symbols.some(symbol => 
-        symbol.assettype_id === assetTypeId || 
-        symbol.asset_type_id === assetTypeId
-      );
+      const hasSymbols = symbols.some(symbol => {
+        const matches = symbol.assettype_id === assetTypeId || symbol.asset_type_id === assetTypeId;
+        if (matches) {
+          console.log('✅ Found matching symbol:', symbol);
+        }
+        return matches;
+      });
+      
+      console.log('🎯 Asset type has symbols:', hasSymbols);
+      return hasSymbols;
     } catch (error) {
       console.error('Error checking asset type symbols:', error);
       return false;
@@ -37,16 +47,6 @@ export const useAssetTypeData = () => {
   };
 
   const toggleAssetTypeStatus = async (assetTypeUid, newStatus) => {
-    // Check if trying to deactivate and asset type has associated symbols
-    if (newStatus === 'Inactive') {
-      const hasSymbols = await checkAssetTypeHasSymbols(assetTypeUid);
-      
-      if (hasSymbols) {
-        alert('Cannot deactivate asset type: This asset type is associated with symbols. Please delete or reassign the symbols first.');
-        return;
-      }
-    }
-    
     try {
       await updateAssetTypeStatus(assetTypeUid, newStatus, fundId);
 
@@ -83,5 +83,5 @@ export const useAssetTypeData = () => {
     }
   }, []);
 
-  return { assetTypes, toggleAssetTypeStatus,fundId };
+  return { assetTypes, toggleAssetTypeStatus, fundId, checkAssetTypeHasSymbols };
 };

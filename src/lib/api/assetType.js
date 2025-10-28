@@ -13,8 +13,8 @@ export const getAssetTypesActive = (fund_id) => {
   return api.get(`/api/v1/asset-types/fund/${fund_id}/active`)
 }
 
-export const deleteCoaSeedByAssetType = async (assettype_id, fund_id) => {
-  return await api.delete(`/api/v1/chart-of-accounts/asset-type/${assettype_id}`, { 
-    data: { fund_id } 
-  })
-}
+// export const deleteCoaSeedByAssetType = async (assettype_id, fund_id) => {
+//   return await api.delete(`/api/v1/chart-of-accounts/asset-type/${assettype_id}`, { 
+//     data: { fund_id } 
+//   })
+// }

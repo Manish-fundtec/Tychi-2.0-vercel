@@ -6,7 +6,7 @@ import { AssetTypeModal } from '@/app/(admin)/base-ui/modals/components/Configur
 import { Modal, Button } from 'react-bootstrap';
 
 const AssetTypeTab = () => {
-  const { assetTypes, toggleAssetTypeStatus } = useAssetTypeData();
+  const { assetTypes, toggleAssetTypeStatus, checkAssetTypeHasSymbols } = useAssetTypeData();
   const [showModal, setShowModal] = useState(false);
   const [selectedAssetType, setSelectedAssetType] = useState(null);
   const [fundId, setFundId] = useState(null);
@@ -34,6 +34,15 @@ const AssetTypeTab = () => {
 
   const handleDeactivateConfirm = async () => {
     if (assetToDeactivate) {
+      // Check if asset type has associated symbols before deactivating
+      const hasSymbols = await checkAssetTypeHasSymbols(assetToDeactivate.assettype_id);
+      
+      if (hasSymbols) {
+        alert('Cannot deactivate asset type: This asset type is associated with symbols. Please delete or reassign the symbols first.');
+        return; // Don't proceed with deactivation
+      }
+      
+      // If no symbols, proceed with deactivation
       await toggleAssetTypeStatus(assetToDeactivate.assettype_id, 'Inactive');
       setAssetToDeactivate(null);
       setShowDeactivateModal(false);

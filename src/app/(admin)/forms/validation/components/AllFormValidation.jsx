@@ -1002,7 +1002,6 @@ export const AddGl = ({ onClose }) => {
           value={glNumber}
           onChange={(e) => setGlNumber(e.target.value)}
           required
-          readOnly // lock in both modes since it’s auto
         />
         <FormControl.Feedback type="invalid" tooltip>
           Please provide a valid GL number.
