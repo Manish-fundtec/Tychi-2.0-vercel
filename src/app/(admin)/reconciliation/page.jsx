@@ -34,32 +34,15 @@ function getFundIdFromCookie() {
   }
 }
 
-// // --- Action cell: initiate reconciliation for selected period
-// function ActionRenderer(props) {
-//   const { data, context } = props;
-//   const status = String(data?.status || '').toLowerCase();
+// --- Status cell renderer: shows status with badge
+function StatusRenderer(props) {
+  const status = String(props.value || 'open').toLowerCase();
+  const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
+  const statusClass = status === 'completed' ? 'badge bg-success' : 'badge bg-warning';
   
-//   // Show "Initiate" button for both 'open' and 'completed' status
- 
-//     return (
-//       <button
-//         className="btn btn-sm btn-primary"
-//         title="Initiate Reconciliation"
-//         onClick={() =>
-//           context?.router?.push(
-//             `/reconciliation?fund=${encodeURIComponent(context.fundId || '')}` +
-//             `&date=${encodeURIComponent(data?.date || '')}` +
-//             `&month=${encodeURIComponent(data?.month || '')}`
-//           )
-//         }
-//       >
-//         Initiate
-//       </button>
-//     );
-  
-  
-//   return <span className="text-muted">—</span>;
-// }
+  return <span className={statusClass}>{displayStatus}</span>;
+}
+
 // --- Action cell: initiate reconciliation for selected period
 function ActionRenderer(props) {
   const { data, context } = props;
@@ -150,17 +133,14 @@ export default function ReconciliationPage() {
       },
       { headerName: 'Month', field: 'month', flex: 1, sortable: true, filter: true },
       { headerName: 'Date', field: 'date', flex: 1, sortable: true, filter: true },
-      {
-        headerName: 'Status',
-        field: 'status',
-        width: 120,
-        sortable: true,
-        filter: true,
-        // Force the grid value to always be 'open'
-        valueGetter: () => 'open',
-        // Render a yellow "Open" badge regardless of backend value
-        cellRenderer: () => '<span class="badge bg-warning">Open</span>',
-      },
+        {
+          headerName: 'Status',
+          field: 'status',
+          width: 120,
+          sortable: true,
+          filter: true,
+          cellRenderer: 'StatusRenderer',
+        },
       {
         headerName: 'Action',
         field: 'action',
@@ -194,7 +174,7 @@ export default function ReconciliationPage() {
                   loading ? '<span class="ag-overlay-loading-center">Loading…</span>' : undefined
                 }
                 context={{ router, fundId }}
-                components={{ ActionRenderer }}
+                components={{ StatusRenderer, ActionRenderer }}
               />
             </div>
           </CardBody>
