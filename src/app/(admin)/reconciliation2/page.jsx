@@ -41,11 +41,29 @@ const getReportingPeriods = async (fundId) => {
   });
 };
 
-const fetchBrokerBankBalances = async (fundId, asOf) => {
-  const url = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(fundId)}/broker-bank-balances?as_of=${encodeURIComponent(asOf)}`;
+// Fetch GL entries for bank and broker COA accounts for a specific date
+const fetchGLDataForMonth = async (fundId, date) => {
+  const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl?date=${encodeURIComponent(date)}&scope=ALL`;
   const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
-  if (!resp.ok) throw new Error(`balances HTTP ${resp.status}`);
-  return await resp.json(); // [{account_id,account_name,type,closing_balance}]
+  if (!resp.ok) throw new Error(`GL HTTP ${resp.status}`);
+  const json = await resp.json();
+  
+  // Filter for bank and broker accounts (you can adjust the account name/code filter as needed)
+  const rows = json?.rows || [];
+  const bankBrokerRows = rows.filter(r => {
+    const accountName = (r.accountname || '').toLowerCase();
+    return accountName.includes('bank') || accountName.includes('broker') || accountName.includes('cash');
+  });
+  
+  return bankBrokerRows.map(r => ({
+    date: r.date || date,
+    journalId: r.journalid,
+    accountName: r.accountname,
+    description: r.description,
+    drAmount: Number(r.dramount || 0),
+    crAmount: Number(r.cramount || 0),
+    runningBalance: r.runningbalance != null ? Number(r.runningbalance) : null,
+  }));
 };
 
 export default function ReconciliationGrid({ router }) {
@@ -64,28 +82,30 @@ export default function ReconciliationGrid({ router }) {
       try {
         const periods = await getReportingPeriods(fundId);
         const all = await Promise.all(
-          periods.map(p => fetchBrokerBankBalances(fundId, p.end).catch(() => []))
+          periods.map(p => fetchGLDataForMonth(fundId, p.end).catch(() => []))
         );
 
         const out = [];
         let idx = 1;
         periods.forEach((p, i) => {
-          (all[i] || []).forEach(bal => {
+          (all[i] || []).forEach(gl => {
             out.push({
               srNo: idx++,
               month: p.monthLabel,
-              date: p.end,
-              brokerBank: bal.account_name,
-              closingBalance: Number(bal.closing_balance || 0),
-              type: bal.type,
-              accountId: bal.account_id,
+              date: gl.date || p.end,
+              brokerBank: gl.accountName,
+              description: gl.description,
+              drAmount: gl.drAmount,
+              crAmount: gl.crAmount,
+              closingBalance: gl.runningBalance != null ? gl.runningBalance : (gl.drAmount - gl.crAmount),
+              journalId: gl.journalId,
             });
           });
         });
         setRows(out);
       } catch (e) {
         console.error('[frontend][reconciliation] error:', e);
-        setErr('Failed to load broker/bank balances');
+        setErr('Failed to load GL data for bank/broker accounts');
       } finally {
         setLoading(false);
       }
@@ -95,18 +115,39 @@ export default function ReconciliationGrid({ router }) {
   const columnDefs = useMemo(() => ([
     { headerName: 'S.No', width: 90, valueGetter: p => (p?.node?.rowIndex ?? 0) + 1, sortable:false, filter:false },
     { headerName: 'Reporting Period', field: 'month', flex: 1, sortable: true, filter: true },
-    { headerName: 'Reporting Date', field: 'date', flex: 1, sortable: true, filter: true },
-    { headerName: 'Broker & Bank Name', field: 'brokerBank', flex: 1.2, sortable: true, filter: true },
+    { headerName: 'Date', field: 'date', flex: 1, sortable: true, filter: true },
+    { headerName: 'Account Name', field: 'brokerBank', flex: 1.2, sortable: true, filter: true },
+    { headerName: 'Description', field: 'description', flex: 1.5, sortable: true, filter: true },
     {
-      headerName: 'Closing Balance',
-      field: 'closingBalance',
-      width: 160,
+      headerName: 'Dr Amount',
+      field: 'drAmount',
+      width: 130,
       sortable: true,
       filter: true,
       valueFormatter: p => Number(p.value || 0).toLocaleString('en-IN', {
         style: 'currency', currency: 'USD', maximumFractionDigits: 2
       }),
-      cellClass: p => (Number(p.value || 0) < 0 ? 'text-danger' : '')
+    },
+    {
+      headerName: 'Cr Amount',
+      field: 'crAmount',
+      width: 130,
+      sortable: true,
+      filter: true,
+      valueFormatter: p => Number(p.value || 0).toLocaleString('en-IN', {
+        style: 'currency', currency: 'USD', maximumFractionDigits: 2
+      }),
+    },
+    {
+      headerName: 'Balance',
+      field: 'closingBalance',
+      width: 130,
+      sortable: true,
+      filter: true,
+      valueFormatter: p => p.value != null ? Number(p.value || 0).toLocaleString('en-IN', {
+        style: 'currency', currency: 'USD', maximumFractionDigits: 2
+      }) : '—',
+      cellClass: p => (p.value != null && Number(p.value || 0) < 0 ? 'text-danger' : '')
     },
     {
       headerName: 'Action',
@@ -114,7 +155,7 @@ export default function ReconciliationGrid({ router }) {
       width: 120,
       sortable: false,
       filter: false,
-      cellRenderer: () => '<button class="btn btn-sm btn-danger">Initiate</button>',
+      cellRenderer: () => null, // Remove action button for now
     },
   ]), []);
 
