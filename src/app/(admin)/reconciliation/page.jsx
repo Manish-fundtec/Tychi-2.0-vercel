@@ -36,11 +36,8 @@ function getFundIdFromCookie() {
 
 // --- Status cell renderer: shows status with badge
 function StatusRenderer(props) {
-  const status = String(props.value || 'open').toLowerCase();
-  const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
-  const statusClass = status === 'completed' ? 'badge bg-success' : 'badge bg-warning';
-  
-  return <span className={statusClass}>{displayStatus}</span>;
+  // Always show "Open" status with warning badge
+  return <span className="badge bg-warning">Open</span>;
 }
 
 // --- Action cell: initiate reconciliation for selected period
