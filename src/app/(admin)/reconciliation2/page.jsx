@@ -18,6 +18,7 @@ function getAuthHeaders() {
 }
 function getFundIdFromCookie() {
   try {
+    
     const cookie = document.cookie.split('; ').find(c => c.startsWith('dashboardToken='));
     if (!cookie) return null;
     const token = cookie.split('=')[1];
