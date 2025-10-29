@@ -34,31 +34,57 @@ function getFundIdFromCookie() {
   }
 }
 
+// // --- Action cell: initiate reconciliation for selected period
+// function ActionRenderer(props) {
+//   const { data, context } = props;
+//   const status = String(data?.status || '').toLowerCase();
+  
+//   // Show "Initiate" button for both 'open' and 'completed' status
+ 
+//     return (
+//       <button
+//         className="btn btn-sm btn-primary"
+//         title="Initiate Reconciliation"
+//         onClick={() =>
+//           context?.router?.push(
+//             `/reconciliation?fund=${encodeURIComponent(context.fundId || '')}` +
+//             `&date=${encodeURIComponent(data?.date || '')}` +
+//             `&month=${encodeURIComponent(data?.month || '')}`
+//           )
+//         }
+//       >
+//         Initiate
+//       </button>
+//     );
+  
+  
+//   return <span className="text-muted">—</span>;
+// }
 // --- Action cell: initiate reconciliation for selected period
 function ActionRenderer(props) {
   const { data, context } = props;
-  const status = String(data?.status || '').toLowerCase();
-  
-  // Show "Initiate" button for both 'open' and 'completed' status
-  if (status === 'completed' || status === 'open') {
-    return (
-      <button
-        className="btn btn-sm btn-primary"
-        title="Initiate Reconciliation"
-        onClick={() =>
-          context?.router?.push(
-            `/reconciliation?fund=${encodeURIComponent(context.fundId || '')}` +
-            `&date=${encodeURIComponent(data?.date || '')}` +
-            `&month=${encodeURIComponent(data?.month || '')}`
-          )
-        }
-      >
-        Initiate
-      </button>
-    );
+
+  // If something is missing, show a placeholder
+  if (!data || !context || !context.router) {
+    return <span className="text-muted">—</span>;
   }
-  
-  return <span className="text-muted">—</span>;
+
+  const handleClick = () => {
+    const fund  = encodeURIComponent(context.fundId || '');
+    const date  = encodeURIComponent(data?.date || '');
+    const month = encodeURIComponent(data?.month || '');
+    context.router.push(`/reconciliation?fund=${fund}&date=${date}&month=${month}`);
+  };
+
+  return (
+    <button
+      className="btn btn-sm btn-primary"
+      title="Initiate Reconciliation"
+      onClick={handleClick}
+    >
+      Initiate
+    </button>
+  );
 }
 
 export default function ReconciliationPage() {
@@ -124,19 +150,16 @@ export default function ReconciliationPage() {
       },
       { headerName: 'Month', field: 'month', flex: 1, sortable: true, filter: true },
       { headerName: 'Date', field: 'date', flex: 1, sortable: true, filter: true },
-      { 
-        headerName: 'Status', 
-        field: 'status', 
-        width: 120, 
-        sortable: true, 
+      {
+        headerName: 'Status',
+        field: 'status',
+        width: 120,
+        sortable: true,
         filter: true,
-        cellRenderer: (params) => {
-          const status = String(params.value || 'open').toLowerCase();
-          // Capitalize first letter for display
-          const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
-          const statusClass = status === 'completed' ? 'badge bg-success' : 'badge bg-warning';
-          return `<span class="${statusClass}">${displayStatus}</span>`;
-        }
+        // Force the grid value to always be 'open'
+        valueGetter: () => 'open',
+        // Render a yellow "Open" badge regardless of backend value
+        cellRenderer: () => '<span class="badge bg-warning">Open</span>',
       },
       {
         headerName: 'Action',
