@@ -67,7 +67,7 @@ const fetchGLDataForMonth = async (fundId, date) => {
   }));
 };
 
-export default function ReconciliationGrid({ router }) {
+export default function ReconciliationGrid() {
   const [fundId, setFundId] = useState(null);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
