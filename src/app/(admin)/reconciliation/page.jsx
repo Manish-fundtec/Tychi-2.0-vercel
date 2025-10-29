@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { Row, Col, Card, CardHeader, CardTitle, CardBody } from 'react-bootstrap';
-import { ArrowRightCircle } from 'lucide-react';
+// Removed ArrowRightCircle import as we're using button instead
 
 // AG Grid modules (register once)
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -34,26 +34,31 @@ function getFundIdFromCookie() {
   }
 }
 
-// --- Action cell: go to reconciliation for selected period
-function ArrowRenderer(props) {
+// --- Action cell: initiate reconciliation for selected period
+function ActionRenderer(props) {
   const { data, context } = props;
-  const isCompleted = String(data?.status || '').toLowerCase() === 'completed';
-  if (!isCompleted) return <>—</>;
-
-  return (
-    <ArrowRightCircle
-      size={18}
-      className="text-primary cursor-pointer"
-      title="Open Reconciliation"
-      onClick={() =>
-        context?.router?.push(
-          `/reconciliation?fund=${encodeURIComponent(context.fundId || '')}` +
-          `&date=${encodeURIComponent(data?.date || '')}` +
-          `&month=${encodeURIComponent(data?.month || '')}`
-        )
-      }
-    />
-  );
+  const status = String(data?.status || '').toLowerCase();
+  
+  // Show "Initiate" button for both 'open' and 'completed' status
+  if (status === 'completed' || status === 'open') {
+    return (
+      <button
+        className="btn btn-sm btn-primary"
+        title="Initiate Reconciliation"
+        onClick={() =>
+          context?.router?.push(
+            `/reconciliation?fund=${encodeURIComponent(context.fundId || '')}` +
+            `&date=${encodeURIComponent(data?.date || '')}` +
+            `&month=${encodeURIComponent(data?.month || '')}`
+          )
+        }
+      >
+        Initiate
+      </button>
+    );
+  }
+  
+  return <span className="text-muted">—</span>;
 }
 
 export default function ReconciliationPage() {
@@ -87,7 +92,7 @@ export default function ReconciliationPage() {
             r?.period_name ||
             (hasValidDate ? d.toLocaleString(undefined, { month: 'long', year: 'numeric' }) : '-');
 
-          const status = String(r?.status || 'completed').toLowerCase();
+          const status = String(r?.status || 'open').toLowerCase();
 
           return {
             srNo: i + 1,
@@ -119,14 +124,27 @@ export default function ReconciliationPage() {
       },
       { headerName: 'Month', field: 'month', flex: 1, sortable: true, filter: true },
       { headerName: 'Date', field: 'date', flex: 1, sortable: true, filter: true },
-      { headerName: 'Status', field: 'status', width: 140, sortable: true, filter: true },
+      { 
+        headerName: 'Status', 
+        field: 'status', 
+        width: 120, 
+        sortable: true, 
+        filter: true,
+        cellRenderer: (params) => {
+          const status = String(params.value || 'open').toLowerCase();
+          // Capitalize first letter for display
+          const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
+          const statusClass = status === 'completed' ? 'badge bg-success' : 'badge bg-warning';
+          return `<span class="${statusClass}">${displayStatus}</span>`;
+        }
+      },
       {
         headerName: 'Action',
         field: 'action',
-        width: 140,
+        width: 120,
         sortable: false,
         filter: false,
-        cellRenderer: 'ArrowRenderer',
+        cellRenderer: 'ActionRenderer',
       },
     ],
     []
@@ -153,7 +171,7 @@ export default function ReconciliationPage() {
                   loading ? '<span class="ag-overlay-loading-center">Loading…</span>' : undefined
                 }
                 context={{ router, fundId }}
-                components={{ ArrowRenderer }}
+                components={{ ActionRenderer }}
               />
             </div>
           </CardBody>
