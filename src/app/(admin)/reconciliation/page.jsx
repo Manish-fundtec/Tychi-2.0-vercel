@@ -60,7 +60,13 @@ function ActionRenderer(props) {
     <button
       className="btn btn-sm btn-primary"
       title="Initiate Reconciliation"
-      onClick={handleClick}
+      onClick={() =>
+          context?.router?.push(
+            `/reconciliation2?fund=${encodeURIComponent(context.fundId || '')}` +
+            `&date=${encodeURIComponent(data?.date || '')}` +
+            `&month=${encodeURIComponent(data?.month || '')}`
+          )
+        }
     >
       Initiate
     </button>
