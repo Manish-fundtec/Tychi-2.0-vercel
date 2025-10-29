@@ -1,7 +1,7 @@
 'use client'
 
 import clsx from 'clsx'
-import { useState, useEffect, useRef ,useMemo} from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Button,
   Col,
@@ -27,7 +27,7 @@ import InputGroupText from 'react-bootstrap/esm/InputGroupText'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { serverSideFormValidate } from '@/helpers/data'
 import ChoicesFormInput from '@/components/from/ChoicesFormInput'
-import { getFundDetails } from '@/lib/api/fund' 
+import { getFundDetails } from '@/lib/api/fund'
 import { useSearchParams } from 'next/navigation'
 import { createBroker, updateBroker } from '@/lib/api/broker'
 import { createBank, updateBank } from '@/lib/api/bank'
@@ -63,15 +63,16 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
     try {
       const token = Cookies.get('dashboardToken')
       console.log('🔑 Token exists:', !!token)
-      
+
       if (token) {
         const payload = jwtDecode(token) || {}
         console.log('📦 Decoded payload BrokerForm:', payload)
-        
+
         // Try to get reporting start date from fund object first
-        const raw = payload.fund?.reporting_start_date || payload.reporting_start_date || payload.reportingStartDate || payload.RSD || payload.fund_start_date
+        const raw =
+          payload.fund?.reporting_start_date || payload.reporting_start_date || payload.reportingStartDate || payload.RSD || payload.fund_start_date
         console.log('📅 Raw reporting start date value:', raw)
-        
+
         if (raw) {
           // Normalize to YYYY-MM-DD (strip time if present)
           const match = String(raw).match(/^(\d{4}-\d{2}-\d{2})/)
@@ -89,14 +90,14 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
     } catch (error) {
       console.error('❌ Error decoding token:', error)
     }
-    
+
     console.log('API Base URL:', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000')
   }, [])
 
-  // Helper: check if start_date is greater than RSD (should be <= RSD)
-  const isAfterRSD = useMemo(() => {
+  // Helper: check if start_date is less than RSD (should be >= RSD)
+  const isBeforeRSD = useMemo(() => {
     if (!rsd || !form.start_date) return false
-    return form.start_date > rsd
+    return form.start_date < rsd
   }, [form.start_date, rsd])
 
   useEffect(() => {
@@ -111,16 +112,16 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
-    
+
     // Check for duplicate broker name (case-insensitive)
     if (name === 'broker_name' && value.trim()) {
       const trimmedValue = value.trim().toLowerCase()
-      const isDuplicate = existingBrokers.some(b => {
+      const isDuplicate = existingBrokers.some((b) => {
         // For edit, exclude current broker from check
         if (isEdit && broker?.broker_id === b.broker_id) return false
         return b.broker_name?.toLowerCase() === trimmedValue
       })
-      
+
       if (isDuplicate) {
         setDuplicateError('Broker name already exists in this fund')
       } else {
@@ -141,15 +142,15 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
     }
 
     // 2) Frontend guard: start_date must be less than or equal to RSD
-    if (rsd && form.start_date && form.start_date > rsd) {
-      toast.error(`Start Date must be less than or equal to Reporting Start Date (${rsd}).`)
+    if (rsd && form.start_date && form.start_date < rsd) {
+      toast.error(`Start Date must be greater than or equal to Reporting Start Date (${rsd}).`)
       setValidated(true)
       return
     }
 
     // 3) One-line guard (YYYY-MM-DD strings compare correctly) - keep existing logic
-    if (reportingStartDate && form.start_date > reportingStartDate) {
-      toast.error(`Broker date cannot be later than ${reportingStartDate}`)
+    if (reportingStartDate && form.start_date < reportingStartDate) {
+      toast.error(`Broker date cannot be less than ${reportingStartDate}`)
       setValidated(true)
       return
     }
@@ -182,7 +183,7 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
       onClose?.()
     } catch (err) {
       console.error('❌ Failed to submit broker form:', err)
-      
+
       // Handle different types of errors
       if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
         toast.error('Cannot connect to server. Please check if the backend is running.')
@@ -204,17 +205,8 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
     <Form noValidate validated={validated} onSubmit={handleSubmit} className="row g-3 m-1">
       <FormGroup className="col-md-6">
         <FormLabel>Broker Name</FormLabel>
-        <FormControl 
-          name="broker_name" 
-          type="text" 
-          required 
-          value={form.broker_name} 
-          onChange={handleChange}
-          isInvalid={!!duplicateError}
-        />
-        <Feedback type="invalid">
-          {duplicateError || 'Please enter broker name'}
-        </Feedback>
+        <FormControl name="broker_name" type="text" required value={form.broker_name} onChange={handleChange} isInvalid={!!duplicateError} />
+        <Feedback type="invalid">{duplicateError || 'Please enter broker name'}</Feedback>
         {/* {duplicateError && (
           <div className="text-danger mt-1" role="alert">
             {duplicateError}
@@ -222,29 +214,27 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
         )} */}
       </FormGroup>
 
-                   <FormGroup className="col-md-6">
-        <FormLabel>
-          Start Date 
-        </FormLabel>
+      <FormGroup className="col-md-6">
+        <FormLabel>Start Date</FormLabel>
         <FormControl 
           name="start_date" 
           type="date" 
           required 
           value={form.start_date} 
           onChange={handleChange} 
-          max={rsd || reportingStartDate || undefined}
-          isInvalid={isAfterRSD}
+          min={rsd || reportingStartDate || undefined}
+          isInvalid={isBeforeRSD}
         />
         <Feedback type="invalid">Please provide a valid start date</Feedback>
-        {isAfterRSD && (
+        {isBeforeRSD && (
           <div className="text-danger mt-1" role="alert">
-            Start date must be less than or equal to Reporting Start Date ({rsd})
+            Start date must be greater than or equal to Reporting Start Date ({rsd})
           </div>
         )}
       </FormGroup>
 
       <Col xs={12}>
-        <Button type="submit" disabled={isAfterRSD}>
+        <Button type="submit" disabled={isBeforeRSD}>
           {isEdit ? 'Update' : 'Submit'}
         </Button>
       </Col>
@@ -256,6 +246,8 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
     closure_rule: assetType?.closure_rule || '',
     long_term_rule: assetType?.long_term_rule || '',
   })
+  const [validated, setValidated] = useState(false)
+  const [errors, setErrors] = useState({})
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -264,10 +256,36 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
       [name]: value,
     }))
     console.log(`📝 ${name} updated to:`, value)
+
+    // Clear error when user makes a selection
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: '',
+      }))
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setValidated(true)
+
+    // Validate that both fields have values
+    const newErrors = {}
+    if (!formData.closure_rule) {
+      newErrors.closure_rule = 'Please select a closure rule'
+    }
+    if (!formData.long_term_rule) {
+      newErrors.long_term_rule = 'Please select a long term rule'
+    }
+
+    // If there are errors, set them and prevent submission
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      console.log('❌ Validation failed:', newErrors)
+      return
+    }
+
     try {
       const payload = {
         ...formData,
@@ -280,8 +298,10 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
       console.log('✅ Update request successful')
 
       if (onSuccess) onSuccess()
+      if (onClose) onClose()
     } catch (error) {
       console.error('❌ Failed to update asset type:', error)
+      alert('Failed to update asset type. Please try again.')
     }
   }
 
@@ -289,17 +309,28 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
     <Form onSubmit={handleSubmit}>
       <FormGroup className="position-relative col-md-6">
         <FormLabel>Closure Rule</FormLabel>
-        <ChoicesFormInput name="closure_rule" value={formData.closure_rule} onChange={handleChange}>
+        <ChoicesFormInput
+          name="closure_rule"
+          value={formData.closure_rule}
+          onChange={handleChange}
+          className={errors.closure_rule ? 'is-invalid' : ''}
+          required>
           <option value="">Select</option>
           <option value="LIFO">LIFO</option>
           <option value="FIFO">FIFO</option>
           <option value="FIRST_SETTLE_THAN_FIFO">FIRST_SETTLE_THAN_FIFO</option>
         </ChoicesFormInput>
+        {errors.closure_rule && <div className="invalid-feedback">{errors.closure_rule}</div>}
       </FormGroup>
 
       <FormGroup className="position-relative col-md-6">
         <FormLabel>Long Term Rule</FormLabel>
-        <ChoicesFormInput name="long_term_rule" value={formData.long_term_rule} onChange={handleChange}>
+        <ChoicesFormInput
+          name="long_term_rule"
+          value={formData.long_term_rule}
+          onChange={handleChange}
+          className={errors.long_term_rule ? 'is-invalid' : ''}
+          required>
           <option value="">Select</option>
           <option value="1 year">1 year</option>
           <option value="2 year">2 year</option>
@@ -307,6 +338,7 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
           <option value="4 year">4 year</option>
           <option value="5 year">5 year</option>
         </ChoicesFormInput>
+        {errors.long_term_rule && <div className="invalid-feedback">{errors.long_term_rule}</div>}
       </FormGroup>
 
       <Col xs={12} className="mt-3">
