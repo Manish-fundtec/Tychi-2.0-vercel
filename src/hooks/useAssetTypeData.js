@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAssetTypes, updateAssetTypeStatus, deleteCoaSeedByAssetType } from '../lib/api/assetType';
+import { getAssetTypes, updateAssetTypeStatus } from '../lib/api/assetType';
 import { getSymbolsByFundId } from '../lib/api/symbol';
 import Cookies from 'js-cookie';
 import { jwtDecode } from 'jwt-decode';
@@ -50,16 +50,7 @@ export const useAssetTypeData = () => {
     try {
       await updateAssetTypeStatus(assetTypeUid, newStatus, fundId);
 
-      // If deactivating, delete COA seed data for this asset type
-      if (newStatus === 'Inactive') {
-        try {
-          await deleteCoaSeedByAssetType(assetTypeUid, fundId);
-          console.log('COA seed data deleted for asset type:', assetTypeUid);
-        } catch (coaError) {
-          console.error('Failed to delete COA seed data:', coaError);
-          // Don't fail the entire operation if COA deletion fails
-        }
-      }
+      // Note: COA seed deletion removed as API doesn't exist
 
       setAssetTypes((prev) =>
         prev.map((item) =>
