@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
-import { Row, Col, Card, CardHeader, CardTitle, CardBody } from 'react-bootstrap';
+import { Row, Col, Card, CardHeader, CardTitle, CardBody, Modal, Button, Form } from 'react-bootstrap';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -29,6 +29,19 @@ export default function Reconciliation2Page() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+
+  // Initiation + review state
+  const [showInitiate, setShowInitiate] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState(null); // { gl_code, gl_name }
+  const [statementBalance, setStatementBalance] = useState('');
+
+  const [showReview, setShowReview] = useState(false);
+  const [glRows, setGlRows] = useState([]);
+  const [openingBalance, setOpeningBalance] = useState(0);
+  const [drTotal, setDrTotal] = useState(0);
+  const [crTotal, setCrTotal] = useState(0);
+  const closingBalance = useMemo(() => Number(openingBalance) + Number(drTotal) - Number(crTotal), [openingBalance, drTotal, crTotal]);
+  const diff = useMemo(() => Number(closingBalance) - Number(statementBalance || 0), [closingBalance, statementBalance]);
 
   useEffect(() => {
     if (!fund) return;
@@ -56,6 +69,70 @@ export default function Reconciliation2Page() {
       }
     })();
   }, [fund, date, month]);
+
+  const handleInitiateClick = (record) => {
+    if (!record) return;
+    const gl_code = record.gl_code || record.glcode || record.code || '';
+    const gl_name = record.gl_name || record.accountName || record.brokerBank || '';
+    if (!gl_code) {
+      alert('Missing GL Code for selected row');
+      return;
+    }
+    if (confirm('Are you sure you want to initiate this period?')) {
+      setSelectedAccount({ gl_code, gl_name });
+      setStatementBalance('');
+      setShowInitiate(true);
+    }
+  };
+
+  const loadGlForReview = async ({ gl_code }) => {
+    const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fund)}/gl?date=${encodeURIComponent(date)}&account=${encodeURIComponent(gl_code)}`;
+    const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
+    if (!resp.ok) throw new Error(`GL HTTP ${resp.status}`);
+    const json = await resp.json();
+    const mapped = (json?.rows || []).map((r) => ({
+      date: r.date || date,
+      journalid: r.journalid,
+      accountname: r.accountname,
+      description: r.description,
+      dramount: Number(r.dramount ?? 0),
+      cramount: Number(r.cramount ?? 0),
+      runningbalance: r.runningbalance != null ? Number(r.runningbalance) : null,
+    }));
+    setGlRows(mapped);
+    setOpeningBalance(Number(json?.opening_balance ?? 0));
+    setDrTotal(Number(json?.totals?.dr_total ?? mapped.reduce((s, r) => s + (r.dramount || 0), 0)));
+    setCrTotal(Number(json?.totals?.cr_total ?? mapped.reduce((s, r) => s + (r.cramount || 0), 0)));
+  };
+
+  const handleInitiateSave = async () => {
+    try {
+      setShowInitiate(false);
+      await loadGlForReview({ gl_code: selectedAccount?.gl_code });
+      setShowReview(true);
+    } catch (e) {
+      console.error('[reconciliation2] load GL for review failed:', e);
+      alert('Failed to load GL transactions for review');
+    }
+  };
+
+  const handleReconcile = async () => {
+    if (diff !== 0) return;
+    try {
+      const url = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(fund)}/reconcile`;
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        credentials: 'include',
+        body: JSON.stringify({ date, account: selectedAccount?.gl_code, statement_balance: Number(statementBalance || 0) })
+      });
+      setShowReview(false);
+      alert('Reconciled successfully');
+    } catch (e) {
+      console.error('[reconciliation2] reconcile failed:', e);
+      alert('Failed to reconcile');
+    }
+  };
 
   const colDefs = useMemo(
     () => [
@@ -97,25 +174,21 @@ export default function Reconciliation2Page() {
         headerName: 'Action',
         field: 'action',
         width: 120,
-        cellRenderer: params => {
-          return (
-            <button
-              className="btn btn-sm btn-danger"
-              onClick={() => {
-                // yaha baad me modal open / reconcile call
-                alert(`Initiate reconciliation for ${params.data?.gl_name}`);
-              }}
-            >
-              Initiate
-            </button>
-          );
-        },
+        cellRenderer: (params) => (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => handleInitiateClick(params.data)}
+          >
+            Initiate
+          </button>
+        ),
       },
     ],
     [date, month]
   );
 
   return (
+    <>
     <Row>
       <Col xl={12}>
         <Card className="shadow-sm">
@@ -144,6 +217,93 @@ export default function Reconciliation2Page() {
         </Card>
       </Col>
     </Row>
+
+    {/* Initiate Modal */}
+    <Modal show={showInitiate} onHide={() => setShowInitiate(false)} centered>
+      <Modal.Header closeButton>
+        <Modal.Title>Initiate Reconciliation</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="mb-2"><strong>GL Code:</strong> {selectedAccount?.gl_code || '—'}</div>
+        <div className="mb-3"><strong>Account Name:</strong> {selectedAccount?.gl_name || '—'}</div>
+        <Form.Group className="mb-2">
+          <Form.Label>Statement Balance</Form.Label>
+          <Form.Control
+            type="number"
+            value={statementBalance}
+            onChange={(e) => setStatementBalance(e.target.value)}
+            placeholder="Enter statement balance"
+          />
+        </Form.Group>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={() => setShowInitiate(false)}>Cancel</Button>
+        <Button variant="primary" onClick={handleInitiateSave} disabled={!selectedAccount}>Save & Continue</Button>
+      </Modal.Footer>
+    </Modal>
+
+    {/* Review/Reconcile Modal */}
+    <Modal show={showReview} onHide={() => setShowReview(false)} size="lg" centered>
+      <Modal.Header closeButton>
+        <Modal.Title>Reconciliation Report Sheet</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="table-responsive">
+          <table className="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>S.no</th>
+                <th>Date</th>
+                <th>journal Id</th>
+                <th>Account Name</th>
+                <th>Description</th>
+                <th className="text-end">Dr Amount</th>
+                <th className="text-end">Cr Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="table-light">
+                <td colSpan={6}><strong>Opening Balance</strong></td>
+                <td className="text-end">{openingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+              {glRows.map((r, i) => (
+                <tr key={i}>
+                  <td>{i + 1}</td>
+                  <td>{r.date}</td>
+                  <td>{r.journalid}</td>
+                  <td>{r.accountname}</td>
+                  <td>{r.description}</td>
+                  <td className="text-end">{r.dramount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="text-end">{r.cramount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              ))}
+              <tr className="table-light">
+                <td colSpan={5} className="text-end"><strong>Total</strong></td>
+                <td className="text-end"><strong>{drTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+                <td className="text-end"><strong>{crTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+              </tr>
+              <tr className="table-primary">
+                <td colSpan={6}><strong>Closing Balance</strong></td>
+                <td className="text-end">{closingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+              <tr className="table-primary">
+                <td colSpan={6}><strong>Statement Balance</strong></td>
+                <td className="text-end">{Number(statementBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+              <tr className={diff === 0 ? 'table-success' : 'table-danger'}>
+                <td colSpan={6}><strong>Difference</strong></td>
+                <td className="text-end">{diff.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={() => setShowReview(false)}>Close</Button>
+        <Button variant="success" onClick={handleReconcile} disabled={diff !== 0}>Reconcile</Button>
+      </Modal.Footer>
+    </Modal>
+    </>
   );
 }
 
