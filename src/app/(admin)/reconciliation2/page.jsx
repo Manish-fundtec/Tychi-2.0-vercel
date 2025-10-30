@@ -62,6 +62,21 @@ export default function Reconciliation2Page() {
         const json = await resp.json();
 
         setRows(json?.rows || []);
+
+        // Persist button state after refresh by loading reconciled codes
+        try {
+          const recUrl = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(fund)}/status?date=${encodeURIComponent(date)}&month=${encodeURIComponent(month)}`;
+          const recResp = await fetch(recUrl, { headers: getAuthHeaders(), credentials: 'include' });
+          if (recResp.ok) {
+            const recJson = await recResp.json();
+            const codes = new Set((recJson?.rows || [])
+              .filter(r => String(r.status || '').toLowerCase() === 'reconciled')
+              .map(r => String(r.gl_code)));
+            setReconciledCodes(codes);
+          }
+        } catch (_) {
+          // ignore best-effort
+        }
       } catch (e) {
         console.error('[reconciliation2] load failed:', e);
         setErr('Failed to load Bank / Broker chart-of-accounts.');
@@ -211,7 +226,7 @@ export default function Reconciliation2Page() {
         },
       },
     ],
-    [date, month]
+    [date, month, reconciledCodes]
   );
 
   return (
