@@ -27,6 +27,7 @@ export default function Reconciliation2Page() {
   const month = searchParams.get('month') || '';
 
   const [rows, setRows] = useState([]);
+  const [reconciledCodes, setReconciledCodes] = useState(() => new Set()); // local set of reconciled gl_code
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
@@ -128,6 +129,19 @@ export default function Reconciliation2Page() {
       });
       setShowReview(false);
       alert('Reconciled successfully');
+
+      // Flip Initiate -> Reconciled for this GL locally
+      const code = String(selectedAccount?.gl_code || '');
+      setReconciledCodes(prev => {
+        const next = new Set(prev);
+        if (code) next.add(code);
+        return next;
+      });
+      setRows(prev => prev.map(r => (
+        String(r.gl_code || r.glcode || r.code || '') === code
+          ? { ...r, _reconciled: true }
+          : r
+      )));
     } catch (e) {
       console.error('[reconciliation2] reconcile failed:', e);
       alert('Failed to reconcile');
@@ -173,15 +187,20 @@ export default function Reconciliation2Page() {
       {
         headerName: 'Action',
         field: 'action',
-        width: 120,
-        cellRenderer: (params) => (
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={() => handleInitiateClick(params.data)}
-          >
-            Initiate
-          </button>
-        ),
+        width: 130,
+        cellRenderer: (params) => {
+          const code = String(params.data?.gl_code || params.data?.glcode || params.data?.code || '');
+          const isDone = reconciledCodes.has(code) || params.data?._reconciled;
+          return (
+            <button
+              className={`btn btn-sm ${isDone ? 'btn-success' : 'btn-primary'}`}
+              disabled={isDone}
+              onClick={() => handleInitiateClick(params.data)}
+            >
+              {isDone ? 'Reconciled' : 'Initiate'}
+            </button>
+          );
+        },
       },
     ],
     [date, month]
