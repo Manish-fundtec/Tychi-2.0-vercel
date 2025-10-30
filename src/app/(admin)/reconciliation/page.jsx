@@ -1,3 +1,4 @@
+// app/(admin)/reconciliation/page.jsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -6,14 +7,11 @@ import { useRouter } from 'next/navigation';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { Row, Col, Card, CardHeader, CardTitle, CardBody } from 'react-bootstrap';
-// Removed ArrowRightCircle import as we're using button instead
 
-// AG Grid modules (register once)
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
-// --- auth header helper
 function getAuthHeaders() {
   const token = Cookies.get('dashboardToken');
   const h = { Accept: 'application/json' };
@@ -21,7 +19,6 @@ function getAuthHeaders() {
   return h;
 }
 
-// --- fund id from cookie
 function getFundIdFromCookie() {
   try {
     const cookie = document.cookie.split('; ').find(c => c.startsWith('dashboardToken='));
@@ -34,39 +31,28 @@ function getFundIdFromCookie() {
   }
 }
 
-// --- Status cell renderer: shows status with badge
-function StatusRenderer(props) {
-  // Always show "Open" status with warning badge
+// shows "Open"
+function StatusRenderer() {
   return <span className="badge bg-warning">Open</span>;
 }
 
-// --- Action cell: initiate reconciliation for selected period
+// initiate → /reconciliation2?... 
 function ActionRenderer(props) {
   const { data, context } = props;
+  if (!data || !context?.router) return <span className="text-muted">—</span>;
 
-  // If something is missing, show a placeholder
-  if (!data || !context || !context.router) {
-    return <span className="text-muted">—</span>;
-  }
-
-  const handleClick = () => {
-    const fund  = encodeURIComponent(context.fundId || '');
-    const date  = encodeURIComponent(data?.date || '');
-    const month = encodeURIComponent(data?.month || '');
-    context.router.push(`/reconciliation?fund=${fund}&date=${date}&month=${month}`);
-  };
+  const { router, fundId } = context;
 
   return (
     <button
       className="btn btn-sm btn-primary"
-      title="Initiate Reconciliation"
-      onClick={() =>
-          context?.router?.push(
-            `/reconciliation2?fund=${encodeURIComponent(context.fundId || '')}` +
+      onClick={() => {
+        router.push(
+          `/reconciliation2?fund=${encodeURIComponent(fundId || '')}` +
             `&date=${encodeURIComponent(data?.date || '')}` +
             `&month=${encodeURIComponent(data?.month || '')}`
-          )
-        }
+        );
+      }}
     >
       Initiate
     </button>
@@ -84,40 +70,39 @@ export default function ReconciliationPage() {
     setFundId(getFundIdFromCookie());
   }, []);
 
-  // Fetch reporting periods
   useEffect(() => {
     if (!fundId) return;
     (async () => {
       setLoading(true);
       setErr('');
       try {
-        const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`;
+        const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(
+          fundId
+        )}/reporting-periods?limit=200`;
         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const json = await resp.json(); // { rows, count }
+        const json = await resp.json();
 
         const rows = (json?.rows || []).map((r, i) => {
-          const end = (r?.end_date || '').slice(0, 10); // YYYY-MM-DD
+          const end = (r?.end_date || '').slice(0, 10);
           const d = end ? new Date(end) : null;
           const hasValidDate = d && !Number.isNaN(d.getTime());
           const monthLabel =
             r?.period_name ||
             (hasValidDate ? d.toLocaleString(undefined, { month: 'long', year: 'numeric' }) : '-');
 
-          const status = String(r?.status || 'open').toLowerCase();
-
           return {
             srNo: i + 1,
             month: monthLabel,
             date: end,
-            status,
+            status: 'open',
             raw: r,
           };
         });
 
         setRowData(rows);
       } catch (e) {
-        console.error('[Reconciliation] load periods failed:', e);
+        console.error(e);
         setErr('Failed to load reporting periods.');
       } finally {
         setLoading(false);
@@ -131,25 +116,19 @@ export default function ReconciliationPage() {
         headerName: 'Sr.No',
         width: 100,
         valueGetter: p => p.node.rowIndex + 1,
-        sortable: false,
-        filter: false,
       },
       { headerName: 'Month', field: 'month', flex: 1, sortable: true, filter: true },
       { headerName: 'Date', field: 'date', flex: 1, sortable: true, filter: true },
-        {
-          headerName: 'Status',
-          field: 'status',
-          width: 120,
-          sortable: true,
-          filter: true,
-          cellRenderer: 'StatusRenderer',
-        },
+      {
+        headerName: 'Status',
+        field: 'status',
+        width: 120,
+        cellRenderer: 'StatusRenderer',
+      },
       {
         headerName: 'Action',
         field: 'action',
         width: 120,
-        sortable: false,
-        filter: false,
         cellRenderer: 'ActionRenderer',
       },
     ],
@@ -163,10 +142,9 @@ export default function ReconciliationPage() {
           <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
             <CardTitle as="h4">Reconciliation — Reporting Periods</CardTitle>
           </CardHeader>
-
           <CardBody className="p-2">
             {err && <div className="text-danger mb-2">{err}</div>}
-            <div className="ag-theme-quartz" style={{ height: 550, width: '100%' }}>
+            <div className="ag-theme-quartz" style={{ height: 550 }}>
               <AgGridReact
                 rowData={rowData}
                 columnDefs={columnDefs}
@@ -186,6 +164,196 @@ export default function ReconciliationPage() {
     </Row>
   );
 }
+
+
+// 'use client';
+
+// import { useEffect, useMemo, useState } from 'react';
+// import Cookies from 'js-cookie';
+// import { useRouter } from 'next/navigation';
+// import { AgGridReact } from 'ag-grid-react';
+// import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
+// import { Row, Col, Card, CardHeader, CardTitle, CardBody } from 'react-bootstrap';
+// // Removed ArrowRightCircle import as we're using button instead
+
+// // AG Grid modules (register once)
+// ModuleRegistry.registerModules([AllCommunityModule]);
+
+// const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+
+// // --- auth header helper
+// function getAuthHeaders() {
+//   const token = Cookies.get('dashboardToken');
+//   const h = { Accept: 'application/json' };
+//   if (token) h.Authorization = `Bearer ${token}`;
+//   return h;
+// }
+
+// // --- fund id from cookie
+// function getFundIdFromCookie() {
+//   try {
+//     const cookie = document.cookie.split('; ').find(c => c.startsWith('dashboardToken='));
+//     if (!cookie) return null;
+//     const token = cookie.split('=')[1];
+//     const payload = JSON.parse(atob((token.split('.')[1] || '')));
+//     return payload?.fund_id || payload?.fundId || payload?.fund?.fund_id || null;
+//   } catch {
+//     return null;
+//   }
+// }
+
+// // --- Status cell renderer: shows status with badge
+// function StatusRenderer(props) {
+//   // Always show "Open" status with warning badge
+//   return <span className="badge bg-warning">Open</span>;
+// }
+
+// // --- Action cell: initiate reconciliation for selected period
+// function ActionRenderer(props) {
+//   const { data, context } = props;
+
+//   // If something is missing, show a placeholder
+//   if (!data || !context || !context.router) {
+//     return <span className="text-muted">—</span>;
+//   }
+
+//   const handleClick = () => {
+//     const fund  = encodeURIComponent(context.fundId || '');
+//     const date  = encodeURIComponent(data?.date || '');
+//     const month = encodeURIComponent(data?.month || '');
+//     context.router.push(`/reconciliation?fund=${fund}&date=${date}&month=${month}`);
+//   };
+
+//   return (
+//     <button
+//       className="btn btn-sm btn-primary"
+//       title="Initiate Reconciliation"
+//       onClick={() =>
+//           context?.router?.push(
+//             `/reconciliation2?fund=${encodeURIComponent(context.fundId || '')}` +
+//             `&date=${encodeURIComponent(data?.date || '')}` +
+//             `&month=${encodeURIComponent(data?.month || '')}`
+//           )
+//         }
+//     >
+//       Initiate
+//     </button>
+//   );
+// }
+
+// export default function ReconciliationPage() {
+//   const router = useRouter();
+//   const [fundId, setFundId] = useState(null);
+//   const [rowData, setRowData] = useState([]);
+//   const [loading, setLoading] = useState(false);
+//   const [err, setErr] = useState('');
+
+//   useEffect(() => {
+//     setFundId(getFundIdFromCookie());
+//   }, []);
+
+//   // Fetch reporting periods
+//   useEffect(() => {
+//     if (!fundId) return;
+//     (async () => {
+//       setLoading(true);
+//       setErr('');
+//       try {
+//         const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`;
+//         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
+//         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+//         const json = await resp.json(); // { rows, count }
+
+//         const rows = (json?.rows || []).map((r, i) => {
+//           const end = (r?.end_date || '').slice(0, 10); // YYYY-MM-DD
+//           const d = end ? new Date(end) : null;
+//           const hasValidDate = d && !Number.isNaN(d.getTime());
+//           const monthLabel =
+//             r?.period_name ||
+//             (hasValidDate ? d.toLocaleString(undefined, { month: 'long', year: 'numeric' }) : '-');
+
+//           const status = String(r?.status || 'open').toLowerCase();
+
+//           return {
+//             srNo: i + 1,
+//             month: monthLabel,
+//             date: end,
+//             status,
+//             raw: r,
+//           };
+//         });
+
+//         setRowData(rows);
+//       } catch (e) {
+//         console.error('[Reconciliation] load periods failed:', e);
+//         setErr('Failed to load reporting periods.');
+//       } finally {
+//         setLoading(false);
+//       }
+//     })();
+//   }, [fundId]);
+
+//   const columnDefs = useMemo(
+//     () => [
+//       {
+//         headerName: 'Sr.No',
+//         width: 100,
+//         valueGetter: p => p.node.rowIndex + 1,
+//         sortable: false,
+//         filter: false,
+//       },
+//       { headerName: 'Month', field: 'month', flex: 1, sortable: true, filter: true },
+//       { headerName: 'Date', field: 'date', flex: 1, sortable: true, filter: true },
+//         {
+//           headerName: 'Status',
+//           field: 'status',
+//           width: 120,
+//           sortable: true,
+//           filter: true,
+//           cellRenderer: 'StatusRenderer',
+//         },
+//       {
+//         headerName: 'Action',
+//         field: 'action',
+//         width: 120,
+//         sortable: false,
+//         filter: false,
+//         cellRenderer: 'ActionRenderer',
+//       },
+//     ],
+//     []
+//   );
+
+//   return (
+//     <Row>
+//       <Col xl={12}>
+//         <Card className="shadow-sm">
+//           <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
+//             <CardTitle as="h4">Reconciliation — Reporting Periods</CardTitle>
+//           </CardHeader>
+
+//           <CardBody className="p-2">
+//             {err && <div className="text-danger mb-2">{err}</div>}
+//             <div className="ag-theme-quartz" style={{ height: 550, width: '100%' }}>
+//               <AgGridReact
+//                 rowData={rowData}
+//                 columnDefs={columnDefs}
+//                 defaultColDef={{ resizable: true }}
+//                 pagination
+//                 paginationPageSize={10}
+//                 overlayLoadingTemplate={
+//                   loading ? '<span class="ag-overlay-loading-center">Loading…</span>' : undefined
+//                 }
+//                 context={{ router, fundId }}
+//                 components={{ StatusRenderer, ActionRenderer }}
+//               />
+//             </div>
+//           </CardBody>
+//         </Card>
+//       </Col>
+//     </Row>
+//   );
+// }
 
 
 

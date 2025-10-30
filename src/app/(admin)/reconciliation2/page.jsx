@@ -1,6 +1,8 @@
+// app/(admin)/reconciliation2/page.jsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
@@ -16,166 +18,123 @@ function getAuthHeaders() {
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
-function getFundIdFromCookie() {
-  try {
-    
-    const cookie = document.cookie.split('; ').find(c => c.startsWith('dashboardToken='));
-    if (!cookie) return null;
-    const token = cookie.split('=')[1];
-    const payload = JSON.parse(atob((token.split('.')[1] || '')));
-    return payload?.fund_id || payload?.fundId || payload?.fund?.fund_id || null;
-  } catch { return null; }
-}
 
-// If you already have reporting periods endpoint, use that.
-// For demo, static dates:
-const getReportingPeriods = async (fundId) => {
-  const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`;
-  const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
-  if (!resp.ok) throw new Error(`periods HTTP ${resp.status}`);
-  const json = await resp.json(); // { rows, count }
-  return (json?.rows || []).map(r => {
-    const end = (r?.end_date || '').slice(0,10);
-    const d = end ? new Date(end) : null;
-    const monthLabel = r?.period_name || (d ? d.toLocaleString(undefined, { month:'long', year:'numeric' }) : '-');
-    return { end, monthLabel, raw: r };
-  });
-};
+export default function Reconciliation2Page() {
+  const searchParams = useSearchParams();
 
-// Fetch GL entries for bank and broker COA accounts for a specific date
-const fetchGLDataForMonth = async (fundId, date) => {
-  const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl?date=${encodeURIComponent(date)}&scope=ALL`;
-  const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
-  if (!resp.ok) throw new Error(`GL HTTP ${resp.status}`);
-  const json = await resp.json();
-  
-  // Filter for bank and broker accounts (you can adjust the account name/code filter as needed)
-  const rows = json?.rows || [];
-  const bankBrokerRows = rows.filter(r => {
-    const accountName = (r.accountname || '').toLowerCase();
-    return accountName.includes('bank') || accountName.includes('broker') || accountName.includes('cash');
-  });
-  
-  return bankBrokerRows.map(r => ({
-    date: r.date || date,
-    journalId: r.journalid,
-    accountName: r.accountname,
-    description: r.description,
-    drAmount: Number(r.dramount || 0),
-    crAmount: Number(r.cramount || 0),
-    runningBalance: r.runningbalance != null ? Number(r.runningbalance) : null,
-  }));
-};
+  const fund = searchParams.get('fund') || '';
+  const date = searchParams.get('date') || '';
+  const month = searchParams.get('month') || '';
 
-export default function ReconciliationGrid() {
-  const [fundId, setFundId] = useState(null);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
-  useEffect(() => setFundId(getFundIdFromCookie()), []);
-
   useEffect(() => {
-    if (!fundId) return;
+    if (!fund) return;
     (async () => {
       setLoading(true);
       setErr('');
       try {
-        const periods = await getReportingPeriods(fundId);
-        const all = await Promise.all(
-          periods.map(p => fetchGLDataForMonth(fundId, p.end).catch(() => []))
-        );
+        const url =
+          `${apiBase}/api/v1/reconciliation/${encodeURIComponent(fund)}/bank-gl` +
+          `?date=${encodeURIComponent(date || '')}&month=${encodeURIComponent(month || '')}`;
 
-        const out = [];
-        let idx = 1;
-        periods.forEach((p, i) => {
-          (all[i] || []).forEach(gl => {
-            out.push({
-              srNo: idx++,
-              month: p.monthLabel,
-              date: gl.date || p.end,
-              brokerBank: gl.accountName,
-              description: gl.description,
-              drAmount: gl.drAmount,
-              crAmount: gl.crAmount,
-              closingBalance: gl.runningBalance != null ? gl.runningBalance : (gl.drAmount - gl.crAmount),
-              journalId: gl.journalId,
-            });
-          });
+        const resp = await fetch(url, {
+          headers: getAuthHeaders(),
+          credentials: 'include',
         });
-        setRows(out);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const json = await resp.json();
+
+        setRows(json?.rows || []);
       } catch (e) {
-        console.error('[frontend][reconciliation] error:', e);
-        setErr('Failed to load GL data for bank/broker accounts');
+        console.error('[reconciliation2] load failed:', e);
+        setErr('Failed to load Bank / Broker chart-of-accounts.');
       } finally {
         setLoading(false);
       }
     })();
-  }, [fundId]);
+  }, [fund, date, month]);
 
-  const columnDefs = useMemo(() => ([
-    { headerName: 'S.No', width: 90, valueGetter: p => (p?.node?.rowIndex ?? 0) + 1, sortable:false, filter:false },
-    { headerName: 'Reporting Period', field: 'month', flex: 1, sortable: true, filter: true },
-    { headerName: 'Date', field: 'date', flex: 1, sortable: true, filter: true },
-    { headerName: 'Account Name', field: 'brokerBank', flex: 1.2, sortable: true, filter: true },
-    { headerName: 'Description', field: 'description', flex: 1.5, sortable: true, filter: true },
-    {
-      headerName: 'Dr Amount',
-      field: 'drAmount',
-      width: 130,
-      sortable: true,
-      filter: true,
-      valueFormatter: p => Number(p.value || 0).toLocaleString('en-IN', {
-        style: 'currency', currency: 'USD', maximumFractionDigits: 2
-      }),
-    },
-    {
-      headerName: 'Cr Amount',
-      field: 'crAmount',
-      width: 130,
-      sortable: true,
-      filter: true,
-      valueFormatter: p => Number(p.value || 0).toLocaleString('en-IN', {
-        style: 'currency', currency: 'USD', maximumFractionDigits: 2
-      }),
-    },
-    {
-      headerName: 'Balance',
-      field: 'closingBalance',
-      width: 130,
-      sortable: true,
-      filter: true,
-      valueFormatter: p => p.value != null ? Number(p.value || 0).toLocaleString('en-IN', {
-        style: 'currency', currency: 'USD', maximumFractionDigits: 2
-      }) : '—',
-      cellClass: p => (p.value != null && Number(p.value || 0) < 0 ? 'text-danger' : '')
-    },
-    {
-      headerName: 'Action',
-      field: 'action',
-      width: 120,
-      sortable: false,
-      filter: false,
-      cellRenderer: () => null, // Remove action button for now
-    },
-  ]), []);
+  const colDefs = useMemo(
+    () => [
+      {
+        headerName: 'S.No',
+        width: 80,
+        valueGetter: p => p.node.rowIndex + 1,
+      },
+      {
+        headerName: 'Reporting Period',
+        field: 'reporting_period',
+        flex: 1,
+        valueGetter: p => p.data?.reporting_period || month || '',
+      },
+      {
+        headerName: 'Reporting Date',
+        field: 'reporting_date',
+        flex: 1,
+        valueGetter: p => p.data?.reporting_date || date || '',
+      },
+      {
+        headerName: 'Broker & Bank Name',
+        field: 'gl_name', // from backend
+        flex: 2,
+      },
+      {
+        headerName: 'Closing Balance',
+        field: 'closing_balance',
+        flex: 1,
+        valueFormatter: p => {
+          const v = Number(p.value || 0);
+          return v.toLocaleString('en-IN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        },
+      },
+      {
+        headerName: 'Action',
+        field: 'action',
+        width: 120,
+        cellRenderer: params => {
+          return (
+            <button
+              className="btn btn-sm btn-danger"
+              onClick={() => {
+                // yaha baad me modal open / reconcile call
+                alert(`Initiate reconciliation for ${params.data?.gl_name}`);
+              }}
+            >
+              Initiate
+            </button>
+          );
+        },
+      },
+    ],
+    [date, month]
+  );
 
   return (
     <Row>
       <Col xl={12}>
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
-            <CardTitle as="h4">Reconciliation</CardTitle>
+            <CardTitle as="h4">Reconciliation — Bank / Broker (COA)</CardTitle>
+            <small className="text-muted">
+              Fund: {fund ? fund.slice(0, 8) + '…' : '—'} &nbsp;|&nbsp;{' '}
+              {month || '—'} &nbsp;|&nbsp; {date || '—'}
+            </small>
           </CardHeader>
           <CardBody className="p-2">
             {err && <div className="text-danger mb-2">{err}</div>}
-            <div className="ag-theme-quartz" style={{ height: 550, width: '100%' }}>
+            <div className="ag-theme-quartz" style={{ height: 520 }}>
               <AgGridReact
                 rowData={rows}
-                columnDefs={columnDefs}
-                defaultColDef={{ resizable: true }}
+                columnDefs={colDefs}
+                defaultColDef={{ resizable: true, sortable: true, filter: true }}
                 pagination
-                paginationPageSize={10}
+                paginationPageSize={15}
                 overlayLoadingTemplate={
                   loading ? '<span class="ag-overlay-loading-center">Loading…</span>' : undefined
                 }
