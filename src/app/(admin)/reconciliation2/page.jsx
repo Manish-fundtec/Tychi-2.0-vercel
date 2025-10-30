@@ -120,12 +120,20 @@ export default function Reconciliation2Page() {
   const handleReconcile = async () => {
     if (diff !== 0) return;
     try {
-      const url = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(fund)}/reconcile`;
+      // Backend route expects POST /api/v1/reconciliation/reconciliation/reconcile (no :fundId in URL)
+      const url = `${apiBase}/api/v1/reconciliation/reconciliation/reconcile`;
       await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         credentials: 'include',
-        body: JSON.stringify({ date, account: selectedAccount?.gl_code, statement_balance: Number(statementBalance || 0) })
+        body: JSON.stringify({
+          fund_id: fund,
+          gl_code: selectedAccount?.gl_code,
+          gl_name: selectedAccount?.gl_name,
+          pricing_date: date,
+          pricing_month: month,
+          statement_balance: Number(statementBalance || 0)
+        })
       });
       setShowReview(false);
       alert('Reconciled successfully');
