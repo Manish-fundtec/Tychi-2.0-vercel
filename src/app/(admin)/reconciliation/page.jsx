@@ -51,9 +51,7 @@ function ActionRenderer(props) {
   return (
     <button
       className={`btn btn-sm ${isDone ? 'btn-success' : 'btn-primary'}`}
-      disabled={isDone}
       onClick={() => {
-        if (isDone) return;
         router.push(
           `/reconciliation2?fund=${encodeURIComponent(fundId || '')}` +
             `&date=${encodeURIComponent(data?.date || '')}` +

@@ -28,6 +28,7 @@ export default function Reconciliation2Page() {
 
   const [rows, setRows] = useState([]);
   const [reconciledCodes, setReconciledCodes] = useState(() => new Set()); // local set of reconciled gl_code
+  const [allReconciled, setAllReconciled] = useState(false); // track if all bank/brokers are reconciled
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
@@ -73,6 +74,18 @@ export default function Reconciliation2Page() {
               .filter(r => String(r.status || '').toLowerCase() === 'reconciled')
               .map(r => String(r.gl_code)));
             setReconciledCodes(codes);
+          }
+        } catch (_) {
+          // ignore best-effort
+        }
+
+        // Check if all bank/brokers are reconciled
+        try {
+          const summaryUrl = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(fund)}/period-summary?date=${encodeURIComponent(date)}&month=${encodeURIComponent(month)}`;
+          const summaryResp = await fetch(summaryUrl, { headers: getAuthHeaders(), credentials: 'include' });
+          if (summaryResp.ok) {
+            const summaryJson = await summaryResp.json();
+            setAllReconciled(summaryJson?.success && summaryJson?.allReconciled === true);
           }
         } catch (_) {
           // ignore best-effort
@@ -132,12 +145,41 @@ export default function Reconciliation2Page() {
     }
   };
 
+  const handleReopen = async () => {
+    if (!confirm('Are you sure you want to reopen reconciliation for all bank/brokers?')) return;
+    
+    try {
+      const url = `${apiBase}/api/v1/reconciliation/reconciliation/reopen`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        credentials: 'include',
+        body: JSON.stringify({
+          fund_id: fund,
+          pricing_date: date,
+          pricing_month: month
+        })
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      
+      alert('Reopened successfully');
+      setAllReconciled(false);
+      setReconciledCodes(new Set()); // Clear reconciled codes
+      
+      // Refresh the rows
+      window.location.reload();
+    } catch (e) {
+      console.error('[reconciliation2] reopen failed:', e);
+      alert('Failed to reopen reconciliation');
+    }
+  };
+
   const handleReconcile = async () => {
     if (diff !== 0) return;
     try {
       // Backend route expects POST /api/v1/reconciliation/reconciliation/reconcile (no :fundId in URL)
       const url = `${apiBase}/api/v1/reconciliation/reconciliation/reconcile`;
-      await fetch(url, {
+      const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         credentials: 'include',
@@ -150,8 +192,16 @@ export default function Reconciliation2Page() {
           statement_balance: Number(statementBalance || 0)
         })
       });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json();
+      
       setShowReview(false);
       alert('Reconciled successfully');
+
+      // Check if all are reconciled from response
+      if (json?.success && json?.data?.allReconciled) {
+        setAllReconciled(true);
+      }
 
       // Flip Initiate -> Reconciled for this GL locally
       const code = String(selectedAccount?.gl_code || '');
@@ -210,23 +260,34 @@ export default function Reconciliation2Page() {
       {
         headerName: 'Action',
         field: 'action',
-        width: 130,
+        width: 200,
         cellRenderer: (params) => {
           const code = String(params.data?.gl_code || params.data?.glcode || params.data?.code || '');
           const isDone = reconciledCodes.has(code) || params.data?._reconciled;
           return (
-            <button
-              className={`btn btn-sm ${isDone ? 'btn-success' : 'btn-primary'}`}
-              disabled={isDone}
-              onClick={() => handleInitiateClick(params.data)}
-            >
-              {isDone ? 'Reconciled' : 'Initiate'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                className={`btn btn-sm ${isDone ? 'btn-success' : 'btn-primary'}`}
+                disabled={isDone}
+                onClick={() => handleInitiateClick(params.data)}
+              >
+                {isDone ? 'Reconciled' : 'Initiate'}
+              </button>
+              {allReconciled && isDone && (
+                <button
+                  className="btn btn-sm btn-warning"
+                  onClick={handleReopen}
+                  title="Reopen reconciliation for all accounts"
+                >
+                  Reopen
+                </button>
+              )}
+            </div>
           );
         },
       },
     ],
-    [date, month, reconciledCodes]
+    [date, month, reconciledCodes, allReconciled]
   );
 
   return (
