@@ -31,22 +31,29 @@ function getFundIdFromCookie() {
   }
 }
 
-// shows "Open"
-function StatusRenderer() {
-  return <span className="badge bg-warning">Open</span>;
+// Status renderer: shows "Open" or "Reconciled"
+function StatusRenderer(props) {
+  const status = props?.data?.status || 'open';
+  if (status === 'reconciled') {
+    return <span className="badge bg-success">Reconciled</span>;
+  }
+  return <span className="badge bg-warning text-dark">Open</span>;
 }
 
-// initiate → /reconciliation2?... 
+// Action renderer: "Open" button that becomes "Reconciled" when done
 function ActionRenderer(props) {
   const { data, context } = props;
   if (!data || !context?.router) return <span className="text-muted">—</span>;
 
   const { router, fundId } = context;
+  const isDone = (data.status || '').toLowerCase() === 'reconciled';
 
   return (
     <button
-      className="btn btn-sm btn-primary"
+      className={`btn btn-sm ${isDone ? 'btn-success' : 'btn-primary'}`}
+      disabled={isDone}
       onClick={() => {
+        if (isDone) return;
         router.push(
           `/reconciliation2?fund=${encodeURIComponent(fundId || '')}` +
             `&date=${encodeURIComponent(data?.date || '')}` +
@@ -54,7 +61,7 @@ function ActionRenderer(props) {
         );
       }}
     >
-      Initiate
+      {isDone ? 'Reconciled' : 'Open'}
     </button>
   );
 }
@@ -83,7 +90,7 @@ export default function ReconciliationPage() {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const json = await resp.json();
 
-        const rows = (json?.rows || []).map((r, i) => {
+        const baseRows = (json?.rows || []).map((r, i) => {
           const end = (r?.end_date || '').slice(0, 10);
           const d = end ? new Date(end) : null;
           const hasValidDate = d && !Number.isNaN(d.getTime());
@@ -100,7 +107,33 @@ export default function ReconciliationPage() {
           };
         });
 
-        setRowData(rows);
+        // Check reconciliation status for each period
+        const enriched = await Promise.all(
+          baseRows.map(async row => {
+            if (!row.date) return row;
+            try {
+              const sUrl = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(
+                fundId
+              )}/period-summary?date=${encodeURIComponent(row.date)}&month=${encodeURIComponent(
+                row.month
+              )}`;
+              const sResp = await fetch(sUrl, {
+                headers: getAuthHeaders(),
+                credentials: 'include',
+              });
+              if (!sResp.ok) return row;
+              const sJson = await sResp.json();
+              if (sJson?.success && sJson.allReconciled) {
+                return { ...row, status: 'reconciled' };
+              }
+              return row;
+            } catch {
+              return row;
+            }
+          })
+        );
+
+        setRowData(enriched);
       } catch (e) {
         console.error(e);
         setErr('Failed to load reporting periods.');
