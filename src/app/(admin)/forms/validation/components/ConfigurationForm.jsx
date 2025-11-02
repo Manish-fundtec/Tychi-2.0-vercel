@@ -1318,6 +1318,7 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
     </Form>
   )
 }
+
 export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
   const isEdit = !!symbol
   const [validated, setValidated] = useState(false)
@@ -1463,6 +1464,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
     </Form>
   )
 }
+
 const MAX_MB = 10
 export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
   const dashboard = useDashboardToken()
@@ -1515,27 +1517,45 @@ export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
 
   const submit = async (e) => {
     e.preventDefault()
+    setErr('')
+    setOk('')
+    setErrorFileUrl('')
     if (!file) return setMsg('Choose a .xlsx file.')
-    if (!fundId) return setMsg('Missing fundId.')
 
     setLoading(true)
-    setMsg('')
     try {
       const form = new FormData()
-      form.append('file', file) // Multer expects 'file'
-      form.append('fund_id', String(fundId))
+      form.append('file', file)                     // Multer expects 'file'
+      // CHANGED: no fundId in URL/body; backend reads fund_id from JWT
+      // form.append('fund_id', String(currentFundId || ''))
 
-      const res = await api.post(`/api/v1/symbols/upload/${fundId}`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      // NEW: pass Dashboard token in `dashboard` header (like Trade upload)
+      const dashboardToken = Cookies.get('dashboardToken') || ''
+      const res = await api.post(`/api/v1/symbols/upload`, form, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          dashboard: dashboardToken ? `Bearer ${dashboardToken}` : undefined,
+        },
       })
 
-      setMsg(res.data?.success ? 'Processing started.' : res.data?.error || 'Upload failed.')
-      if (res.data?.success && inputRef.current) {
-        inputRef.current.value = ''
+      // CHANGED: handle new response shape (success / error_file_url / file_id)
+      const data = res?.data || {}
+      if (data.success) {
+        setOk(data.message || 'File uploaded. Validation in progress.')
+        setMsg('')
+        setErrorFileUrl('')
+        if (inputRef.current) inputRef.current.value = ''
         setFile(null)
+        console.log('✅ Upload successful, triggering onUploaded callback...')
+        onUploaded?.() // Trigger refresh in parent component
+        onClose?.() // Close modal after successful upload
+      } else {
+        // backend may return: { success:false, error_file_url, message }
+        setErr(data.message || 'Upload/validation failed.')
+        if (data.error_file_url) setErrorFileUrl(data.error_file_url)
       }
-    } catch (err) {
-      setMsg(err?.response?.data?.error || 'Upload failed.')
+    } catch (e) {
+      setErr(e?.response?.data?.message || e?.response?.data?.error || 'Upload failed.')
     } finally {
       setLoading(false)
     }
