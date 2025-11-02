@@ -1164,14 +1164,43 @@ export const Tooltips = () => {
   )
 }
 
-export const BankForm = ({ bank, onSuccess, onClose }) => {
+export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate }) => {
   const isEdit = !!bank
   const [validated, setValidated] = useState(false)
+  const [rsd, setRsd] = useState(null) // Reporting Start Date from token
 
   const [form, setForm] = useState({
     bank_name: '',
     start_date: '',
   })
+
+  // Get RSD from token on component mount
+  useEffect(() => {
+    try {
+      const token = Cookies.get('dashboardToken')
+      if (token) {
+        const payload = jwtDecode(token) || {}
+        // Try to get reporting start date from fund object first
+        const raw =
+          payload.fund?.reporting_start_date || payload.reporting_start_date || payload.reportingStartDate || payload.RSD || payload.fund_start_date
+
+        if (raw) {
+          // Normalize to YYYY-MM-DD (strip time if present)
+          const match = String(raw).match(/^(\d{4}-\d{2}-\d{2})/)
+          const normalized = match ? match[1] : null
+          setRsd(normalized)
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error decoding token:', error)
+    }
+  }, [])
+
+  // Helper: check if start_date is less than RSD (should be >= RSD)
+  const isBeforeRSD = useMemo(() => {
+    if (!rsd || !form.start_date) return false
+    return form.start_date < rsd
+  }, [form.start_date, rsd])
 
   // ✅ Pre-fill if editing
   useEffect(() => {
@@ -1192,30 +1221,60 @@ export const BankForm = ({ bank, onSuccess, onClose }) => {
     e.preventDefault()
     const formEl = e.currentTarget
 
+    // 1) Native HTML validation
     if (!formEl.checkValidity()) {
       e.stopPropagation()
-    } else {
-      try {
-        const token = Cookies.get('dashboardToken')
-        const decoded = jwtDecode(token)
+      setValidated(true)
+      return
+    }
 
-        const payload = {
-          ...form,
-          user_id: decoded.user_id,
-          org_id: decoded.org_id,
-          fund_id: decoded.fund_id,
-        }
+    // 2) Frontend guard: start_date must be greater than or equal to RSD
+    if (rsd && form.start_date && form.start_date < rsd) {
+      toast.error(`Start Date must be greater than or equal to Reporting Start Date (${rsd}).`)
+      setValidated(true)
+      return
+    }
 
-        if (isEdit) {
-          await updateBank(bank.bank_id, payload) // ✅ Call update
-        } else {
-          await createBank(payload)
-        }
+    // 3) Guard for reportingStartDate prop
+    if (reportingStartDate && form.start_date < reportingStartDate) {
+      toast.error(`Bank date cannot be less than ${reportingStartDate}`)
+      setValidated(true)
+      return
+    }
 
-        onSuccess?.()
-        onClose?.()
-      } catch (error) {
-        console.error('❌ Failed to submit bank form:', error)
+    try {
+      const token = Cookies.get('dashboardToken')
+      const decoded = jwtDecode(token)
+
+      const payload = {
+        ...form,
+        user_id: decoded.user_id,
+        org_id: decoded.org_id,
+        fund_id: decoded.fund_id,
+      }
+
+      if (isEdit) {
+        await updateBank(bank.bank_id, payload) // ✅ Call update
+      } else {
+        await createBank(payload)
+      }
+
+      onSuccess?.()
+      onClose?.()
+    } catch (error) {
+      console.error('❌ Failed to submit bank form:', error)
+      
+      // Handle different types of errors
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        toast.error('Cannot connect to server. Please check if the backend is running.')
+      } else if (error.response?.status === 401) {
+        toast.error('Unauthorized. Please log in again.')
+      } else if (error.response?.status === 403) {
+        toast.error('Forbidden. You do not have permission to perform this action.')
+      } else if (error.response?.status >= 500) {
+        toast.error('Server error. Please try again later.')
+      } else {
+        toast.error(error.response?.data?.message || error.message || 'Failed to submit bank form')
       }
     }
 
@@ -1232,12 +1291,25 @@ export const BankForm = ({ bank, onSuccess, onClose }) => {
 
       <FormGroup className="col-md-6">
         <FormLabel>Start Date</FormLabel>
-        <FormControl name="start_date" type="date" required value={form.start_date} onChange={handleChange} />
+        <FormControl 
+          name="start_date" 
+          type="date" 
+          required 
+          value={form.start_date} 
+          onChange={handleChange}
+          min={rsd || reportingStartDate || undefined}
+          isInvalid={isBeforeRSD}
+        />
         <Feedback type="invalid">Please provide a valid start date</Feedback>
+        {isBeforeRSD && (
+          <div className="text-danger mt-1" role="alert">
+            Start date must be greater than or equal to Reporting Start Date ({rsd})
+          </div>
+        )}
       </FormGroup>
 
       <Col xs={12}>
-        <Button type="submit">{isEdit ? 'Update' : 'Submit'}</Button>
+        <Button type="submit" disabled={isBeforeRSD}>{isEdit ? 'Update' : 'Submit'}</Button>
       </Col>
     </Form>
   )
