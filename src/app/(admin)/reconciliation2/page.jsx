@@ -186,11 +186,6 @@ export default function Reconciliation2Page() {
           ? { ...r, _reconciled: false }
           : r
       ));
-      
-      // Check if all are still reconciled after reopen
-      if (reconciledCodes.size <= 1) {
-        setAllReconciled(false);
-      }
     } catch (e) {
       console.error('[reconciliation2] reopen failed:', e);
       alert('Failed to reopen reconciliation');
@@ -296,7 +291,7 @@ export default function Reconciliation2Page() {
               >
                 {isDone ? 'Reconciled' : 'Initiate'}
               </button>
-              {allReconciled && isDone && (
+              {isDone && (
                 <button
                   className="btn btn-sm btn-warning"
                   onClick={() => handleReopen(params.data)}
@@ -310,7 +305,7 @@ export default function Reconciliation2Page() {
         },
       },
     ],
-    [date, month, reconciledCodes, allReconciled]
+    [date, month, reconciledCodes]
   );
 
   return (
