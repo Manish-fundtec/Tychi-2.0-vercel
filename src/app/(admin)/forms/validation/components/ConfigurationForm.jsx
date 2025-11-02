@@ -33,7 +33,7 @@ import { createBroker, updateBroker } from '@/lib/api/broker'
 import { createBank, updateBank } from '@/lib/api/bank'
 import { createExchange, updateExchange } from '@/lib/api/exchange'
 import { createSymbol, updateSymbol } from '@/lib/api/symbol'
-import { getExchanges } from '@/lib/api/exchange'
+import { getExchangesByFundId } from '@/lib/api/exchange'
 import { getAssetTypesActive } from '@/lib/api/assetType'
 import { updateAssetType } from '@/lib/api/assetType'
 import { updateFund, getTradeCount } from '@/lib/api/fund'
@@ -1451,7 +1451,8 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         const token = Cookies.get('dashboardToken')
         const decoded = jwtDecode(token)
 
-        const exRes = await getExchanges()
+        // Fetch exchanges filtered by fund_id (same as asset types)
+        const exRes = await getExchangesByFundId(decoded.fund_id)
         const atRes = await getAssetTypesActive(decoded.fund_id) // ⬅ only active ones
 
         setExchanges(exRes.data || [])
