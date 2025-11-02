@@ -149,7 +149,7 @@ export const BankModal = ({ show, onClose, bank, onSuccess, existingBanks = [] }
   }, [])
   return (
     <Modal show={show} onHide={onClose} centered size="md-lg">
-      <ModalHeader closeButton onHide={onClose}>
+      <ModalHeader closeButton>
         <h5 className="modal-title">{bank ? 'Edit Bank' : 'Add Bank'}</h5>
       </ModalHeader>
       <ModalBody>
