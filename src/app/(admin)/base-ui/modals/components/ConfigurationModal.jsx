@@ -131,14 +131,35 @@ export const BrokerModal = ({ show, onClose, broker, onSuccess, existingBrokers 
   )
 }
 
-export const BankModal = ({ show, onClose, bank, onSuccess }) => {
+export const BankModal = ({ show, onClose, bank, onSuccess, existingBanks = [] }) => {
+  const [reportingStartDate, setReportingStartDate] = useState('')
+  useEffect(() => {
+    try {
+      const token = Cookies.get('dashboardToken')
+      if (!token) {
+        console.warn('No dashboardToken found')
+        return
+      }
+      const decoded = jwtDecode(token) || {}
+      const rsd = toISODate(pickReportingStartFromToken(decoded))
+      if (rsd) setReportingStartDate(rsd)
+    } catch (e) {
+      console.warn('Could not read reporting_start_date from token:', e?.message)
+    }
+  }, [])
   return (
-    <Modal show={show} onHide={onClose} centered>
+    <Modal show={show} onHide={onClose} centered size="md-lg">
       <ModalHeader closeButton>
         <h5 className="modal-title">{bank ? 'Edit Bank' : 'Add Bank'}</h5>
       </ModalHeader>
       <ModalBody>
-        <BankForm bank={bank} onSuccess={onSuccess} onClose={onClose} />
+        <BankForm 
+          bank={bank} 
+          onSuccess={onSuccess} 
+          onClose={onClose}
+          reportingStartDate={reportingStartDate}
+          existingBanks={existingBanks}
+        />
       </ModalBody>
     </Modal>
   )

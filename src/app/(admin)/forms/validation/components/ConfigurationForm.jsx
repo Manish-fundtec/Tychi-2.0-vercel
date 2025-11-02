@@ -1164,10 +1164,11 @@ export const Tooltips = () => {
   )
 }
 
-export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate }) => {
+export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existingBanks = [] }) => {
   const isEdit = !!bank
   const [validated, setValidated] = useState(false)
   const [rsd, setRsd] = useState(null) // Reporting Start Date from token
+  const [duplicateError, setDuplicateError] = useState('')
 
   const [form, setForm] = useState({
     bank_name: '',
@@ -1215,6 +1216,22 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate }) => {
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
+
+    // Check for duplicate bank name (case-insensitive)
+    if (name === 'bank_name' && value.trim()) {
+      const trimmedValue = value.trim().toLowerCase()
+      const isDuplicate = existingBanks.some((b) => {
+        // For edit, exclude current bank from check
+        if (isEdit && bank?.bank_id === b.bank_id) return false
+        return b.bank_name?.toLowerCase() === trimmedValue
+      })
+
+      if (isDuplicate) {
+        setDuplicateError('Bank name already exists in this fund')
+      } else {
+        setDuplicateError('')
+      }
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -1238,6 +1255,13 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate }) => {
     // 3) Guard for reportingStartDate prop
     if (reportingStartDate && form.start_date < reportingStartDate) {
       toast.error(`Bank date cannot be less than ${reportingStartDate}`)
+      setValidated(true)
+      return
+    }
+
+    // 4) Check for duplicate bank name
+    if (duplicateError) {
+      toast.error(duplicateError)
       setValidated(true)
       return
     }
@@ -1285,8 +1309,8 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate }) => {
     <Form noValidate validated={validated} onSubmit={handleSubmit} className="row g-3 m-1">
       <FormGroup className="col-md-6">
         <FormLabel>Bank Name</FormLabel>
-        <FormControl name="bank_name" type="text" required value={form.bank_name} onChange={handleChange} />
-        <Feedback type="invalid">Please enter bank name</Feedback>
+        <FormControl name="bank_name" type="text" required value={form.bank_name} onChange={handleChange} isInvalid={!!duplicateError} />
+        <Feedback type="invalid">{duplicateError || 'Please enter bank name'}</Feedback>
       </FormGroup>
 
       <FormGroup className="col-md-6">

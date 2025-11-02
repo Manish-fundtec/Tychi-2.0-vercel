@@ -51,6 +51,7 @@ const BankTab = () => {
                 }}
                 bank={editingBank}
                 onSuccess={refetchBanks}
+                existingBanks={banks}
               />
               <Button variant="primary" onClick={() => setShowModal(true)}>
                 Add Bank
@@ -85,6 +86,7 @@ const BankTab = () => {
           setShowModal(false);
           refetchBanks();
         }}
+        existingBanks={banks}
       />
     </Row>
   );
