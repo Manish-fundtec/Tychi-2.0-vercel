@@ -43,16 +43,6 @@ const BankTab = () => {
           <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
             <CardTitle as="h4">Bank List</CardTitle>
             <Dropdown>
-            <BankModal
-                show={showModal}
-                onClose={() => {
-                  setEditingBank(null);
-                  setShowModal(false);
-                }}
-                bank={editingBank}
-                onSuccess={refetchBanks}
-                existingBanks={banks}
-              />
               <Button variant="primary" onClick={() => setShowModal(true)}>
                 Add Bank
               </Button>
@@ -75,17 +65,14 @@ const BankTab = () => {
           </CardBody>
         </Card>
       </Col>
-      {/* Keep modal outside of Dropdown to avoid layering issues */}
       <BankModal
         show={showModal}
         onClose={() => {
           setEditingBank(null);
+          setShowModal(false);
         }}
         bank={editingBank}
-        onSuccess={() => {
-          setShowModal(false);
-          refetchBanks();
-        }}
+        onSuccess={refetchBanks}
         existingBanks={banks}
       />
     </Row>
