@@ -145,8 +145,16 @@ export default function Reconciliation2Page() {
     }
   };
 
-  const handleReopen = async () => {
-    if (!confirm('Are you sure you want to reopen reconciliation for all bank/brokers?')) return;
+  const handleReopen = async (row) => {
+    const gl_code = row?.gl_code || row?.glcode || row?.code || '';
+    const gl_name = row?.gl_name || row?.accountName || row?.brokerBank || '';
+    
+    if (!gl_code) {
+      alert('Missing GL Code for selected row');
+      return;
+    }
+    
+    if (!confirm(`Are you sure you want to reopen reconciliation for ${gl_name || gl_code}?`)) return;
     
     try {
       const url = `${apiBase}/api/v1/reconciliation/reconciliation/reopen`;
@@ -156,6 +164,7 @@ export default function Reconciliation2Page() {
         credentials: 'include',
         body: JSON.stringify({
           fund_id: fund,
+          gl_code: gl_code,
           pricing_date: date,
           pricing_month: month
         })
@@ -163,11 +172,25 @@ export default function Reconciliation2Page() {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       
       alert('Reopened successfully');
-      setAllReconciled(false);
-      setReconciledCodes(new Set()); // Clear reconciled codes
       
-      // Refresh the rows
-      window.location.reload();
+      // Remove this GL from reconciled codes
+      setReconciledCodes(prev => {
+        const next = new Set(prev);
+        next.delete(String(gl_code));
+        return next;
+      });
+      
+      // Update row status
+      setRows(prev => prev.map(r => 
+        String(r.gl_code || r.glcode || r.code || '') === String(gl_code)
+          ? { ...r, _reconciled: false }
+          : r
+      ));
+      
+      // Check if all are still reconciled after reopen
+      if (reconciledCodes.size <= 1) {
+        setAllReconciled(false);
+      }
     } catch (e) {
       console.error('[reconciliation2] reopen failed:', e);
       alert('Failed to reopen reconciliation');
@@ -276,8 +299,8 @@ export default function Reconciliation2Page() {
               {allReconciled && isDone && (
                 <button
                   className="btn btn-sm btn-warning"
-                  onClick={handleReopen}
-                  title="Reopen reconciliation for all accounts"
+                  onClick={() => handleReopen(params.data)}
+                  title="Reopen reconciliation for this account"
                 >
                   Reopen
                 </button>
