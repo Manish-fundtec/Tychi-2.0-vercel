@@ -237,11 +237,6 @@ export default function Reconciliation2Page() {
       setShowReview(false);
       alert('Reconciled successfully');
 
-      // Check if all are reconciled from response
-      if (json?.success && json?.data?.allReconciled) {
-        setAllReconciled(true);
-      }
-
       // Flip Initiate -> Reconciled for this GL locally
       const code = String(selectedAccount?.gl_code || '');
       setReconciledCodes(prev => {
@@ -254,6 +249,25 @@ export default function Reconciliation2Page() {
           ? { ...r, _reconciled: true }
           : r
       )));
+
+      // Re-check period-summary to see if all are now reconciled
+      try {
+        const summaryUrl = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(fund)}/period-summary?date=${encodeURIComponent(date)}&month=${encodeURIComponent(month)}`;
+        const summaryResp = await fetch(summaryUrl, { headers: getAuthHeaders(), credentials: 'include' });
+        if (summaryResp.ok) {
+          const summaryJson = await summaryResp.json();
+          const newAllReconciled = summaryJson?.success && summaryJson?.allReconciled === true;
+          setAllReconciled(newAllReconciled);
+          console.log('[reconciliation2] Period summary after reconcile:', {
+            allReconciled: newAllReconciled,
+            total: summaryJson?.total,
+            done: summaryJson?.done,
+            response: summaryJson
+          });
+        }
+      } catch (e) {
+        console.error('[reconciliation2] Failed to re-check period-summary:', e);
+      }
     } catch (e) {
       console.error('[reconciliation2] reconcile failed:', e);
       alert('Failed to reconcile');

@@ -121,11 +121,28 @@ export default function ReconciliationPage() {
             });
             if (!sResp.ok) return row;
             const sJson = await sResp.json();
-            if (sJson?.success && sJson.allReconciled) {
+            
+            // Log for debugging
+            console.log(`[Reconciliation] Period ${row.month} (${row.date}) summary:`, {
+              success: sJson?.success,
+              allReconciled: sJson?.allReconciled,
+              total: sJson?.total,
+              done: sJson?.done,
+              response: sJson
+            });
+            
+            // Check if all are reconciled - consider both allReconciled flag and done === total
+            const isReconciled = sJson?.success && (
+              sJson.allReconciled === true || 
+              (sJson.total > 0 && sJson.done === sJson.total)
+            );
+            
+            if (isReconciled) {
               return { ...row, status: 'reconciled' };
             }
             return row;
-          } catch {
+          } catch (e) {
+            console.error(`[Reconciliation] Error checking period ${row.month}:`, e);
             return row;
           }
         })
