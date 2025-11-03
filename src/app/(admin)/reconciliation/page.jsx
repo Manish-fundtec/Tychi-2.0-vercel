@@ -1,7 +1,7 @@
 // app/(admin)/reconciliation/page.jsx
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
 import { AgGridReact } from 'ag-grid-react';
@@ -75,71 +75,100 @@ export default function ReconciliationPage() {
     setFundId(getFundIdFromCookie());
   }, []);
 
-  useEffect(() => {
+  // Function to fetch and update reconciliation data
+  const fetchReconciliationData = useCallback(async () => {
     if (!fundId) return;
-    (async () => {
-      setLoading(true);
-      setErr('');
-      try {
-        const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(
-          fundId
-        )}/reporting-periods?limit=200`;
-        const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const json = await resp.json();
+    setLoading(true);
+    setErr('');
+    try {
+      const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(
+        fundId
+      )}/reporting-periods?limit=200`;
+      const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json();
 
-        const baseRows = (json?.rows || []).map((r, i) => {
-          const end = (r?.end_date || '').slice(0, 10);
-          const d = end ? new Date(end) : null;
-          const hasValidDate = d && !Number.isNaN(d.getTime());
-          const monthLabel =
-            r?.period_name ||
-            (hasValidDate ? d.toLocaleString(undefined, { month: 'long', year: 'numeric' }) : '-');
+      const baseRows = (json?.rows || []).map((r, i) => {
+        const end = (r?.end_date || '').slice(0, 10);
+        const d = end ? new Date(end) : null;
+        const hasValidDate = d && !Number.isNaN(d.getTime());
+        const monthLabel =
+          r?.period_name ||
+          (hasValidDate ? d.toLocaleString(undefined, { month: 'long', year: 'numeric' }) : '-');
 
-          return {
-            srNo: i + 1,
-            month: monthLabel,
-            date: end,
-            status: 'open',
-            raw: r,
-          };
-        });
+        return {
+          srNo: i + 1,
+          month: monthLabel,
+          date: end,
+          status: 'open',
+          raw: r,
+        };
+      });
 
-        // Check reconciliation status for each period
-        const enriched = await Promise.all(
-          baseRows.map(async row => {
-            if (!row.date) return row;
-            try {
-              const sUrl = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(
-                fundId
-              )}/period-summary?date=${encodeURIComponent(row.date)}&month=${encodeURIComponent(
-                row.month
-              )}`;
-              const sResp = await fetch(sUrl, {
-                headers: getAuthHeaders(),
-                credentials: 'include',
-              });
-              if (!sResp.ok) return row;
-              const sJson = await sResp.json();
-              if (sJson?.success && sJson.allReconciled) {
-                return { ...row, status: 'reconciled' };
-              }
-              return row;
-            } catch {
-              return row;
+      // Check reconciliation status for each period
+      const enriched = await Promise.all(
+        baseRows.map(async row => {
+          if (!row.date) return row;
+          try {
+            const sUrl = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(
+              fundId
+            )}/period-summary?date=${encodeURIComponent(row.date)}&month=${encodeURIComponent(
+              row.month
+            )}`;
+            const sResp = await fetch(sUrl, {
+              headers: getAuthHeaders(),
+              credentials: 'include',
+            });
+            if (!sResp.ok) return row;
+            const sJson = await sResp.json();
+            if (sJson?.success && sJson.allReconciled) {
+              return { ...row, status: 'reconciled' };
             }
-          })
-        );
+            return row;
+          } catch {
+            return row;
+          }
+        })
+      );
 
-        setRowData(enriched);
-      } catch (e) {
-        console.error(e);
-        setErr('Failed to load reporting periods.');
-      } finally {
-        setLoading(false);
-      }
-    })();
+      setRowData(enriched);
+    } catch (e) {
+      console.error(e);
+      setErr('Failed to load reporting periods.');
+    } finally {
+      setLoading(false);
+    }
   }, [fundId]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchReconciliationData();
+  }, [fetchReconciliationData]);
+
+  // Refresh when page becomes visible (when user navigates back from reconciliation2)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && fundId) {
+        // Page became visible, refresh data
+        fetchReconciliationData();
+      }
+    };
+
+    const handleFocus = () => {
+      if (fundId) {
+        // Window gained focus, refresh data
+        fetchReconciliationData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [fundId, fetchReconciliationData]);
 
   const columnDefs = useMemo(
     () => [
