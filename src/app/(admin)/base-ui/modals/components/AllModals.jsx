@@ -875,6 +875,18 @@ export const ToggleBetweenModals = ({
         if (result && (result.success === false || result.error)) {
           throw new Error(result?.error || result?.message || 'Upload failed to save')
         }
+
+        // Log response for debugging
+        if (result) {
+          console.log('[Upload Pricing] Response:', {
+            file_id: result.file_id,
+            success: result.success,
+            message: result.message,
+            rows_total: result.rows_total,
+            rows_valid: result.rows_valid,
+            rows_invalid: result.rows_invalid
+          })
+        }
       }
       
       // Close ALL modals after successful upload
