@@ -194,6 +194,27 @@ export default function Reconciliation2Page() {
 
   const handleReconcile = async () => {
     if (diff !== 0) return;
+    
+    // Validate required fields
+    if (!fund || !date || !selectedAccount?.gl_code) {
+      alert('Missing required fields: fund, date, or GL code');
+      return;
+    }
+    
+    // Ensure pricing_month is not null - use date as fallback if month is empty
+    // Backend expects DATEONLY format (YYYY-MM-DD), so use date if month is missing
+    let pricingMonth = month;
+    if (!pricingMonth || pricingMonth.trim() === '') {
+      // If month is empty, use the date itself (backend will handle it or we can use first day of month)
+      pricingMonth = date;
+    }
+    
+    // Additional validation - pricing_month cannot be null
+    if (!pricingMonth || !date) {
+      alert('Missing required fields: date or month is required');
+      return;
+    }
+    
     try {
       // Backend route expects POST /api/v1/reconciliation/reconciliation/reconcile (no :fundId in URL)
       const url = `${apiBase}/api/v1/reconciliation/reconciliation/reconcile`;
@@ -206,7 +227,7 @@ export default function Reconciliation2Page() {
           gl_code: selectedAccount?.gl_code,
           gl_name: selectedAccount?.gl_name,
           pricing_date: date,
-          pricing_month: month,
+          pricing_month: pricingMonth,
           statement_balance: Number(statementBalance || 0)
         })
       });
