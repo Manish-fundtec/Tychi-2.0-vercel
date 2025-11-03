@@ -843,13 +843,40 @@ export const ToggleBetweenModals = ({
         fd.append('fund_id', currentFundId)
         if (orgId) fd.append('org_id', orgId)
 
+        const token = Cookies.get('dashboardToken') || ''
         const url = `${API_BASE}/api/v1/pricing/${encodeURIComponent(currentFundId)}/upload`
-        const resp = await fetch(url, { method: 'POST', body: fd })
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: 'include',
+          body: fd
+        })
+        
+        // Parse response once
+        let result = null
+        try {
+          const responseText = await resp.text()
+          if (responseText) {
+            result = JSON.parse(responseText)
+          }
+        } catch (parseErr) {
+          // Response might not be JSON, that's okay
+          console.log('[Upload Pricing] Response is not JSON')
+        }
+        
         if (!resp.ok) {
-          const text = await resp.text().catch(() => '')
-          throw new Error(`Upload failed (HTTP ${resp.status})${text ? ` - ${text}` : ''}`)
+          const errorMsg = result?.error || result?.message || `Upload failed (HTTP ${resp.status})`
+          throw new Error(errorMsg)
+        }
+
+        // Check if backend returned success=false even with HTTP 200
+        if (result && (result.success === false || result.error)) {
+          throw new Error(result?.error || result?.message || 'Upload failed to save')
         }
       }
+      
       // Close ALL modals after successful upload
       setUploadOpen(false)
       setChooserOpen(false)
@@ -858,6 +885,7 @@ export const ToggleBetweenModals = ({
       setFile(null)
       setFileError('')
     } catch (e) {
+      console.error('[Upload Pricing] Error:', e)
       setFileError(e?.message || 'Upload failed.')
     } finally {
       setIsUploading(false)
