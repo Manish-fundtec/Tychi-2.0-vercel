@@ -1050,10 +1050,10 @@ export const ToggleBetweenModals = ({
     if (!endDate) return []
 
     const base = `${API_BASE}/api/v1/pricing/custom/${encodeURIComponent(currentFundId)}`
-    const params = new URLSearchParams()
-    if (startDate) params.set('from', startDate)
-    if (endDate) params.set('till', endDate)
-    const url = `${base}?${params.toString()}`
+    const param = new URLSearchParams()
+    if (startDate) param.set('from', startDate)
+    if (endDate) param.set('till', endDate)
+    const url = `${base}?${param.toString()}`
 
     const token = Cookies.get('dashboardToken') || ''
     const resp = await fetch(url, {
