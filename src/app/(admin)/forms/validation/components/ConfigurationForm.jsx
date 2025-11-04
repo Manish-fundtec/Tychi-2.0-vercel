@@ -1617,23 +1617,28 @@ export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
     setErr('')
     setOk('')
     setErrorFileUrl('')
-    if (!file) return setMsg('Choose a .xlsx file.')
+    setMsg('')
+    
+    if (!file) {
+      setMsg('Choose a .xlsx file.')
+      return
+    }
+    
+    // Validate fund ID
+    if (!currentFundId) {
+      setErr('Fund ID is required')
+      return
+    }
 
     setLoading(true)
     try {
       const form = new FormData()
       form.append('file', file)                     // Multer expects 'file'
-      // CHANGED: no fundId in URL/body; backend reads fund_id from JWT
-      // form.append('fund_id', String(currentFundId || ''))
+      form.append('fund_id', String(currentFundId)) // Ensure fund_id is sent
 
-      // NEW: pass Dashboard token in `dashboard` header (like Trade upload)
-      const dashboardToken = Cookies.get('dashboardToken') || ''
-      const res = await api.post(`/api/v1/symbols/upload`, form, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          dashboard: dashboardToken ? `Bearer ${dashboardToken}` : undefined,
-        },
-      })
+      // Note: Authorization header is automatically added by axios interceptor in axios.js
+      // Don't set Content-Type manually - browser will set it with boundary for FormData
+      const res = await api.post(`/api/v1/symbols/upload`, form)
 
       // CHANGED: handle new response shape (success / error_file_url / file_id)
       const data = res?.data || {}
