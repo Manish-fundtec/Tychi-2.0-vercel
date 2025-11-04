@@ -44,13 +44,23 @@ export const deleteTrade = async (trade_id) => {
 export async function addTrade(payload) {
   // Ensure org_id exists (backend requires it)
   // const { org_id: tokenOrgId } = getIdsFromToken()
+   // ✅ Make sure token exists
+   const token = Cookies.get('dashboardToken');
+   console.log('Bearer token:', token);
+   
   const body = {
     ...payload,
     org_id: payload.org_id ?? tokenOrgId,
     file_row_no: 1, // always 1 as requested
   }
 
-  const res = await api.post('/api/v1/trade', body)
+  const res = await api.post('/api/v1/trade', body, {
+    headers: {
+      'dashboard': `Bearer ${token}`, // manually attach token
+      'Content-Type': 'application/json', // optional but good
+    },
+  })
+  
   if (res?.data?.success === false) {
     throw new Error(res?.data?.message || 'Trade creation failed')
   }

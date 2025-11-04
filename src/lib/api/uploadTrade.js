@@ -17,11 +17,11 @@ export const uploadTradeFile = (file) => {
   });
 };
  
-export const createTrade = (payload) => {
-  const token = Cookies.get('dashboardToken');
-  return api.post('/api/v1/trade', payload, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-};
+// export const createTrade = (payload) => {
+//   const token = Cookies.get('dashboardToken');
+//   return api.post('/api/v1/trade', payload, {
+//     headers: {
+//       'Authorization': `Bearer ${token}`,
+//     },
+//   });
+// };
