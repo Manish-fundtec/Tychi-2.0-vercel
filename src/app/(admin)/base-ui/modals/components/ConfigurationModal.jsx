@@ -53,9 +53,9 @@ export const BadaModal = () => {
   const { isOpen, size, className, toggleModal, openModalWithSize } = useModal()
   return (
     <>
-      <Button type="button" variant="primary" onClick={() => openModalWithSize('lg')}>
-        Add
-      </Button>
+        <Button type="button" variant="primary" onClick={() => openModalWithSize('lg')}>
+          Add
+        </Button>
 
       <Modal className="fade" show={isOpen} onHide={toggleModal} dialogClassName={className} size={size} centered>
         <ModalHeader onHide={toggleModal} closeButton>
@@ -67,7 +67,7 @@ export const BadaModal = () => {
           <p>Add trades form goes here</p>
         </ModalBody>
       </Modal>
-    </>
+      </>
   )
 }
 

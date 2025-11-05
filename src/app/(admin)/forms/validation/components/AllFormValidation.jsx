@@ -1638,8 +1638,14 @@ export const UploadManualJournal = ({ onClose }) => {
       const form = new FormData()
       form.append('file', file)
 
+      // ✅ Get dashboard token for manual journal upload
+      const token = Cookies.get('dashboardToken');
+      
       const res = await api.post(`/api/v1/manualjournal/upload/${fundId}`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: {
+          'dashboard': `Bearer ${token}`, // ✅ Manually attach dashboard token
+          'Content-Type': 'multipart/form-data',
+        },
       })
 
       const data = res?.data || {}
