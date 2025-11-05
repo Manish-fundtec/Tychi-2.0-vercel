@@ -357,13 +357,12 @@ export const bookclosureColDefs = [
   { headerName: 'Sr.No', field: 'srNo', sortable: true, filter: true, flex: 1, checkboxSelection: true },
   { headerName: 'Reporting Period', field: 'month', sortable: true, filter: true, flex: 1 },
   { headerName: 'Reporting Date', field: 'date', sortable: true, filter: true, flex: 1 },
-  { headerName: 'Reconciliation Type', field: 'reconciliation_type', sortable: true, filter: true, flex: 1 },
   { headerName: 'Status', field: 'status', sortable: true, filter: true, flex: 1 },
   {
     field: 'Action',
     headerName: 'Action',
-    cellRenderer: CustomButtonComponent,
     flex: 1,
+    // Note: cellRenderer will be set in the page component to access state/functions
   },
 ]
 
