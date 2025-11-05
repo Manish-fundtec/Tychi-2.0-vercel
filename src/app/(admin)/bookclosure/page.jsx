@@ -1,11 +1,10 @@
-'use client' // ✅ Ensures this is a Client Component
+'use client'
 
 import { useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import Cookies from 'js-cookie'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown } from 'react-bootstrap'
 
-// ✅ Dynamically Import Components to Prevent SSR Issues
 const AgGridReact = dynamic(() => import('ag-grid-react').then(mod => mod.AgGridReact), { ssr: false });
 const MGLEntryModal = dynamic(() => import('../base-ui/modals/components/AllModals').then(mod => mod.MGLEntryModal), { ssr: false });
 
@@ -42,7 +41,7 @@ const BookClosurePage = () => {
     setFundId(getFundIdFromCookie());
   }, []);
 
-  // Fetch bookclosure data with reconciliation type
+  // Fetch bookclosure data
   useEffect(() => {
     if (!fundId || typeof window === 'undefined') return;
 
@@ -50,29 +49,39 @@ const BookClosurePage = () => {
       setLoading(true);
       setErr('');
       try {
-        // Fetch bookclosure data from API
-        const token = Cookies.get('dashboardToken') || '';
-        const url = `${apiBase}/api/v1/bookclosure/${encodeURIComponent(fundId)}`;
+        // ✅ Backend returns: { success: true, count: number, rows: [...] }
+        // ✅ Query parameter for reconciliation_type (optional, defaults to 'bank_broker')
+        const url = `${apiBase}/api/v1/bookclosure/${encodeURIComponent(fundId)}?type=bank_broker`;
         const resp = await fetch(url, {
-          headers: {
-            ...getAuthHeaders(),
-            ...(token ? { dashboard: `Bearer ${token}` } : {}),
-          },
+          headers: getAuthHeaders(),
           credentials: 'include',
         });
 
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const json = await resp.json();
 
-        // Transform data for grid
-        const rows = (json?.rows || json?.data || []).map((r, i) => ({
+        if (!json?.success) {
+          throw new Error(json?.error || 'Failed to fetch bookclosure data');
+        }
+
+        // ✅ Backend response format: { success: true, count: number, rows: [...] }
+        // ✅ Each row has: bookclosure_id, fund_id, reconciliation_type, period_name, 
+        //    reporting_date, pricing_month, status ('OPEN' or 'CLOSED'), created_at, updated_at
+        const rows = (json?.rows || []).map((r, i) => ({
           srNo: i + 1,
-          month: r?.period_name || r?.month || r?.reporting_period || '-',
-          date: r?.reporting_date || r?.date || r?.end_date || '-',
-          status: r?.status || r?.reconciliation_status || 'Pending',
-          reconciliation_type: r?.reconciliation_type || r?.type || '-',
-          raw: r,
+          month: r?.period_name || '-',           // ✅ e.g., "Oct-2025"
+          date: r?.reporting_date || '-',         // ✅ e.g., "2025-10-31"
+          status: r?.status || 'OPEN',            // ✅ "OPEN" or "CLOSED" (uppercase)
+          reconciliation_type: r?.reconciliation_type || 'bank_broker',
+          pricing_month: r?.pricing_month || '-', // ✅ e.g., "2025-10-01"
+          raw: r, // Keep raw data for reference
         }));
+
+        console.log('[BookClosure] Loaded:', {
+          count: json?.count || 0,
+          rows: rows.length,
+          sample: rows[0] || null,
+        });
 
         setRowData(rows);
       } catch (e) {
@@ -97,7 +106,6 @@ const BookClosurePage = () => {
           setColumnDefs([]);
         });
 
-      // ✅ Move ModuleRegistry inside useEffect
       import('ag-grid-community')
         .then(({ ModuleRegistry, AllCommunityModule }) => {
           ModuleRegistry.registerModules([AllCommunityModule]);
