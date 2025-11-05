@@ -169,9 +169,34 @@ export default function Reconciliation2Page() {
           pricing_month: month
         })
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => '');
+        console.error('[reconciliation2] Reopen failed:', {
+          status: resp.status,
+          statusText: resp.statusText,
+          error: errorText
+        });
+        throw new Error(`HTTP ${resp.status}: ${errorText || resp.statusText}`);
+      }
       
-      alert('Reopened successfully');
+      const json = await resp.json();
+      
+      // Log full response for debugging
+      console.log('[reconciliation2] Reopen response:', {
+        success: json?.success,
+        bookclosureDeleted: json?.data?.bookclosureDeleted,
+        bookclosureDeletedFromResponse: json?.bookclosureDeleted,
+        message: json?.message,
+        data: json?.data,
+        fullResponse: json
+      });
+      
+      // Show success message based on response
+      if (json?.data?.bookclosureDeleted === true || json?.bookclosureDeleted === true) {
+        alert('Reopened successfully! Bookclosure entry deleted for this period.');
+      } else {
+        alert('Reopened successfully');
+      }
       
       // Remove this GL from reconciled codes
       setReconciledCodes(prev => {
@@ -186,6 +211,32 @@ export default function Reconciliation2Page() {
           ? { ...r, _reconciled: false }
           : r
       ));
+      
+      // Re-check period-summary to see if all are still reconciled
+      try {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const summaryUrl = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(fund)}/period-summary?date=${encodeURIComponent(date)}&month=${encodeURIComponent(month)}`;
+        const summaryResp = await fetch(summaryUrl, { headers: getAuthHeaders(), credentials: 'include' });
+        if (summaryResp.ok) {
+          const summaryJson = await summaryResp.json();
+          const newAllReconciled = summaryJson?.success && (summaryJson?.allReconciled === true || (summaryJson?.total > 0 && summaryJson?.done === summaryJson?.total));
+          setAllReconciled(newAllReconciled);
+          console.log('[reconciliation2] Period summary after reopen:', {
+            allReconciled: newAllReconciled,
+            total: summaryJson?.total,
+            done: summaryJson?.done,
+            response: summaryJson
+          });
+          
+          // If not all reconciled, log that bookclosure should be deleted
+          if (!newAllReconciled) {
+            console.log('[reconciliation2] ⚠️ Not all GLs reconciled anymore. Backend should delete bookclosure entry for this period.');
+          }
+        }
+      } catch (e) {
+        console.error('[reconciliation2] Failed to re-check period-summary after reopen:', e);
+      }
     } catch (e) {
       console.error('[reconciliation2] reopen failed:', e);
       alert('Failed to reopen reconciliation');
@@ -231,11 +282,44 @@ export default function Reconciliation2Page() {
           statement_balance: Number(statementBalance || 0)
         })
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => '');
+        console.error('[reconciliation2] Reconcile failed:', {
+          status: resp.status,
+          statusText: resp.statusText,
+          error: errorText
+        });
+        throw new Error(`HTTP ${resp.status}: ${errorText || resp.statusText}`);
+      }
+      
       const json = await resp.json();
       
+      // Log full response for debugging
+      console.log('[reconciliation2] Reconcile response:', {
+        success: json?.success,
+        allReconciled: json?.data?.allReconciled,
+        allReconciledFromResponse: json?.allReconciled,
+        bookclosureCreated: json?.data?.bookclosureCreated,
+        bookclosureCreatedFromResponse: json?.bookclosureCreated,
+        message: json?.message,
+        data: json?.data,
+        fullResponse: json
+      });
+      
       setShowReview(false);
-      alert('Reconciled successfully');
+      
+      // Check if all are reconciled from response
+      const isAllReconciled = json?.data?.allReconciled === true || json?.allReconciled === true;
+      const isBookclosureCreated = json?.data?.bookclosureCreated === true || json?.bookclosureCreated === true;
+      
+      // Show success message based on response
+      if (isBookclosureCreated) {
+        alert('Reconciled successfully! Bookclosure entry created for this period.');
+      } else if (isAllReconciled) {
+        alert('Reconciled successfully! All GLs reconciled. Bookclosure should be created.');
+      } else {
+        alert('Reconciled successfully');
+      }
 
       // Flip Initiate -> Reconciled for this GL locally
       const code = String(selectedAccount?.gl_code || '');
@@ -252,11 +336,14 @@ export default function Reconciliation2Page() {
 
       // Re-check period-summary to see if all are now reconciled
       try {
+        // Wait a bit for backend to process bookclosure creation
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         const summaryUrl = `${apiBase}/api/v1/reconciliation/${encodeURIComponent(fund)}/period-summary?date=${encodeURIComponent(date)}&month=${encodeURIComponent(month)}`;
         const summaryResp = await fetch(summaryUrl, { headers: getAuthHeaders(), credentials: 'include' });
         if (summaryResp.ok) {
           const summaryJson = await summaryResp.json();
-          const newAllReconciled = summaryJson?.success && summaryJson?.allReconciled === true;
+          const newAllReconciled = summaryJson?.success && (summaryJson?.allReconciled === true || (summaryJson?.total > 0 && summaryJson?.done === summaryJson?.total));
           setAllReconciled(newAllReconciled);
           console.log('[reconciliation2] Period summary after reconcile:', {
             allReconciled: newAllReconciled,
@@ -264,6 +351,16 @@ export default function Reconciliation2Page() {
             done: summaryJson?.done,
             response: summaryJson
           });
+          
+          // If all are reconciled, log that bookclosure should be created
+          if (newAllReconciled) {
+            console.log('[reconciliation2] ✅ All GLs reconciled! Backend should create bookclosure entry for this period.');
+            console.log('[reconciliation2] 📋 Period details:', {
+              fund_id: fund,
+              pricing_date: date,
+              pricing_month: month || pricingMonth
+            });
+          }
         }
       } catch (e) {
         console.error('[reconciliation2] Failed to re-check period-summary:', e);
@@ -298,8 +395,8 @@ export default function Reconciliation2Page() {
         field: 'gl_name', // from backend
         flex: 2,
       },
-      {
-        headerName: 'Closing Balance',
+    {
+      headerName: 'Closing Balance',
         field: 'closing_balance',
         flex: 1,
         valueFormatter: p => {
@@ -309,10 +406,10 @@ export default function Reconciliation2Page() {
             maximumFractionDigits: 2,
           });
         },
-      },
-      {
-        headerName: 'Action',
-        field: 'action',
+    },
+    {
+      headerName: 'Action',
+      field: 'action',
         width: 200,
         cellRenderer: (params) => {
           const code = String(params.data?.gl_code || params.data?.glcode || params.data?.code || '');
