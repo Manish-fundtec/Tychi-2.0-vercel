@@ -357,6 +357,7 @@ export const bookclosureColDefs = [
   { headerName: 'Sr.No', field: 'srNo', sortable: true, filter: true, flex: 1, checkboxSelection: true },
   { headerName: 'Reporting Period', field: 'month', sortable: true, filter: true, flex: 1 },
   { headerName: 'Reporting Date', field: 'date', sortable: true, filter: true, flex: 1 },
+  { headerName: 'Reconciliation Type', field: 'reconciliation_type', sortable: true, filter: true, flex: 1 },
   { headerName: 'Status', field: 'status', sortable: true, filter: true, flex: 1 },
   {
     field: 'Action',
