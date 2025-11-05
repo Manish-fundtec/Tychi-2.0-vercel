@@ -148,7 +148,7 @@ const BookClosurePage = () => {
 
   // Action renderer component
   const ActionRenderer = useMemo(() => {
-    return (params) => {
+    const BookClosureActionRenderer = (params) => {
       const row = params.data;
       if (!row) return <span className="text-muted">—</span>;
 
@@ -173,6 +173,9 @@ const BookClosurePage = () => {
         </button>
       );
     };
+    
+    BookClosureActionRenderer.displayName = 'BookClosureActionRenderer';
+    return BookClosureActionRenderer;
   }, [updatingId, handleStatusUpdate]);
 
   // Load column definitions
