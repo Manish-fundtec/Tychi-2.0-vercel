@@ -156,6 +156,26 @@ export default function Reconciliation2Page() {
     
     if (!confirm(`Are you sure you want to reopen reconciliation for ${gl_name || gl_code}?`)) return;
     
+    // Normalize pricing_month to YYYY-MM-01 format (same as reconcile)
+    let pricingMonth = null;
+    if (date) {
+      try {
+        const dateObj = new Date(date + 'T00:00:00');
+        if (!isNaN(dateObj.getTime())) {
+          const year = dateObj.getFullYear();
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          pricingMonth = `${year}-${month}-01`;
+        }
+      } catch (e) {
+        console.error('[reconciliation2] Failed to parse date for reopen:', e);
+      }
+    }
+    
+    if (!pricingMonth || !date) {
+      alert('Missing required fields: date is required and must be valid');
+      return;
+    }
+    
     try {
       const url = `${apiBase}/api/v1/reconciliation/reconciliation/reopen`;
       const resp = await fetch(url, {
@@ -166,7 +186,7 @@ export default function Reconciliation2Page() {
           fund_id: fund,
           gl_code: gl_code,
           pricing_date: date,
-          pricing_month: month
+          pricing_month: pricingMonth
         })
       });
       if (!resp.ok) {
@@ -252,19 +272,35 @@ export default function Reconciliation2Page() {
       return;
     }
     
-    // Ensure pricing_month is not null - use date as fallback if month is empty
-    // Backend expects DATEONLY format (YYYY-MM-DD), so use date if month is missing
-    let pricingMonth = month;
-    if (!pricingMonth || pricingMonth.trim() === '') {
-      // If month is empty, use the date itself (backend will handle it or we can use first day of month)
-      pricingMonth = date;
+    // Ensure pricing_month is not null - convert to YYYY-MM-01 format
+    // Backend expects DATEONLY format (YYYY-MM-DD), specifically first day of month
+    let pricingMonth = null;
+    
+    if (date) {
+      // Extract year and month from date (YYYY-MM-DD) and format as YYYY-MM-01
+      try {
+        const dateObj = new Date(date + 'T00:00:00'); // Add time to avoid timezone issues
+        if (!isNaN(dateObj.getTime())) {
+          const year = dateObj.getFullYear();
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          pricingMonth = `${year}-${month}-01`;
+        }
+      } catch (e) {
+        console.error('[reconciliation2] Failed to parse date:', e);
+      }
     }
     
     // Additional validation - pricing_month cannot be null
     if (!pricingMonth || !date) {
-      alert('Missing required fields: date or month is required');
+      alert('Missing required fields: date is required and must be valid');
       return;
     }
+    
+    console.log('[reconciliation2] Pricing month normalized:', {
+      originalDate: date,
+      originalMonth: month,
+      normalizedPricingMonth: pricingMonth
+    });
     
     try {
       // Backend route expects POST /api/v1/reconciliation/reconciliation/reconcile (no :fundId in URL)
