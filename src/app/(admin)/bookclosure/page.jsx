@@ -51,9 +51,13 @@ const BookClosurePage = () => {
       setErr('');
       try {
         // Fetch bookclosure data from API
+        const token = Cookies.get('dashboardToken') || '';
         const url = `${apiBase}/api/v1/bookclosure/${encodeURIComponent(fundId)}`;
         const resp = await fetch(url, {
-          headers: getAuthHeaders(),
+          headers: {
+            ...getAuthHeaders(),
+            ...(token ? { dashboard: `Bearer ${token}` } : {}),
+          },
           credentials: 'include',
         });
 
