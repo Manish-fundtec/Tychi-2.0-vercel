@@ -92,7 +92,7 @@ const AssetTypeTab = () => {
             Cancel
           </Button>
           <Button variant="danger" onClick={handleDeactivateConfirm}>
-            Deactivate & Delete COA Data
+            Deactivate 
           </Button>
         </Modal.Footer>
       </Modal>

@@ -1051,7 +1051,8 @@ export const AddGl = ({ onClose }) => {
   )
 }
 
-export const AddManualJournal = ({ onClose }) => {
+export const AddManualJournal = ({ onClose, onSuccess, initialData = null, mode = 'create' }) => {
+  const isEditMode = Boolean(initialData) || mode === 'edit'
   const [validated, setValidated] = useState(false)
 
   // token values
@@ -1070,23 +1071,43 @@ export const AddManualJournal = ({ onClose }) => {
 
   const [saving, setSaving] = useState(false)
 
-  const alertAndClose = (msg) => {
+  const notifySuccess = (msg, payload) => {
     window.alert(msg)
-    onClose?.() // this will now call toggle() from parent
+    onSuccess?.(payload)
+    onClose?.()
   }
-  // 1) decode token
+
   useEffect(() => {
     const token = Cookies.get('dashboardToken')
     if (!token) return
     try {
-      const d = jwtDecode(token)
-      setFundId(d.fund_id)
-      setOrgId(d.org_id)
-      console.log('Decoded token →', { fund_id: d.fund_id, org_id: d.org_id })
-    } catch (e) {
-      console.error('jwt decode failed', e)
+      const decodedToken = jwtDecode(token)
+      setFundId(decodedToken.fund_id || null)
+      setOrgId(decodedToken.org_id || null)
+    } catch (error) {
+      console.error('Error decoding token:', error)
     }
   }, [])
+
+  useEffect(() => {
+    if (initialData) {
+      const journalDate = initialData.journal_date || initialData.date || initialData.transaction_date
+      setDate(journalDate ? String(journalDate).slice(0, 10) : '')
+      setDebit(initialData.dr_account || initialData.debit_account || '')
+      setCredit(initialData.cr_account || initialData.credit_account || '')
+      setAmount(initialData.amount != null ? String(initialData.amount) : '')
+      setDesc(initialData.description || '')
+      if (initialData.fund_id) setFundId((prev) => prev || initialData.fund_id)
+      if (initialData.org_id) setOrgId((prev) => prev || initialData.org_id)
+    } else {
+      setDate('')
+      setDebit('')
+      setCredit('')
+      setAmount('')
+      setDesc('')
+      setValidated(false)
+    }
+  }, [initialData])
 
   // 2) fetch postable accounts (hide only 10000/20000/30000/40000/50000)
   useEffect(() => {
@@ -1149,33 +1170,52 @@ export const AddManualJournal = ({ onClose }) => {
       description: desc || null,
       journal_type: 'Manual',
     }
-    console.log('POST /manualjournal payload →', payload)
+    console.log('Manual journal payload →', payload)
 
     try {
       setSaving(true)
 
-      // Use full URL to avoid baseURL mixups
-      const r = await api.post('/api/v1/manualjournal', payload, {
+      if (isEditMode) {
+        const entryId = initialData?.journal_id || initialData?._id || initialData?.id
+        if (!entryId) {
+          window.alert('Missing manual journal identifier')
+          return
+        }
+
+        const response = await api.put(`/api/v1/manualjournal/${entryId}`, payload, {
+          headers: { 'Content-Type': 'application/json' },
+        })
+
+        if (response.status === 200 || response.status === 201) {
+          notifySuccess('Manual journal updated successfully ✅', response.data)
+          return
+        }
+
+        window.alert(response.data?.message || 'Failed to update manual journal')
+        return
+      }
+
+      const response = await api.post('/api/v1/manualjournal', payload, {
         headers: { 'Content-Type': 'application/json' },
       })
 
-      if (r.status === 201) {
-        // reset (optional)
+      if (response.status === 201 || response.status === 200) {
         setDate('')
         setDebit('')
         setCredit('')
         setAmount('')
         setDesc('')
         setValidated(false)
-        // success & close
-        return alertAndClose('Manual journal created successfully ✅')
+        notifySuccess('Manual journal created successfully ✅', response.data)
+        return
       }
-      window.alert(r.data?.message || 'Failed to create manual journal')
+
+      window.alert(response.data?.message || 'Failed to create manual journal')
     } catch (err) {
       const status = err?.response?.status
       const data = err?.response?.data
-      console.error('POST /manualjournal failed', { status, data, err })
-      alertAndClose(data?.message || data?.error || `Request failed (${status || 'unknown'})`)
+      console.error(`${isEditMode ? 'PUT' : 'POST'} /manualjournal failed`, { status, data, err })
+      window.alert(data?.message || data?.error || `Request failed (${status || 'unknown'})`)
     } finally {
       setSaving(false)
     }

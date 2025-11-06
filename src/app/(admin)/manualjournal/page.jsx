@@ -1,14 +1,15 @@
 'use client' // ✅ Ensures this is a Client Component
 
-import { useEffect, useState, useMemo } from 'react'
-import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown } from 'react-bootstrap'
-import { MGLEntryModal , UploadManualJournalModal } from '../base-ui/modals/components/AllModals'
+import { useEffect, useState, useMemo, useCallback } from 'react'
+import { Card, CardBody, CardHeader, CardTitle, Col, Row, Button, Modal, Tabs, Tab, Alert } from 'react-bootstrap'
+import { UploadManualJournalModal } from '../base-ui/modals/components/AllModals'
 import { AgGridReact } from 'ag-grid-react'
 import Cookies from 'js-cookie'
 import { jwtDecode } from 'jwt-decode'
 import api from '@/lib/api/axios'
 import { formatYmd } from '@/lib/dateFormat'
-import {useDashboardToken} from '@/hooks/useDashboardToken'
+import { useDashboardToken } from '@/hooks/useDashboardToken'
+import { AddManualJournal } from '../forms/validation/components/AllFormValidation'
 
 const ManualJournalPage = () => {
   const [fundId, setFundId] = useState(null)
@@ -17,6 +18,11 @@ const ManualJournalPage = () => {
   const [loading, setLoading] = useState(false)
   // simple pagination (client-side, since you asked for GET '/')
   const [pageSize, setPageSize] = useState(20)
+  const [showFormModal, setShowFormModal] = useState(false)
+  const [editingRow, setEditingRow] = useState(null)
+  const [historyRows, setHistoryRows] = useState([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [historyError, setHistoryError] = useState('')
 
   // decode token to get fund_id
   useEffect(() => {
@@ -50,13 +56,10 @@ const ManualJournalPage = () => {
   //   })()
   // }, [])
 
-  // fetch journals
-  const fetchJournals = async () => {
+  const fetchJournals = useCallback(async () => {
     if (!fundId) return
     setLoading(true)
     try {
-      // ✅ Your route: router.get('/', getManualJournals)
-      // If your backend expects fund_id as a query param:
       const res = await api.get(`/api/v1/manualjournal/${fundId}`)
       const data = Array.isArray(res.data?.data) ? res.data.data : res.data || []
       setRows(data)
@@ -66,11 +69,59 @@ const ManualJournalPage = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [fundId])
 
   useEffect(() => {
     fetchJournals()
-  }, [fundId])
+  }, [fetchJournals])
+
+  const closeFormModal = useCallback(() => {
+    setShowFormModal(false)
+    setEditingRow(null)
+  }, [])
+
+  const openCreateModal = useCallback(() => {
+    setEditingRow(null)
+    setShowFormModal(true)
+  }, [])
+
+  const openEditModal = useCallback((row) => {
+    setEditingRow(row)
+    setShowFormModal(true)
+  }, [])
+
+  const handleFormSuccess = useCallback(() => {
+    fetchJournals()
+  }, [fetchJournals])
+
+  const handleDelete = useCallback(
+    async (row) => {
+      const entryId = row?.journal_id || row?._id || row?.id
+      if (!entryId) {
+        window.alert('Unable to delete: missing manual journal identifier.')
+        return
+      }
+
+      const confirmation = window.confirm('Are you sure you want to delete this manual journal entry?')
+      if (!confirmation) return
+
+      setLoading(true)
+      try {
+        const deleteUrl = fundId ? `/api/v1/manualjournal/${fundId}/${entryId}` : `/api/v1/manualjournal/${entryId}`
+        await api.delete(deleteUrl)
+        window.alert('Manual journal deleted successfully ✅')
+        fetchJournals()
+      } catch (error) {
+        const status = error?.response?.status
+        const message = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Failed to delete manual journal'
+        console.error('DELETE /manualjournal failed', { status, error })
+        window.alert(message)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [fetchJournals, fundId],
+  )
 
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
@@ -102,8 +153,32 @@ const ManualJournalPage = () => {
         flex: 1,
       },
       { headerName: 'Description', field: 'description', flex: 1 },
+      {
+        headerName: 'Actions',
+        field: 'actions',
+        sortable: false,
+        filter: false,
+        suppressMenu: true,
+        width: 160,
+        cellRenderer: (params) => {
+          const { data, context } = params
+          const handleEditRow = context?.handleEdit
+          const handleDeleteRow = context?.handleDelete
+
+          return (
+            <div className="d-flex gap-2">
+              <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => handleEditRow?.(data)}>
+                Edit
+              </button>
+              <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteRow?.(data)}>
+                Delete
+              </button>
+            </div>
+          )
+        },
+      },
     ],
-    [],
+    [fmt],
   )
 
   return (
@@ -113,8 +188,10 @@ const ManualJournalPage = () => {
           <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
             <CardTitle as="h4">Manual Journal</CardTitle>
             <div className="d-flex gap-2">
-              <MGLEntryModal />
-              <UploadManualJournalModal />
+              <Button variant="primary" onClick={openCreateModal}>
+                Add
+              </Button>
+              <UploadManualJournalModal onClose={fetchJournals} />
             </div>
           </CardHeader>
           <CardBody className="p-2">
@@ -127,6 +204,7 @@ const ManualJournalPage = () => {
                   pagination={true}
                   paginationPageSize={pageSize}
                   defaultColDef={{ sortable: true, filter: true, resizable: true }}
+                  context={{ handleEdit: openEditModal, handleDelete }}
                 />
               ) : (
                 <div className="d-flex justify-content-center align-items-center h-100">Loading grid…</div>
@@ -135,6 +213,21 @@ const ManualJournalPage = () => {
           </CardBody>
         </Card>
       </Col>
+
+      <Modal show={showFormModal} onHide={closeFormModal} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>{editingRow ? 'Edit Manual Journal' : 'Add Manual Journal'}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <AddManualJournal
+            key={editingRow?.journal_id || editingRow?._id || editingRow?.id || 'new'}
+            onClose={closeFormModal}
+            onSuccess={handleFormSuccess}
+            initialData={editingRow}
+            mode={editingRow ? 'edit' : 'create'}
+          />
+        </Modal.Body>
+      </Modal>
     </Row>
   )
 }
