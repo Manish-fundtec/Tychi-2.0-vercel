@@ -21,8 +21,9 @@ const ManualJournalPage = () => {
   const [showFormModal, setShowFormModal] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
   const [historyRows, setHistoryRows] = useState([])
-  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
+  const [activeTab, setActiveTab] = useState('list')
 
   // decode token to get fund_id
   useEffect(() => {
@@ -56,72 +57,147 @@ const ManualJournalPage = () => {
   //   })()
   // }, [])
 
-  const fetchJournals = useCallback(async () => {
-    if (!fundId) return
-    setLoading(true)
-    try {
-      const res = await api.get(`/api/v1/manualjournal/${fundId}`)
-      const data = Array.isArray(res.data?.data) ? res.data.data : res.data || []
-      setRows(data)
-    } catch (e) {
-      console.error('fetch manual journals failed:', e)
+  useEffect(() => {
+    if (!fundId) {
       setRows([])
+      return
+    }
+
+    let ignore = false
+    setLoading(true)
+
+    const load = async () => {
+      try {
+        const res = await api.get(`/api/v1/manualjournal/${fundId}`)
+        const data = Array.isArray(res.data?.data) ? res.data.data : res.data || []
+        if (!ignore) setRows(data)
+      } catch (error) {
+        console.error('fetch manual journals failed:', error)
+        if (!ignore) setRows([])
+      } finally {
+        if (!ignore) setLoading(false)
+      }
+    }
+
+    load()
+
+    return () => {
+      ignore = true
+    }
+  }, [fundId])
+
+  const closeFormModal = () => {
+    setShowFormModal(false)
+    setEditingRow(null)
+  }
+
+  const openCreateModal = () => {
+    setEditingRow(null)
+    setShowFormModal(true)
+  }
+
+  const openEditModal = (row) => {
+    setEditingRow(row)
+    setShowFormModal(true)
+  }
+
+  const fetchHistory = useCallback(async () => {
+    if (!fundId) {
+      setHistoryRows([])
+      return
+    }
+
+    setHistoryLoading(true)
+    setHistoryError('')
+
+    try {
+      const res = await api.get(`/api/v1/manualjournal/upload/history/${fundId}`)
+      const payload = res?.data ?? []
+
+      let rows = []
+      if (Array.isArray(payload)) rows = payload
+      else if (Array.isArray(payload?.rows)) rows = payload.rows
+      else if (Array.isArray(payload?.data)) rows = payload.data
+      else if (Array.isArray(payload?.data?.rows)) rows = payload.data.rows
+      else rows = []
+
+      const normalized = rows.map((row) => ({
+        ...row,
+        uploaded_at: row.uploaded_at || row.date_and_time || row.created_at || null,
+      }))
+      setHistoryRows(normalized)
+    } catch (error) {
+      const message = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Failed to load upload history'
+      setHistoryError(message)
+      setHistoryRows([])
     } finally {
-      setLoading(false)
+      setHistoryLoading(false)
     }
   }, [fundId])
 
   useEffect(() => {
-    fetchJournals()
-  }, [fetchJournals])
+    if (activeTab === 'history') {
+      fetchHistory()
+    }
+  }, [activeTab, fetchHistory])
 
-  const closeFormModal = useCallback(() => {
-    setShowFormModal(false)
-    setEditingRow(null)
-  }, [])
-
-  const openCreateModal = useCallback(() => {
-    setEditingRow(null)
-    setShowFormModal(true)
-  }, [])
-
-  const openEditModal = useCallback((row) => {
-    setEditingRow(row)
-    setShowFormModal(true)
-  }, [])
-
-  const handleFormSuccess = useCallback(() => {
-    fetchJournals()
-  }, [fetchJournals])
-
-  const handleDelete = useCallback(
-    async (row) => {
-      const entryId = row?.journal_id || row?._id || row?.id
-      if (!entryId) {
-        window.alert('Unable to delete: missing manual journal identifier.')
-        return
-      }
-
-      const confirmation = window.confirm('Are you sure you want to delete this manual journal entry?')
-      if (!confirmation) return
-
+  const handleFormSuccess = () => {
+    if (fundId) {
+      // refresh list
       setLoading(true)
-      try {
-        const deleteUrl = fundId ? `/api/v1/manualjournal/${fundId}/${entryId}` : `/api/v1/manualjournal/${entryId}`
-        await api.delete(deleteUrl)
-        window.alert('Manual journal deleted successfully ✅')
-        fetchJournals()
-      } catch (error) {
-        const status = error?.response?.status
-        const message = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Failed to delete manual journal'
-        console.error('DELETE /manualjournal failed', { status, error })
-        window.alert(message)
-      } finally {
-        setLoading(false)
+      api
+        .get(`/api/v1/manualjournal/${fundId}`)
+        .then((res) => {
+          const data = Array.isArray(res.data?.data) ? res.data.data : res.data || []
+          setRows(data)
+        })
+        .catch((error) => {
+          console.error('fetch manual journals failed:', error)
+          setRows([])
+        })
+        .finally(() => {
+          setLoading(false)
+        })
+
+      if (activeTab === 'history') {
+        fetchHistory()
       }
-    },
-    [fetchJournals, fundId],
-  )
+    }
+  }
+
+  const handleDelete = async (row) => {
+    const entryId = row?.journal_id || row?._id || row?.id
+    if (!entryId) {
+      window.alert('Unable to delete: missing manual journal identifier.')
+      return
+    }
+
+    const confirmation = window.confirm('Are you sure you want to delete this manual journal entry?')
+    if (!confirmation) return
+
+    setLoading(true)
+    try {
+      const deleteUrl = fundId ? `/api/v1/manualjournal/${fundId}/${entryId}` : `/api/v1/manualjournal/${entryId}`
+      await api.delete(deleteUrl)
+      window.alert('Manual journal deleted successfully ✅')
+
+      // refresh list
+      const res = await api.get(`/api/v1/manualjournal/${fundId}`)
+      const data = Array.isArray(res.data?.data) ? res.data.data : res.data || []
+      setRows(data)
+
+      if (activeTab === 'history') {
+        fetchHistory()
+      }
+    } catch (error) {
+      const status = error?.response?.status
+      const message = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Failed to delete manual journal'
+      console.error('DELETE /manualjournal failed', { status, error })
+      window.alert(message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
@@ -181,6 +257,24 @@ const ManualJournalPage = () => {
     [fmt],
   )
 
+  const historyColDefs = useMemo(
+    () => [
+      { headerName: 'File ID', field: 'file_id', sortable: true, filter: true, width: 220 },
+      { headerName: 'File Name', field: 'file_name', sortable: true, filter: true, flex: 1 },
+      { headerName: 'Status', field: 'status', sortable: true, filter: true, flex: 1 },
+      {
+        headerName: 'Uploaded At',
+        field: 'uploaded_at',
+        sortable: true,
+        filter: true,
+        flex: 1,
+        valueGetter: (params) => (params.data?.uploaded_at ? new Date(params.data.uploaded_at).toLocaleString() : ''),
+      },
+      { headerName: 'Uploaded By', field: 'user_id', sortable: true, filter: true, flex: 1 },
+    ],
+    [],
+  )
+
   return (
     <Row>
       <Col xl={12}>
@@ -191,26 +285,107 @@ const ManualJournalPage = () => {
               <Button variant="primary" onClick={openCreateModal}>
                 Add
               </Button>
-              <UploadManualJournalModal onClose={fetchJournals} />
+              <UploadManualJournalModal
+                onClose={() => {
+                  if (fundId) {
+                    api
+                      .get(`/api/v1/manualjournal/${fundId}`)
+                      .then((res) => {
+                        const data = Array.isArray(res.data?.data) ? res.data.data : res.data || []
+                        setRows(data)
+                      })
+                      .catch((error) => {
+                        console.error('fetch manual journals failed:', error)
+                        setRows([])
+                      })
+
+                    if (activeTab === 'history') {
+                      fetchHistory()
+                    }
+                  }
+                }}
+              />
             </div>
           </CardHeader>
-          <CardBody className="p-2">
-            <div className="ag-theme-alpine" style={{ height: 550, width: '100%' }}>
-              {/* Guard so we don’t mount grid before columns */}
-              {columnDefs.length > 0 ? (
-                <AgGridReact
-                  rowData={rows}
-                  columnDefs={columnDefs}
-                  pagination={true}
-                  paginationPageSize={pageSize}
-                  defaultColDef={{ sortable: true, filter: true, resizable: true }}
-                  context={{ handleEdit: openEditModal, handleDelete }}
-                />
-              ) : (
-                <div className="d-flex justify-content-center align-items-center h-100">Loading grid…</div>
-              )}
-            </div>
-          </CardBody>
+          <Tabs
+            activeKey={activeTab}
+            id="manual-journal-tabs"
+            className="px-3 pt-3"
+            onSelect={(key) => {
+              setActiveTab(key || 'list')
+            }}
+          >
+            <Tab eventKey="list" title="Manual Journal List">
+              <CardBody className="p-2">
+                {!fundId && (
+                  <Alert variant="warning" className="mb-3">
+                    Select a fund to view manual journals.
+                  </Alert>
+                )}
+
+                <div className="ag-theme-alpine" style={{ height: 550, width: '100%' }}>
+                  {/* Guard so we don’t mount grid before columns */}
+                  {columnDefs.length > 0 ? (
+                    <AgGridReact
+                      rowData={rows}
+                      columnDefs={columnDefs}
+                      pagination={true}
+                      paginationPageSize={pageSize}
+                      defaultColDef={{ sortable: true, filter: true, resizable: true }}
+                      context={{ handleEdit: openEditModal, handleDelete }}
+                    />
+                  ) : (
+                    <div className="d-flex justify-content-center align-items-center h-100">Loading grid…</div>
+                  )}
+                </div>
+              </CardBody>
+            </Tab>
+            <Tab eventKey="history" title="Loader History">
+              <CardBody className="p-2">
+                {!fundId && (
+                  <Alert variant="warning" className="mb-3">
+                    Select a fund to view upload history.
+                  </Alert>
+                )}
+
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <div />
+                  <Button variant="outline-secondary" size="sm" onClick={fetchHistory} disabled={!fundId || historyLoading}>
+                    {historyLoading ? 'Refreshing…' : 'Refresh'}
+                  </Button>
+                </div>
+
+                {historyError && (
+                  <Alert variant="danger" className="mb-2">
+                    {historyError}
+                  </Alert>
+                )}
+
+                {historyLoading && (
+                  <Alert variant="info" className="mb-2">
+                    Loading upload history...
+                  </Alert>
+                )}
+
+                {!historyLoading && !historyError && historyRows.length === 0 && (
+                  <Alert variant="warning" className="mb-2">
+                    No upload history found for this fund.
+                  </Alert>
+                )}
+
+                <div className="ag-theme-alpine" style={{ width: '100%' }}>
+                  <AgGridReact
+                    rowData={historyRows}
+                    columnDefs={historyColDefs}
+                    pagination={true}
+                    paginationPageSize={10}
+                    defaultColDef={{ sortable: true, filter: true, resizable: true }}
+                    domLayout="autoHeight"
+                  />
+                </div>
+              </CardBody>
+            </Tab>
+          </Tabs>
         </Card>
       </Col>
 
