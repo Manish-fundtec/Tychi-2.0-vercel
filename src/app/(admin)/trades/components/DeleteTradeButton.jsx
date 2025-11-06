@@ -21,8 +21,25 @@ const DeleteTradeButton = (props) => {
 
       alert('Trade deleted successfully');
     } catch (error) {
-      console.error(error);
-      alert(error?.response?.data?.error || 'Failed to delete trade');
+      console.error('[DeleteTrade] failed:', error);
+
+      const backendMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.response?.data?.details ||
+        '';
+
+      const isPricingBlock =
+        error?.response?.status === 409 ||
+        /pricing exists/i.test(backendMessage) ||
+        /pricing/i.test(backendMessage);
+
+      const message = backendMessage ||
+        (isPricingBlock
+          ? 'Trade cannot be deleted because pricing already exists for this month. Please delete that pricing entry first.'
+          : 'Failed to delete trade');
+
+      alert(message);
     } finally {
       setLoading(false);
     }
