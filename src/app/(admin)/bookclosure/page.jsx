@@ -6,7 +6,7 @@ import Cookies from 'js-cookie'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown } from 'react-bootstrap'
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then(mod => mod.AgGridReact), { ssr: false });
-const MGLEntryModal = dynamic(() => import('../base-ui/modals/components/AllModals').then(mod => mod.MGLEntryModal), { ssr: false });
+// const MGLEntryModal = dynamic(() => import('../base-ui/modals/components/AllModals').then(mod => mod.MGLEntryModal), { ssr: false });
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -215,9 +215,9 @@ const BookClosurePage = () => {
         <Card>
           <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
             <CardTitle as="h4">Book Closure</CardTitle>
-            <Dropdown>
+            {/* <Dropdown>
               <MGLEntryModal />
-            </Dropdown>
+            </Dropdown> */}
           </CardHeader>
           <CardBody className="p-2">
             {err && <div className="text-danger mb-2">{err}</div>}
