@@ -23,11 +23,27 @@ const DeleteTradeButton = (props) => {
     } catch (error) {
       console.error('[DeleteTrade] failed:', error);
 
-      const backendMessage =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        error?.response?.data?.details ||
-        '';
+      const payload = error?.response?.data;
+      let backendMessage = '';
+
+      if (typeof payload === 'string') {
+        backendMessage = payload;
+      } else if (payload && typeof payload === 'object') {
+        backendMessage =
+          payload.message ||
+          payload.error ||
+          payload.details ||
+          payload.reason ||
+          '';
+
+        if (!backendMessage) {
+          const month = payload.month || payload.pricing_month;
+          const pricingId = payload.pricing_id || payload.pricingId;
+          if (month || pricingId) {
+            backendMessage = `Cannot delete trade because pricing already exists for ${month || 'this month'}${pricingId ? ` (pricing id ${pricingId})` : ''}.`;
+          }
+        }
+      }
 
       const isPricingBlock =
         error?.response?.status === 409 ||
