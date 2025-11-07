@@ -26,34 +26,38 @@ const DeleteTradeButton = (props) => {
       const payload = error?.response?.data;
       let backendMessage = '';
 
-      if (typeof payload === 'string') {
-        backendMessage = payload;
-      } else if (payload && typeof payload === 'object') {
-        backendMessage =
-          payload.message ||
-          payload.error ||
-          payload.details ||
-          payload.reason ||
-          '';
+      if (payload) {
+        if (typeof payload === 'string') {
+          backendMessage = payload;
+        } else if (typeof payload === 'object') {
+          backendMessage =
+            (typeof payload.message === 'string' && payload.message) ||
+            (typeof payload.error === 'string' && payload.error) ||
+            (typeof payload.details === 'string' && payload.details) ||
+            (typeof payload.reason === 'string' && payload.reason) ||
+            '';
 
-        if (!backendMessage) {
-          const month = payload.month || payload.pricing_month;
-          const pricingId = payload.pricing_id || payload.pricingId;
-          if (month || pricingId) {
-            backendMessage = `Cannot delete trade because pricing already exists for ${month || 'this month'}${pricingId ? ` (pricing id ${pricingId})` : ''}.`;
+          if (!backendMessage && Array.isArray(payload.errors)) {
+            backendMessage = payload.errors
+              .map((err) => (typeof err === 'string' ? err : err?.message))
+              .filter(Boolean)
+              .join('\n');
+          }
+
+          if (!backendMessage) {
+            const month = payload.month || payload.pricing_month;
+            const pricingId = payload.pricing_id || payload.pricingId;
+            if (month || pricingId) {
+              backendMessage = `Cannot delete trade because pricing already exists for ${month || 'this month'}${
+                pricingId ? ` (pricing id ${pricingId})` : ''
+              }.`;
+            }
           }
         }
       }
 
-      const isPricingBlock =
-        error?.response?.status === 409 ||
-        /pricing exists/i.test(backendMessage) ||
-        /pricing/i.test(backendMessage);
-
-      const message = backendMessage ||
-        (isPricingBlock
-          ? 'Trade cannot be deleted because pricing already exists for this month. Please delete that pricing entry first.'
-          : 'Failed to delete trade');
+      const message =
+        backendMessage || error?.message || 'Failed to delete trade. Please try again or contact support.';
 
       alert(message);
     } finally {
