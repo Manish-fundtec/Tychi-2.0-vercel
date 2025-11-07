@@ -216,8 +216,20 @@ export default function ReviewsPage() {
         body: JSON.stringify({ date: row.date }),
       });
       if (!resp.ok) {
-        const txt = await resp.text().catch(() => '');
-        throw new Error(`HTTP ${resp.status} ${txt}`);
+        const raw = await resp.text().catch(() => '');
+        let message = `HTTP ${resp.status}`;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            message =
+              (typeof parsed?.message === 'string' && parsed.message) ||
+              (typeof parsed?.error === 'string' && parsed.error) ||
+              message;
+          } catch (_) {
+            message = raw;
+          }
+        }
+        throw new Error(message);
       }
 
       // refresh UI: mark this row reverted and recompute "latest completed"
@@ -235,8 +247,9 @@ export default function ReviewsPage() {
 
       alert('Reverted successfully.');
     } catch (e) {
+      const message = e?.message || 'Revert failed.';
       console.error('[Valuation] revert failed:', e);
-      alert('Revert failed.');
+      alert(message);
     }
   }
 
