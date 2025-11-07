@@ -141,7 +141,7 @@ const JournalsPage = () => {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportCsv = () => {
     if (!rowData?.length) {
       alert('No journal records to export.')
       return
@@ -151,14 +151,6 @@ const JournalsPage = () => {
       .filter((col) => col.field)
       .map((col) => ({ field: col.field, header: col.headerName || col.field }))
 
-    const escapeHtml = (value) =>
-      String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-
     const formatCell = (field, value) => {
       if (field === 'journal_date') {
         const raw = value ? String(value).slice(0, 10) : ''
@@ -167,28 +159,28 @@ const JournalsPage = () => {
       return value ?? ''
     }
 
-    const headerRow = `<tr>${fields
-      .map(({ header }) => `<th>${escapeHtml(header)}</th>`)
-      .join('')}</tr>`
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? '')
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return '"' + stringValue.replace(/"/g, '""') + '"'
+      }
+      return stringValue
+    }
 
-    const bodyRows = rowData
-      .map((row) => {
-        const cells = fields
-          .map(({ field }) => `<td>${escapeHtml(formatCell(field, row[field]))}</td>`)
-          .join('')
-        return `<tr>${cells}</tr>`
-      })
-      .join('')
+    const headerRow = fields.map(({ header }) => escapeCsv(header)).join(',')
+    const dataRows = rowData.map((row) =>
+      fields
+        .map(({ field }) => escapeCsv(formatCell(field, row[field])))
+        .join(','),
+    )
 
-    const tableHtml = `<table>${headerRow}${bodyRows}</table>`
-    const blob = new Blob(['\ufeff', tableHtml], {
-      type: 'application/vnd.ms-excel;charset=utf-8;',
-    })
+    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     const timestamp = new Date().toISOString().slice(0, 10)
     link.href = url
-    link.download = `journals-${fundId || 'fund'}-${timestamp}.xls`
+    link.download = `journals-${fundId || 'fund'}-${timestamp}.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -205,9 +197,9 @@ const JournalsPage = () => {
                 variant="outline-success"
                 size="sm"
                 disabled={!rowData?.length}
-                onClick={handleExportExcel}
+                onClick={handleExportCsv}
               >
-                Export Excel
+                Export CSV
               </Button>
             </div>
           </CardHeader>
