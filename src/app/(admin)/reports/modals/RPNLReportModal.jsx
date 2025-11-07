@@ -178,7 +178,7 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
         )}
       </Modal.Body>
 
-      <Modal.Footer className="d-flex justify-content-between flex-wrap gap-2">
+      <Modal.Footer className="d-flex justify-content-end gap-2">
         <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
           Export CSV
         </Button>

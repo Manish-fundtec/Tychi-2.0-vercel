@@ -355,7 +355,10 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
         )}
       </Modal.Body>
 
-      <Modal.Footer>
+      <Modal.Footer className="d-flex justify-content-end gap-2">
+        <Button variant="outline-success" size="sm" onClick={exportCsv} disabled={!rows.length || loading}>
+          Export CSV
+        </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>
     </Modal>
