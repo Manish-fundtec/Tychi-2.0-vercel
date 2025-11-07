@@ -52,6 +52,52 @@ export default function ProfitLossModal({
     })();
   }, [show, fundId, date, legacyStrict]);
 
+  const handleExportCsv = () => {
+    if (!rows?.length) {
+      alert('No P&L rows to export.');
+      return;
+    }
+
+    const headers = [
+      { key: 'category', label: 'Category' },
+      { key: 'gl_code', label: 'GL Number' },
+      { key: 'gl_name', label: 'GL Name' },
+      { key: 'mtd_amount', label: 'MTD' },
+      { key: 'qtd_amount', label: 'QTD' },
+      { key: 'ytd_amount', label: 'YTD' },
+    ];
+
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? '');
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return '"' + stringValue.replace(/"/g, '""') + '"';
+      }
+      return stringValue;
+    };
+
+    const formatValue = (key, value) =>
+      ['mtd_amount', 'qtd_amount', 'ytd_amount'].includes(key) ? fmt(value) : value ?? '';
+
+    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const dataRows = rows.map((row) =>
+      headers
+        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+        .join(','),
+    );
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `profit-loss-${fundId || 'fund'}-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // group & totals
   const {
     incomeRows, expenseRows,
@@ -176,8 +222,10 @@ export default function ProfitLossModal({
         )}
       </Modal.Body>
 
-      <Modal.Footer>
-        {/* (Optional) add export buttons later */}
+      <Modal.Footer className="d-flex justify-content-between flex-wrap gap-2">
+        <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
+          Export CSV
+        </Button>
         <Button variant="secondary" onClick={handleClose}>
           Close
         </Button>

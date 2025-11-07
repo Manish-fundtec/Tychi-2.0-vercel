@@ -52,6 +52,69 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
     })();
   }, [show, fundId, date, orgId]);
 
+  const handleExportCsv = () => {
+    if (!rows?.length) {
+      alert('No realized P&L rows to export.');
+      return;
+    }
+
+    const headers = [
+      { key: 'symbol', label: 'Symbol' },
+      { key: 'tradeId', label: 'Trade ID' },
+      { key: 'lotId', label: 'Lot ID' },
+      { key: 'openDate', label: 'Open Date' },
+      { key: 'openPrice', label: 'Open Price' },
+      { key: 'closeDate', label: 'Close Date' },
+      { key: 'closePrice', label: 'Close Price' },
+      { key: 'quantity', label: 'Quantity' },
+      { key: 'longTermRpnl', label: 'Long Term RPNL' },
+      { key: 'shortTermRpnl', label: 'Short Term RPNL' },
+      { key: 'totalRpnl', label: 'Total RPNL' },
+    ];
+
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? '');
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return '"' + stringValue.replace(/"/g, '""') + '"';
+      }
+      return stringValue;
+    };
+
+    const formatValue = (key, value) => {
+      switch (key) {
+        case 'openPrice':
+        case 'closePrice':
+        case 'longTermRpnl':
+        case 'shortTermRpnl':
+        case 'totalRpnl':
+          return fmt(value);
+        case 'quantity':
+          return fmt(value);
+        default:
+          return value ?? '';
+      }
+    };
+
+    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const dataRows = rows.map((row) =>
+      headers
+        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+        .join(','),
+    );
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `realized-pnl-${fundId || 'fund'}-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Modal show={show} onHide={handleClose} size="xl" centered>
       <Modal.Header closeButton>
@@ -115,7 +178,10 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
         )}
       </Modal.Body>
 
-      <Modal.Footer>
+      <Modal.Footer className="d-flex justify-content-between flex-wrap gap-2">
+        <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
+          Export CSV
+        </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>
     </Modal>

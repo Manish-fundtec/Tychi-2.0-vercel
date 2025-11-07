@@ -140,15 +140,57 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
   }, [show, fundId, date, selectedAccount, scope]);
 
   const exportCsv = () => {
-    const headers = ['Date','Journal ID','Account Name','Description','Dr Amount','Cr Amount','Running Balance'];
-    const lines = rows.map(r => [
-      r.date, r.journalid, r.accountname, (r.description||'').replaceAll('\n',' '), r.dramount, r.cramount, r.runningbalance ?? ''
-    ].join(','));
-    const csv = [headers.join(','), ...lines].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    if (!rows?.length) {
+      alert('No GL rows to export.');
+      return;
+    }
+
+    const headers = [
+      { key: 'date', label: 'Date' },
+      { key: 'journalid', label: 'Journal ID' },
+      { key: 'accountname', label: 'Account Name' },
+      { key: 'description', label: 'Description' },
+      { key: 'dramount', label: 'Dr Amount' },
+      { key: 'cramount', label: 'Cr Amount' },
+      { key: 'runningbalance', label: 'Running Balance' },
+    ];
+
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? '');
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return '"' + stringValue.replace(/"/g, '""') + '"';
+      }
+      return stringValue;
+    };
+
+    const formatValue = (key, value) => {
+      switch (key) {
+        case 'dramount':
+        case 'cramount':
+        case 'runningbalance':
+          return value != null && value !== '' ? fmt(value) : '';
+        default:
+          return value ?? '';
+      }
+    };
+
+    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const dataRows = rows.map((row) =>
+      headers
+        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+        .join(','),
+    );
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `GL-Report-${date}.csv`; a.click();
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `gl-report-${fundId || 'fund'}-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 

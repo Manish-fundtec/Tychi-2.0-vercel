@@ -116,6 +116,65 @@ export default function LotSummaryModal({
     })();
   }, [show, fundId, date, scope, orgId]);
 
+  const handleExportCsv = () => {
+    if (!rows?.length) {
+      alert('No lot records to export.');
+      return;
+    }
+
+    const headers = [
+      { key: 'symbol_name', label: 'Symbol' },
+      { key: 'lot_id', label: 'Lot ID' },
+      { key: 'balance_quantity', label: 'Balance Quantity' },
+      { key: 'cost_per_unit', label: 'Cost/Unit' },
+      { key: 'amount', label: 'Amount' },
+      { key: 'market_price', label: 'Market Price' },
+      { key: 'market_value', label: 'Market Value' },
+      { key: 'upnl', label: 'UPNL' },
+    ];
+
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? '');
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return '"' + stringValue.replace(/"/g, '""') + '"';
+      }
+      return stringValue;
+    };
+
+    const formatValue = (key, value) => {
+      switch (key) {
+        case 'balance_quantity':
+        case 'cost_per_unit':
+        case 'amount':
+        case 'market_price':
+        case 'market_value':
+        case 'upnl':
+          return fmt(value);
+        default:
+          return value ?? '';
+      }
+    };
+
+    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const dataRows = rows.map((row) =>
+      headers
+        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+        .join(','),
+    );
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `lot-summary-${fundId || 'fund'}-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Group by symbol
   const { sections, grand } = useMemo(() => {
     const bySymbol = new Map();
@@ -285,7 +344,10 @@ export default function LotSummaryModal({
         )}
       </Modal.Body>
 
-      <Modal.Footer>
+      <Modal.Footer className="d-flex justify-content-between flex-wrap gap-2">
+        <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
+          Export CSV
+        </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>
     </Modal>
