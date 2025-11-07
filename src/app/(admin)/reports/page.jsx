@@ -236,7 +236,7 @@ const ReportsPage = () => {
                                 <Button variant="outline-primary" size="sm" onClick={() => handleViewReport(report)}>
                                   <Eye size={16} /> View
                                 </Button>
-                                <Dropdown>
+                                {/* <Dropdown>
                                   <Dropdown.Toggle variant="outline-success" size="sm" className="d-flex align-items-center">
                                     <Download size={16} />
                                   </Dropdown.Toggle>
@@ -246,7 +246,7 @@ const ReportsPage = () => {
                                     <DropdownItem onClick={() => handleDownloadReport(report, 'pdf')}>📕 PDF</DropdownItem>
                                     <DropdownItem onClick={() => handleDownloadReport(report, 'txt')}>📜 TXT</DropdownItem>
                                   </Dropdown.Menu>
-                                </Dropdown>
+                                </Dropdown> */}
                               </div>
                             </CardBody>
                           </Card>
