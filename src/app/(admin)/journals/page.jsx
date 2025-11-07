@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
-import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown, Spinner, Alert } from 'react-bootstrap'
+import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown, Spinner, Alert, Button } from 'react-bootstrap'
 import api from '../../../lib/api/axios'
 import Cookies from 'js-cookie'
 import { jwtDecode } from 'jwt-decode'
@@ -140,15 +140,76 @@ const JournalsPage = () => {
       setLoading(false);
     }
   };
+
+  const handleExportExcel = () => {
+    if (!rowData?.length) {
+      alert('No journal records to export.')
+      return
+    }
+
+    const fields = (defaultJournalColDefs || [])
+      .filter((col) => col.field)
+      .map((col) => ({ field: col.field, header: col.headerName || col.field }))
+
+    const escapeHtml = (value) =>
+      String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+
+    const formatCell = (field, value) => {
+      if (field === 'journal_date') {
+        const raw = value ? String(value).slice(0, 10) : ''
+        return raw ? formatYmd(raw, fmt) : ''
+      }
+      return value ?? ''
+    }
+
+    const headerRow = `<tr>${fields
+      .map(({ header }) => `<th>${escapeHtml(header)}</th>`)
+      .join('')}</tr>`
+
+    const bodyRows = rowData
+      .map((row) => {
+        const cells = fields
+          .map(({ field }) => `<td>${escapeHtml(formatCell(field, row[field]))}</td>`)
+          .join('')
+        return `<tr>${cells}</tr>`
+      })
+      .join('')
+
+    const tableHtml = `<table>${headerRow}${bodyRows}</table>`
+    const blob = new Blob(['\ufeff', tableHtml], {
+      type: 'application/vnd.ms-excel;charset=utf-8;',
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const timestamp = new Date().toISOString().slice(0, 10)
+    link.href = url
+    link.download = `journals-${fundId || 'fund'}-${timestamp}.xls`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
   return (
     <Row>
       <Col xl={12}>
         <Card>
           <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
             <CardTitle as="h4">Journals</CardTitle>
-            {/* <Dropdown>
-              <MGLEntryModal />
-            </Dropdown> */}
+            <div className="d-flex gap-2">
+              <Button
+                variant="outline-success"
+                size="sm"
+                disabled={!rowData?.length}
+                onClick={handleExportExcel}
+              >
+                Export Excel
+              </Button>
+            </div>
           </CardHeader>
           <CardBody className="p-2">
             {errMsg && (
