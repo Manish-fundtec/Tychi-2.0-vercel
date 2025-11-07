@@ -21,8 +21,6 @@ const DeleteTradeButton = (props) => {
 
       alert('Trade deleted successfully');
     } catch (error) {
-      console.error('[DeleteTrade] failed:', error);
-
       const payload = error?.response?.data;
       let backendMessage = '';
 
@@ -58,6 +56,8 @@ const DeleteTradeButton = (props) => {
 
       const message =
         backendMessage || error?.message || 'Failed to delete trade. Please try again or contact support.';
+
+      console.warn('[DeleteTrade] failed:', message);
 
       alert(message);
     } finally {
