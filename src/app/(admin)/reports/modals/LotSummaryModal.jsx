@@ -199,8 +199,12 @@ export default function LotSummaryModal({
         symbol_id: r0.symbol_id,
         symbol_name: r0.symbol_name,
         lot_id: r0.lot_id,
-        balance_quantity: Number(r0.balance_quantity ?? 0),
-        cost_per_unit: Number(r0.cost_per_unit ?? 0),
+        balance_quantity: Number(r0.balance_quantity ?? r0.raw?.balance_quantity ?? 0),
+        cost_per_unit: Number(
+          r0.raw?.balance_quantity
+            ? Number(r0.amount ?? 0) / Number(r0.raw?.balance_quantity || 1)
+            : r0.cost_per_unit ?? 0,
+        ),
         amount: Number(r0.amount ?? 0),
         market_price: Number(r0.market_price ?? 0),
         market_value: Number(r0.market_value ?? 0),
