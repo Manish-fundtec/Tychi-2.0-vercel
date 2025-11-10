@@ -41,7 +41,16 @@ export default function ProfitLossModal({
         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const json = await resp.json();
-        setRows(Array.isArray(json?.rows) ? json.rows : []);
+        const rawRows = Array.isArray(json?.rows) ? json.rows : [];
+        const normalizedRows = rawRows.map((r) => {
+          const code = String(r.gl_code || r.glNumber || r.glnumber || '').trim();
+          const existingCategory = typeof r.category === 'string' ? r.category : '';
+          if (!existingCategory && (code === '41100' || code === '41200')) {
+            return { ...r, category: 'Income' };
+          }
+          return r;
+        });
+        setRows(normalizedRows);
       } catch (e) {
         console.error('[PnL] fetch failed', e);
         setErr('Failed to load P&L data.');
