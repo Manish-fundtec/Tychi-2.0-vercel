@@ -88,9 +88,14 @@ export default function TrialBalanceModalGrouped({
       category: glToCategory(r.glNumber),
     }));
 
+    const filteredDerived = derived.filter((r) => {
+      const code = String(r.glNumber || '').trim();
+      return code && !EXCLUDED_PARENT_GL_CODES.has(code);
+    });
+
     const order = ['Asset', 'Liability', 'Equity', 'Income', 'Expense', 'Other'];
     const byCat = {};
-    for (const r of derived) {
+    for (const r of filteredDerived) {
       const key = r.category || 'Other';
       if (!byCat[key]) byCat[key] = [];
       byCat[key].push(r);
