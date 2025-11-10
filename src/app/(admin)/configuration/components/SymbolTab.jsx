@@ -78,13 +78,24 @@ const SymbolTab = () => {
         `/api/v1/symbols/uploadhistory/${fund_id}`,
         { headers: token ? { Authorization: `Bearer ${token}` } : {} },
       )
-      const rows = res?.data?.rows || []
+      const payload = res?.data ?? []
+      let rows = []
+      if (Array.isArray(payload)) rows = payload
+      else if (Array.isArray(payload?.rows)) rows = payload.rows
+      else if (Array.isArray(payload?.data)) rows = payload.data
+      else if (Array.isArray(payload?.data?.rows)) rows = payload.data.rows
       // normalize uploaded_at if your API returns created_at instead
       const normalized = rows.map((r) => ({
         ...r,
         uploaded_at: r.date_and_time || r.uploaded_at || r.created_at || null,
       }))
       setHistory(normalized)
+
+      const topLevelFailed = typeof payload === 'object' && payload !== null && payload.status === 'Validation Failed'
+      const rowFailed = rows.some((row) => String(row.status || '').toLowerCase() === 'validation failed')
+      if (topLevelFailed || rowFailed) {
+        alert('Symbol upload validation failed. Check loader history for details.')
+      }
     } catch (err) {
       setHistoryError(err?.response?.data?.error || err?.message || 'Failed to load upload history')
     } finally {

@@ -144,6 +144,12 @@ export default function TradesData() {
         uploaded_at: r.uploaded_at || r.date_and_time || r.created_at || null,
       }))
       setHistory(normalized)
+
+      const topLevelFailed = typeof res?.data?.payload === 'object' && res?.data?.payload !== null && res?.data?.payload.status === 'Validation Failed'
+      const rowFailed = rows.some((row) => String(row.status || '').toLowerCase() === 'validation failed')
+      if (topLevelFailed || rowFailed) {
+        alert('Trade upload validation failed. Check loader history for details.')
+      }
     } catch (e) {
       setHistoryError(e?.response?.data?.error || e?.message || 'Failed to load trade upload history')
       setHistory([])

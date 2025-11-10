@@ -448,13 +448,22 @@ export const BasicForm = () => {
 
   // fields never editable
   const ALWAYS_LOCKED = ['fund_id', 'fund_status']
-  // fields allowed to edit when trades exist
-  const EDITABLE_WHEN_TRADES = ['fund_description', 'fund_address', 'reporting_mtd', 'reporting_qtd', 'reporting_ytd', 'reporting_itd', 'date_format']
+  const EDITABLE_WHEN_TRADES = ['reporting_currency', 'decimal_precision']
+  const EDITABLE_WHEN_NO_TRADES = [
+    'fund_address',
+    'incorp_date',
+    'reporting_start_date',
+    'fy_ends_on',
+    'reporting_frequency',
+    'reporting_currency',
+    'decimal_precision',
+    
+  ]
   const canEditField = (field) => {
     if (!isEditing) return false
     if (ALWAYS_LOCKED.includes(field)) return false
-    if (!hasTrades) return true
-    return EDITABLE_WHEN_TRADES.includes(field)
+    if (hasTrades) return EDITABLE_WHEN_TRADES.includes(field)
+    return EDITABLE_WHEN_NO_TRADES.includes(field)
   }
   const roField = (field) => !canEditField(field) // for text/number
   const disField = (field) => !canEditField(field) // for select/date/checkbox
