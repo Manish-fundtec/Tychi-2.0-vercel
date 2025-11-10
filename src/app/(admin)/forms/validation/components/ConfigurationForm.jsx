@@ -1342,11 +1342,30 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
 export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
   const isEdit = !!exchange
   const [validated, setValidated] = useState(false)
+  const [duplicateIdError, setDuplicateIdError] = useState('')
+  const [duplicateNameError, setDuplicateNameError] = useState('')
+  const [existingExchanges, setExistingExchanges] = useState([])
 
   const [form, setForm] = useState({
     exchange_id: '',
     exchange_name: '',
   })
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = Cookies.get('dashboardToken')
+        if (!token) return
+        const decoded = jwtDecode(token)
+        if (!decoded?.fund_id) return
+
+        const res = await getExchangesByFundId(decoded.fund_id)
+        setExistingExchanges(Array.isArray(res?.data) ? res.data : [])
+      } catch (err) {
+        console.error('❌ Failed to fetch exchanges for duplicate validation:', err)
+      }
+    })()
+  }, [])
 
   useEffect(() => {
     if (exchange) {
@@ -1360,6 +1379,32 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
+
+    if (name === 'exchange_id') {
+      const trimmed = value.trim().toLowerCase()
+      if (!trimmed) {
+        setDuplicateIdError('')
+      } else {
+        const isDuplicate = existingExchanges.some((ex) => {
+          if (isEdit && exchange?.exchange_uid === ex.exchange_uid) return false
+          return String(ex.exchange_id || '').trim().toLowerCase() === trimmed
+        })
+        setDuplicateIdError(isDuplicate ? 'Exchange ID already exists for this fund' : '')
+      }
+    }
+
+    if (name === 'exchange_name') {
+      const trimmed = value.trim().toLowerCase()
+      if (!trimmed) {
+        setDuplicateNameError('')
+      } else {
+        const isDuplicate = existingExchanges.some((ex) => {
+          if (isEdit && exchange?.exchange_uid === ex.exchange_uid) return false
+          return String(ex.exchange_name || '').trim().toLowerCase() === trimmed
+        })
+        setDuplicateNameError(isDuplicate ? 'Exchange name already exists for this fund' : '')
+      }
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -1368,6 +1413,10 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
 
     if (!formEl.checkValidity()) {
       e.stopPropagation()
+    } else if (duplicateIdError || duplicateNameError) {
+      toast.error(duplicateIdError || duplicateNameError)
+      setValidated(true)
+      return
     } else {
       try {
         const token = Cookies.get('dashboardToken')
@@ -1400,12 +1449,28 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
     <Form noValidate validated={validated} onSubmit={handleSubmit} className="row g-3 m-1">
       <FormGroup className="col-md-6">
         <FormLabel>Exchange ID</FormLabel>
-        <FormControl name="exchange_id" type="text" value={form.exchange_id} onChange={handleChange} required />
+        <FormControl
+          name="exchange_id"
+          type="text"
+          value={form.exchange_id}
+          onChange={handleChange}
+          required
+          isInvalid={!!duplicateIdError}
+        />
+        <Feedback type="invalid">{duplicateIdError || 'Please provide exchange ID'}</Feedback>
       </FormGroup>
 
       <FormGroup className="col-md-6">
         <FormLabel>Exchange Name</FormLabel>
-        <FormControl name="exchange_name" type="text" value={form.exchange_name} onChange={handleChange} required />
+        <FormControl
+          name="exchange_name"
+          type="text"
+          value={form.exchange_name}
+          onChange={handleChange}
+          required
+          isInvalid={!!duplicateNameError}
+        />
+        <Feedback type="invalid">{duplicateNameError || 'Please provide exchange name'}</Feedback>
       </FormGroup>
 
       <Col xs={12}>
