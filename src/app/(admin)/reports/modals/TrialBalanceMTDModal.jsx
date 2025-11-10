@@ -32,6 +32,8 @@ const glToCategory = (gl) => {
   return 'Other';
 };
 
+const EXCLUDED_PARENT_GL_CODES = new Set(['11000', '12000', '21200']);
+
 export default function TrialBalanceModalGrouped({
   show,
   handleClose,
@@ -67,7 +69,10 @@ export default function TrialBalanceModalGrouped({
           debit: Number(r.debit_amount ?? r.debit ?? 0),
           credit: Number(r.credit_amount ?? r.credit ?? 0),
           closing: Number(r.closing_balance ?? r.closingbalance ?? 0),
-        }));
+        })).filter(item => {
+          const code = String(item.glNumber || '').trim();
+          return code && !EXCLUDED_PARENT_GL_CODES.has(code);
+        });
 
         setRows(data);
       } catch (e) {
