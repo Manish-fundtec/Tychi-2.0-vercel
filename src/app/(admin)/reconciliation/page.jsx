@@ -54,8 +54,8 @@ function ActionRenderer(props) {
       onClick={() => {
         router.push(
           `/reconciliation2?fund=${encodeURIComponent(fundId || '')}` +
-            `&date=${encodeURIComponent(data?.date || '')}` +
-            `&month=${encodeURIComponent(data?.month || '')}`
+          `&date=${encodeURIComponent(data?.date || '')}` +
+          `&month=${encodeURIComponent(data?.month || '')}`
         );
       }}
     >
@@ -78,32 +78,32 @@ export default function ReconciliationPage() {
   // Function to fetch and update reconciliation data
   const fetchReconciliationData = useCallback(async () => {
     if (!fundId) return;
-    setLoading(true);
-    setErr('');
-    try {
+      setLoading(true);
+      setErr('');
+      try {
       const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(
         fundId
       )}/reporting-periods?limit=200`;
-      const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const json = await resp.json();
 
       const baseRows = (json?.rows || []).map((r, i) => {
         const end = (r?.end_date || '').slice(0, 10);
-        const d = end ? new Date(end) : null;
-        const hasValidDate = d && !Number.isNaN(d.getTime());
-        const monthLabel =
-          r?.period_name ||
-          (hasValidDate ? d.toLocaleString(undefined, { month: 'long', year: 'numeric' }) : '-');
+          const d = end ? new Date(end) : null;
+          const hasValidDate = d && !Number.isNaN(d.getTime());
+          const monthLabel =
+            r?.period_name ||
+            (hasValidDate ? d.toLocaleString(undefined, { month: 'long', year: 'numeric' }) : '-');
 
-        return {
-          srNo: i + 1,
-          month: monthLabel,
-          date: end,
+          return {
+            srNo: i + 1,
+            month: monthLabel,
+            date: end,
           status: 'open',
-          raw: r,
-        };
-      });
+            raw: r,
+          };
+        });
 
       // Check reconciliation status for each period
       const enriched = await Promise.all(
@@ -132,12 +132,12 @@ export default function ReconciliationPage() {
       );
 
       setRowData(enriched);
-    } catch (e) {
+      } catch (e) {
       console.error(e);
-      setErr('Failed to load reporting periods.');
-    } finally {
-      setLoading(false);
-    }
+        setErr('Failed to load reporting periods.');
+      } finally {
+        setLoading(false);
+      }
   }, [fundId]);
 
   // Initial fetch

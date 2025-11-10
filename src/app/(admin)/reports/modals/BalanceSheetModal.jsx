@@ -17,6 +17,8 @@ function getAuthHeaders() {
 const fmt = (v) =>
   Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const EXCLUDED_PARENT_GL_CODES = new Set(['11000', '12000', '21200']);
+
 /**
  * Balance Sheet – pulls only from chartofaccounts + journals (as-of date)
  * Sections: Assets, Liabilities, Equity
@@ -55,12 +57,20 @@ export default function BalanceSheetModal({
         const json = await resp.json();
 
         // backend shape per our repo: { success, data: { assets, liabilities, equity, totals } }
-        const merged =
-          json?.data
-            ? [...(json.data.assets || []), ...(json.data.liabilities || []), ...(json.data.equity || [])]
-            : Array.isArray(json?.rows) ? json.rows : [];
+        const merged = json?.data
+          ? [...(json.data.assets || []), ...(json.data.liabilities || []), ...(json.data.equity || [])]
+          : Array.isArray(json?.rows)
+          ? json.rows
+          : [];
 
-        setRows(Array.isArray(merged) ? merged : []);
+        const filtered = Array.isArray(merged)
+          ? merged.filter((row) => {
+              const glCode = String(row?.gl_code || row?.glNumber || row?.glnumber || '').trim();
+              return glCode && !EXCLUDED_PARENT_GL_CODES.has(glCode);
+            })
+          : [];
+
+        setRows(filtered);
       } catch (e) {
         console.error('[BS] fetch failed', e);
         setErr('Failed to load Balance Sheet.');
