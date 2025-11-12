@@ -1,7 +1,7 @@
 'use client'
 
 import clsx from 'clsx'
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   Button,
   Col,
@@ -355,6 +355,21 @@ export const BasicForm = () => {
   const [formData, setFormData] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [hasTrades, setHasTrades] = useState(false)
+  const dateOnly = useCallback((val) => {
+    if (!val) return ''
+    const str = String(val)
+    const match = str.match(/^\d{4}-\d{2}-\d{2}/)
+    if (match) return match[0]
+    if (str.includes('T')) return str.split('T')[0]
+    return str
+  }, [])
+
+  const incorpDate = useMemo(() => dateOnly(formData?.incorp_date), [dateOnly, formData?.incorp_date])
+  const reportingStartDate = useMemo(() => dateOnly(formData?.reporting_start_date), [dateOnly, formData?.reporting_start_date])
+  const incorpAfterReporting = useMemo(() => {
+    if (!incorpDate || !reportingStartDate) return false
+    return incorpDate > reportingStartDate
+  }, [incorpDate, reportingStartDate])
   // 2) helpers for toggling editability
   const ro = !isEditing // readOnly for text/number
   const dis = !isEditing // disabled for date/select/checkbox
@@ -394,6 +409,13 @@ export const BasicForm = () => {
         reporting_itd: !!rest.reporting_itd,
         enable_report_email: !!rest.enable_report_email,
         date_format: rest.date_format || 'MM/DD/YYYY',
+      }
+
+      const incorpYmd = rawPayload.incorp_date
+      const reportingStartYmd = rawPayload.reporting_start_date
+      if (incorpYmd && reportingStartYmd && incorpYmd > reportingStartYmd) {
+        alert('Incorporation date must be less than or equal to Reporting Start Date.')
+        return
       }
 
       // keep only keys allowed by the current rules
@@ -574,20 +596,30 @@ export const BasicForm = () => {
             <FormLabel>Incorporation Date</FormLabel>
             <FormControl
               type="date"
-              value={formData.incorp_date?.split('T')[0] || ''}
+              value={incorpDate}
               onChange={(e) => setFormData((p) => ({ ...p, incorp_date: e.target.value || '' }))}
               disabled={disField('incorp_date')}
+              max={reportingStartDate || undefined}
+              isInvalid={isEditing && incorpAfterReporting}
             />
+            {isEditing && incorpAfterReporting && (
+              <div className="invalid-feedback d-block">Incorporation date must be less than or equal to Reporting Start Date.</div>
+            )}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
             <FormLabel>Reporting Start Date</FormLabel>
             <FormControl
               type="date"
-              value={formData.reporting_start_date?.split('T')[0] || ''}
+              value={reportingStartDate}
               onChange={(e) => setFormData((p) => ({ ...p, reporting_start_date: e.target.value || '' }))}
               disabled={disField('reporting_start_date')}
+              min={incorpDate || undefined}
+              isInvalid={isEditing && incorpAfterReporting}
             />
+            {isEditing && incorpAfterReporting && (
+              <div className="invalid-feedback d-block">Reporting Start Date must be greater than or equal to Incorporation Date.</div>
+            )}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
