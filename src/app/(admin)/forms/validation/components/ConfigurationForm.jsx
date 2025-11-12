@@ -1552,7 +1552,14 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         onClose?.()
         console.log('📤 Submitting payload:', payload)
       } catch (err) {
-        console.error('❌ Failed to submit symbol form:', err)
+        const status = err?.response?.status
+        const duplicateMessage = err?.response?.data?.error
+        if (status === 409 && duplicateMessage) {
+          console.warn('⚠️ Duplicate symbol detected:', duplicateMessage)
+          alert(duplicateMessage)
+        } else {
+          console.error('❌ Failed to submit symbol form:', err)
+        }
       }
     }
 
