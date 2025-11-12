@@ -126,12 +126,6 @@ const ManualJournalPage = () => {
         uploaded_at: row.uploaded_at || row.date_and_time || row.created_at || null,
       }))
       setHistoryRows(normalized)
-
-      const topLevelFailed = typeof payload === 'object' && payload !== null && payload.status === 'Validation Failed'
-      const rowFailed = rows.some((row) => String(row.status || '').toLowerCase() === 'validation failed')
-      if (topLevelFailed || rowFailed) {
-        alert('Manual journal upload validation failed. Check loader history for details.')
-      }
     } catch (error) {
       const message = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Failed to load upload history'
       setHistoryError(message)

@@ -457,12 +457,30 @@ export const BasicForm = () => {
     'reporting_frequency',
     'reporting_currency',
     'decimal_precision',
+    'fund_description',
     
   ]
+  const tradesExist = useMemo(() => {
+    if (hasTrades) return true
+    if (!formData) return false
+
+    const { has_trades, hasTrades: camelHasTrades, trade_count, tradeCount, trades_count } = formData
+    if (typeof has_trades === 'boolean') return has_trades
+    if (typeof camelHasTrades === 'boolean') return camelHasTrades
+
+    const numericCount = Number(
+      trade_count ??
+        tradeCount ??
+        trades_count ??
+        (Array.isArray(formData.trades) ? formData.trades.length : 0)
+    )
+
+    return !Number.isNaN(numericCount) && numericCount > 0
+  }, [formData, hasTrades])
   const canEditField = (field) => {
     if (!isEditing) return false
     if (ALWAYS_LOCKED.includes(field)) return false
-    if (hasTrades) return EDITABLE_WHEN_TRADES.includes(field)
+    if (tradesExist) return EDITABLE_WHEN_TRADES.includes(field)
     return EDITABLE_WHEN_NO_TRADES.includes(field)
   }
   const roField = (field) => !canEditField(field) // for text/number
