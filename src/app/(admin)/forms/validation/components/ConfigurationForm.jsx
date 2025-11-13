@@ -306,39 +306,39 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
   }
 
   return (
-    <Form onSubmit={handleSubmit}>
+    <Form noValidate validated={validated} onSubmit={handleSubmit} className="row g-3">
       <FormGroup className="position-relative col-md-6">
         <FormLabel>Closure Rule</FormLabel>
-        <ChoicesFormInput
+        <Form.Select
           name="closure_rule"
           value={formData.closure_rule}
           onChange={handleChange}
-          className={errors.closure_rule ? 'is-invalid' : ''}
-          required>
+          required
+          isInvalid={!!errors.closure_rule}>
           <option value="">Select</option>
           <option value="LIFO">LIFO</option>
           <option value="FIFO">FIFO</option>
           <option value="FIRST_SETTLE_THAN_FIFO">FIRST_SETTLE_THAN_FIFO</option>
-        </ChoicesFormInput>
-        {errors.closure_rule && <div className="invalid-feedback">{errors.closure_rule}</div>}
+        </Form.Select>
+        <Feedback type="invalid">{errors.closure_rule || 'Please select a closure rule'}</Feedback>
       </FormGroup>
 
       <FormGroup className="position-relative col-md-6">
         <FormLabel>Long Term Rule</FormLabel>
-        <ChoicesFormInput
+        <Form.Select
           name="long_term_rule"
           value={formData.long_term_rule}
           onChange={handleChange}
-          className={errors.long_term_rule ? 'is-invalid' : ''}
-          required>
+          required
+          isInvalid={!!errors.long_term_rule}>
           <option value="">Select</option>
           <option value="1 year">1 year</option>
           <option value="2 year">2 year</option>
           <option value="3 year">3 year</option>
           <option value="4 year">4 year</option>
           <option value="5 year">5 year</option>
-        </ChoicesFormInput>
-        {errors.long_term_rule && <div className="invalid-feedback">{errors.long_term_rule}</div>}
+        </Form.Select>
+        <Feedback type="invalid">{errors.long_term_rule || 'Please select a long term rule'}</Feedback>
       </FormGroup>
 
       <Col xs={12} className="mt-3">
