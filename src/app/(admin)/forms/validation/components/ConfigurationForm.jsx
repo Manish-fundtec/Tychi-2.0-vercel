@@ -1,7 +1,7 @@
 'use client'
 
 import clsx from 'clsx'
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   Button,
   Col,
@@ -306,39 +306,39 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
   }
 
   return (
-    <Form onSubmit={handleSubmit}>
+    <Form noValidate validated={validated} onSubmit={handleSubmit} className="row g-3">
       <FormGroup className="position-relative col-md-6">
         <FormLabel>Closure Rule</FormLabel>
-        <ChoicesFormInput
+        <Form.Select
           name="closure_rule"
           value={formData.closure_rule}
           onChange={handleChange}
-          className={errors.closure_rule ? 'is-invalid' : ''}
-          required>
+          required
+          isInvalid={!!errors.closure_rule}>
           <option value="">Select</option>
           <option value="LIFO">LIFO</option>
           <option value="FIFO">FIFO</option>
           <option value="FIRST_SETTLE_THAN_FIFO">FIRST_SETTLE_THAN_FIFO</option>
-        </ChoicesFormInput>
-        {errors.closure_rule && <div className="invalid-feedback">{errors.closure_rule}</div>}
+        </Form.Select>
+        <Feedback type="invalid">{errors.closure_rule || 'Please select a closure rule'}</Feedback>
       </FormGroup>
 
       <FormGroup className="position-relative col-md-6">
         <FormLabel>Long Term Rule</FormLabel>
-        <ChoicesFormInput
+        <Form.Select
           name="long_term_rule"
           value={formData.long_term_rule}
           onChange={handleChange}
-          className={errors.long_term_rule ? 'is-invalid' : ''}
-          required>
+          required
+          isInvalid={!!errors.long_term_rule}>
           <option value="">Select</option>
           <option value="1 year">1 year</option>
           <option value="2 year">2 year</option>
           <option value="3 year">3 year</option>
           <option value="4 year">4 year</option>
           <option value="5 year">5 year</option>
-        </ChoicesFormInput>
-        {errors.long_term_rule && <div className="invalid-feedback">{errors.long_term_rule}</div>}
+        </Form.Select>
+        <Feedback type="invalid">{errors.long_term_rule || 'Please select a long term rule'}</Feedback>
       </FormGroup>
 
       <Col xs={12} className="mt-3">
@@ -355,6 +355,21 @@ export const BasicForm = () => {
   const [formData, setFormData] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [hasTrades, setHasTrades] = useState(false)
+  const dateOnly = useCallback((val) => {
+    if (!val) return ''
+    const str = String(val)
+    const match = str.match(/^\d{4}-\d{2}-\d{2}/)
+    if (match) return match[0]
+    if (str.includes('T')) return str.split('T')[0]
+    return str
+  }, [])
+
+  const incorpDate = useMemo(() => dateOnly(formData?.incorp_date), [dateOnly, formData?.incorp_date])
+  const reportingStartDate = useMemo(() => dateOnly(formData?.reporting_start_date), [dateOnly, formData?.reporting_start_date])
+  const incorpAfterReporting = useMemo(() => {
+    if (!incorpDate || !reportingStartDate) return false
+    return incorpDate > reportingStartDate
+  }, [incorpDate, reportingStartDate])
   // 2) helpers for toggling editability
   const ro = !isEditing // readOnly for text/number
   const dis = !isEditing // disabled for date/select/checkbox
@@ -394,6 +409,13 @@ export const BasicForm = () => {
         reporting_itd: !!rest.reporting_itd,
         enable_report_email: !!rest.enable_report_email,
         date_format: rest.date_format || 'MM/DD/YYYY',
+      }
+
+      const incorpYmd = rawPayload.incorp_date
+      const reportingStartYmd = rawPayload.reporting_start_date
+      if (incorpYmd && reportingStartYmd && incorpYmd > reportingStartYmd) {
+        alert('Incorporation date must be less than or equal to Reporting Start Date.')
+        return
       }
 
       // keep only keys allowed by the current rules
@@ -448,14 +470,58 @@ export const BasicForm = () => {
 
   // fields never editable
   const ALWAYS_LOCKED = ['fund_id', 'fund_status']
-  // fields allowed to edit when trades exist
-  const EDITABLE_WHEN_TRADES = ['fund_description', 'fund_address', 'reporting_mtd', 'reporting_qtd', 'reporting_ytd', 'reporting_itd', 'date_format']
+  const EDITABLE_WHEN_TRADES = ['reporting_currency', 'decimal_precision']
+  const EDITABLE_WHEN_NO_TRADES = [
+    'fund_address',
+    'incorp_date',
+    'reporting_start_date',
+    'fy_ends_on',
+    'reporting_frequency',
+    'reporting_currency',
+    'decimal_precision',
+    'fund_description',
+    
+  ]
+  const REQUIRED_FIELDS = useMemo(
+    () =>
+      new Set([
+        'fund_name',
+        'fund_description',
+        'fund_address',
+        'incorp_date',
+        'reporting_start_date',
+        'fy_ends_on',
+        'reporting_frequency',
+        'reporting_currency',
+        'decimal_precision',
+        'commission_accounting_method',
+      ]),
+    [],
+  )
+  const tradesExist = useMemo(() => {
+    if (hasTrades) return true
+    if (!formData) return false
+
+    const { has_trades, hasTrades: camelHasTrades, trade_count, tradeCount, trades_count } = formData
+    if (typeof has_trades === 'boolean') return has_trades
+    if (typeof camelHasTrades === 'boolean') return camelHasTrades
+
+    const numericCount = Number(
+      trade_count ??
+        tradeCount ??
+        trades_count ??
+        (Array.isArray(formData.trades) ? formData.trades.length : 0)
+    )
+
+    return !Number.isNaN(numericCount) && numericCount > 0
+  }, [formData, hasTrades])
   const canEditField = (field) => {
     if (!isEditing) return false
     if (ALWAYS_LOCKED.includes(field)) return false
-    if (!hasTrades) return true
-    return EDITABLE_WHEN_TRADES.includes(field)
+    if (tradesExist) return EDITABLE_WHEN_TRADES.includes(field)
+    return EDITABLE_WHEN_NO_TRADES.includes(field)
   }
+  const isFieldRequired = (field) => isEditing && REQUIRED_FIELDS.has(field)
   const roField = (field) => !canEditField(field) // for text/number
   const disField = (field) => !canEditField(field) // for select/date/checkbox
 
@@ -501,7 +567,7 @@ export const BasicForm = () => {
               value={formData.fund_name || ''}
               onChange={onChange('fund_name')}
               readOnly={roField('fund_name')}
-              required
+              required={isFieldRequired('fund_name')}
             />
             <Feedback type="invalid" tooltip>
               Please enter fund name
@@ -529,7 +595,9 @@ export const BasicForm = () => {
               value={formData.fund_description || ''}
               onChange={onChange('fund_description')}
               readOnly={roField('fund_description')}
+              required={isFieldRequired('fund_description')}
             />
+            {isFieldRequired('fund_description') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -540,32 +608,53 @@ export const BasicForm = () => {
               value={formData.fund_address || ''}
               onChange={onChange('fund_address')}
               readOnly={roField('fund_address')}
+              required={isFieldRequired('fund_address')}
             />
+            {isFieldRequired('fund_address') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
             <FormLabel>Incorporation Date</FormLabel>
             <FormControl
               type="date"
-              value={formData.incorp_date?.split('T')[0] || ''}
+              value={incorpDate}
               onChange={(e) => setFormData((p) => ({ ...p, incorp_date: e.target.value || '' }))}
               disabled={disField('incorp_date')}
+              max={reportingStartDate || undefined}
+              isInvalid={isEditing && incorpAfterReporting}
+              required={isFieldRequired('incorp_date')}
             />
+            {isEditing && incorpAfterReporting && (
+              <div className="invalid-feedback d-block">Incorporation date must be less than or equal to Reporting Start Date.</div>
+            )}
+            {isFieldRequired('incorp_date') && !incorpAfterReporting && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
             <FormLabel>Reporting Start Date</FormLabel>
             <FormControl
               type="date"
-              value={formData.reporting_start_date?.split('T')[0] || ''}
+              value={reportingStartDate}
               onChange={(e) => setFormData((p) => ({ ...p, reporting_start_date: e.target.value || '' }))}
               disabled={disField('reporting_start_date')}
+              min={incorpDate || undefined}
+              isInvalid={isEditing && incorpAfterReporting}
+              required={isFieldRequired('reporting_start_date')}
             />
+            {isEditing && incorpAfterReporting && (
+              <div className="invalid-feedback d-block">Reporting Start Date must be greater than or equal to Incorporation Date.</div>
+            )}
+            {isFieldRequired('reporting_start_date') && !incorpAfterReporting && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
             <FormLabel>Financial Year Ends On</FormLabel>
-            <Form.Select type="text" value={formData.fy_ends_on || ''} onChange={onChange('fy_ends_on')} disabled={disField('fy_ends_on')}>
+            <Form.Select
+              type="text"
+              value={formData.fy_ends_on || ''}
+              onChange={onChange('fy_ends_on')}
+              disabled={disField('fy_ends_on')}
+              required={isFieldRequired('fy_ends_on')}>
               <option value="">Select</option>
               <option value="January">January</option>
               <option value="February">February</option>
@@ -580,6 +669,7 @@ export const BasicForm = () => {
               <option value="November">November</option>
               <option value="December">December</option>
             </Form.Select>
+            {isFieldRequired('fy_ends_on') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -588,13 +678,15 @@ export const BasicForm = () => {
               type="text"
               value={formData.reporting_frequency || ''}
               onChange={onChange('reporting_frequency')}
-              disabled={disField('reporting_frequency')}>
+              disabled={disField('reporting_frequency')}
+              required={isFieldRequired('reporting_frequency')}>
               <option value="">Select</option>
               <option value="Daily">Daily</option>
               <option value="Monthly">Monthly</option>
               <option value="Quarterly">Quarterly</option>
               <option value="Annually">Annually</option>
             </Form.Select>
+            {isFieldRequired('reporting_frequency') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -603,7 +695,8 @@ export const BasicForm = () => {
               type="text"
               value={formData.reporting_currency || ''}
               onChange={onChange('reporting_currency')}
-              disabled={disField('reporting_currency')}>
+              disabled={disField('reporting_currency')}
+              required={isFieldRequired('reporting_currency')}>
               <option value="">Select</option>
               {currencies
                 .slice()
@@ -614,6 +707,7 @@ export const BasicForm = () => {
                   </option>
                 ))}
             </Form.Select>
+            {isFieldRequired('reporting_currency') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -627,12 +721,14 @@ export const BasicForm = () => {
                   decimal_precision: e.target.value === '' ? '' : Number(e.target.value),
                 }))
               }
-              disabled={disField('decimal_precision')}>
+              disabled={disField('decimal_precision')}
+              required={isFieldRequired('decimal_precision')}>
               <option value="1">1</option>
               <option value="2">2</option>
               <option value="3">3</option>
               <option value="4">4</option>
             </Form.Select>
+            {isFieldRequired('decimal_precision') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -641,11 +737,13 @@ export const BasicForm = () => {
               type="text"
               value={commissionLabel(formData.commission_accounting_method)}
               onChange={onChange('commission_accounting_method')}
-              disabled={disField('commission_accounting_method')}>
+              disabled={disField('commission_accounting_method')}
+              required={isFieldRequired('commission_accounting_method')}>
               <option value="">Select</option>
               <option value="capitalize">Capitalize</option>
               <option value="expense">Expense</option>
             </Form.Select>
+            {isFieldRequired('commission_accounting_method') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -1558,7 +1656,14 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         onClose?.()
         console.log('📤 Submitting payload:', payload)
       } catch (err) {
-        console.error('❌ Failed to submit symbol form:', err)
+        const status = err?.response?.status
+        const duplicateMessage = err?.response?.data?.error
+        if (status === 409 && duplicateMessage) {
+          console.warn('⚠️ Duplicate symbol detected:', duplicateMessage)
+          alert(duplicateMessage)
+        } else {
+          console.error('❌ Failed to submit symbol form:', err)
+        }
       }
     }
 

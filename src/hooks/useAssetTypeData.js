@@ -60,7 +60,8 @@ export const useAssetTypeData = () => {
         )
       );
     } catch (error) {
-      console.error('Failed to update asset type status:', error);
+      const message = error?.message || error?.raw?.message || 'Failed to update asset type status.';
+      alert(message);
     }
   };
 
