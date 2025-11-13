@@ -1461,11 +1461,11 @@ export const ToggleBetweenModals = ({
               <div className="alert alert-info py-2 mb-0 small">
                 No symbols for this month. If you need reports, click <strong>Save</strong> to store an empty pricing for this month.
               </div>
-              <div>
+              {/* <div>
                 <Button size="sm" variant="outline-primary" onClick={fetchManualSymbols} disabled={manualLoading}>
                   {manualLoading ? 'Loading…' : 'Load Symbols'}
                 </Button>
-              </div>
+              </div> */}
             </div>
           )}
         </Modal.Body>
