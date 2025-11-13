@@ -98,28 +98,29 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const json = await resp.json();
 
-        const mapped = (json?.rows || []).map((r) => ({
-          date: r.date || date,
-          journalid: r.journalid,
-          accountname: r.accountname,
-          description: r.description,
-          dramount: Number(r.dramount ?? 0),
-          cramount: Number(r.cramount ?? 0),
-          runningbalance: r.runningbalance != null ? Number(r.runningbalance) : null,
-        }));
+        const openingBal = Number(json?.opening_balance ?? 0);
+        let runningBal = openingBal;
+        const mapped = (json?.rows || []).map((r) => {
+          const dramount = Number(r.dramount ?? 0);
+          const cramount = Number(r.cramount ?? 0);
+          runningBal += dramount - cramount;
+
+          return {
+            date: r.date || date,
+            journalid: r.journalid,
+            accountname: r.accountname,
+            description: r.description,
+            dramount,
+            cramount,
+            runningbalance: runningBal,
+          };
+        });
         setRows(mapped);
 
-        const openingBal = Number(json?.opening_balance ?? 0);
         const drT = Number(json?.totals?.dr_total ?? mapped.reduce((s, r) => s + (r.dramount || 0), 0));
         const crT = Number(json?.totals?.cr_total ?? mapped.reduce((s, r) => s + (r.cramount || 0), 0));
 
-        let closingBal;
-        if (selectedAccount) {
-          const lastRB = mapped.length ? mapped[mapped.length - 1].runningbalance : openingBal;
-          closingBal = lastRB == null ? openingBal + (drT - crT) : lastRB;
-        } else {
-          closingBal = openingBal + (drT - crT);
-        }
+        const closingBal = mapped.length ? mapped[mapped.length - 1].runningbalance : openingBal + (drT - crT);
 
         setOpening(openingBal);
         setDrTotal(drT);
