@@ -1456,11 +1456,16 @@ export const ToggleBetweenModals = ({
             />
           </div>
           {!!manualError && <div className="text-danger small mt-2">{manualError}</div>}
-          {!symbols?.length && !manualLoading && (
-            <div className="mt-3">
-              <Button size="sm" variant="outline-primary" onClick={fetchManualSymbols} disabled={manualLoading}>
-                {manualLoading ? 'Loading…' : 'Load Symbols'}
-              </Button>
+          {!symbols?.length && (
+            <div className="mt-3 d-flex flex-column gap-2">
+              <div className="alert alert-info py-2 mb-0 small">
+                No symbols for this month. If you need reports, click <strong>Save</strong> to store an empty pricing for this month.
+              </div>
+              <div>
+                <Button size="sm" variant="outline-primary" onClick={fetchManualSymbols} disabled={manualLoading}>
+                  {manualLoading ? 'Loading…' : 'Load Symbols'}
+                </Button>
+              </div>
             </div>
           )}
         </Modal.Body>
