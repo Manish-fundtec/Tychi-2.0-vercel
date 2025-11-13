@@ -28,28 +28,81 @@ export default function ProfitLossModal({
   const [err, setErr] = useState('');
 
   // fetch P&L rows
+  // useEffect(() => {
+  //   if (!show || !fundId || !date) return;
+  //   (async () => {
+  //     try {
+  //       setLoading(true);
+  //       setErr('');
+  //       const params = new URLSearchParams();
+  //       params.set('date', date);
+  //       if (legacyStrict) params.set('legacy_strict', 'true');
+  //       const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/pnl?${params.toString()}`;
+  //       const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
+  //       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  //       const json = await resp.json();
+  //       const rawRows = Array.isArray(json?.rows) ? json.rows : [];
+  //       const remapGlCode = (code, name) => {
+  //         const normalizedCode = String(code || '').trim();
+  //         const normalizedName = String(name || '').toLowerCase();
+  //         if (normalizedCode === '41000') {
+  //           if (normalizedName.includes('short')) return '41200';
+  //           return '41100';
+  //         }
+  //         return normalizedCode || code || '';
+  //       };
+  //       const normalizedRows = rawRows.map((r) => {
+  //         const remappedCode = remapGlCode(r.gl_code ?? r.glNumber ?? r.glnumber, r.gl_name ?? r.glName);
+  //         const code = String(remappedCode || '').trim();
+  //         const existingCategory = typeof r.category === 'string' ? r.category : '';
+  //         return {
+  //           ...r,
+  //           gl_code: remappedCode,
+  //           glNumber: remappedCode,
+  //           category: !existingCategory && (code === '41100' || code === '41200') ? 'Income' : existingCategory,
+  //         };
+  //       });
+  //       setRows(normalizedRows);
+  //     } catch (e) {
+  //       console.error('[PnL] fetch failed', e);
+  //       setErr('Failed to load P&L data.');
+  //       setRows([]);
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   })();
+  // }, [show, fundId, date, legacyStrict]);
+
   useEffect(() => {
     if (!show || !fundId || !date) return;
     (async () => {
       try {
         setLoading(true);
         setErr('');
+  
         const params = new URLSearchParams();
         params.set('date', date);
         if (legacyStrict) params.set('legacy_strict', 'true');
+  
         const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/pnl?${params.toString()}`;
         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  
         const json = await resp.json();
         const rawRows = Array.isArray(json?.rows) ? json.rows : [];
+  
+        // 🔹 No remapping, take codes as-is from any of the known fields
         const normalizedRows = rawRows.map((r) => {
-          const code = String(r.gl_code || r.glNumber || r.glnumber || '').trim();
-          const existingCategory = typeof r.category === 'string' ? r.category : '';
-          if (!existingCategory && (code === '41100' || code === '41200')) {
-            return { ...r, category: 'Income' };
-          }
-          return r;
+          const code =
+            (r.gl_code ?? r.glNumber ?? r.glnumber ?? r.glCode ?? r.GLCode ?? '').toString().trim();
+          return {
+            ...r,
+            gl_code: code,
+            glNumber: code,
+            // keep existing category untouched
+          };
         });
+  
         setRows(normalizedRows);
       } catch (e) {
         console.error('[PnL] fetch failed', e);
@@ -61,6 +114,7 @@ export default function ProfitLossModal({
     })();
   }, [show, fundId, date, legacyStrict]);
 
+  
   const handleExportCsv = () => {
     if (!rows?.length) {
       alert('No P&L rows to export.');
