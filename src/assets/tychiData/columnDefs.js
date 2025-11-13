@@ -73,7 +73,25 @@ export const TradeColDefs = [
       }
     },
   },
-  { field: 'symbol_id', headerName: 'Symbol ID', sortable: true, filter: true, search: true, flex: 1 },
+  {
+    field: 'symbol_name',
+    headerName: 'Symbol',
+    sortable: true,
+    filter: true,
+    search: true,
+    flex: 1,
+    valueGetter: (params) => params?.data?.symbol_name || params?.data?.symbol_id || '',
+  },
+  {
+    field: 'symbol_code',
+    headerName: 'Symbol Code',
+    sortable: true,
+    filter: true,
+    search: true,
+    flex: 1,
+    hide: true,
+    valueGetter: (params) => params?.data?.symbol_code || params?.data?.symbol_id || '',
+  },
 
   { field: 'price', headerName: 'Price', flex: 1 },
   { field: 'quantity', headerName: 'Quantity', flex: 1 },
