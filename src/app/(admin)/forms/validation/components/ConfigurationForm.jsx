@@ -1528,7 +1528,6 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
   const [exchanges, setExchanges] = useState([])
   const [assetTypes, setAssetTypes] = useState([])
-  const [duplicateError, setDuplicateError] = useState('')
 
   useEffect(() => {
     if (symbol) {
@@ -1566,9 +1565,6 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
-    if (name === 'symbol_name' && duplicateError) {
-      setDuplicateError('')
-    }
   }
 
   const handleSubmit = async (e) => {
@@ -1594,13 +1590,12 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         onSuccess?.()
         onClose?.()
         console.log('📤 Submitting payload:', payload)
-        setDuplicateError('')
       } catch (err) {
         const status = err?.response?.status
         const duplicateMessage = err?.response?.data?.error
         if (status === 409 && duplicateMessage) {
           console.warn('⚠️ Duplicate symbol detected:', duplicateMessage)
-          setDuplicateError(duplicateMessage)
+          alert(duplicateMessage)
         } else {
           console.error('❌ Failed to submit symbol form:', err)
         }
@@ -1620,15 +1615,8 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
       <FormGroup className="col-md-6">
         <FormLabel>Symbol Name</FormLabel>
-        <FormControl
-          name="symbol_name"
-          type="text"
-          required
-          value={form.symbol_name}
-          onChange={handleChange}
-          isInvalid={!!duplicateError}
-        />
-        <Feedback type="invalid">{duplicateError || 'Required'}</Feedback>
+        <FormControl name="symbol_name" type="text" required value={form.symbol_name} onChange={handleChange} />
+        <Feedback type="invalid">Required</Feedback>
       </FormGroup>
 
       <FormGroup className="col-md-6">

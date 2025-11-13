@@ -31,6 +31,7 @@ const SymbolTab = () => {
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState('')
+  const [announceValidation, setAnnounceValidation] = useState(false)
 
   // NEW: grid columns for history
   // ── Columns for history grid
@@ -67,7 +68,7 @@ const SymbolTab = () => {
     [],
   )
   // ── Fetch history (simple)
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async ({ announce = false } = {}) => {
     if (!fund_id) return
     setLoadingHistory(true)
     setHistoryError('')
@@ -93,15 +94,17 @@ const SymbolTab = () => {
 
       const topLevelFailed = typeof payload === 'object' && payload !== null && payload.status === 'Validation Failed'
       const rowFailed = rows.some((row) => String(row.status || '').toLowerCase() === 'validation failed')
-      if (topLevelFailed || rowFailed) {
+      const shouldAlert = announce || announceValidation
+      if (shouldAlert && (topLevelFailed || rowFailed)) {
         alert('Symbol upload validation failed. Check loader history for details.')
       }
     } catch (err) {
       setHistoryError(err?.response?.data?.error || err?.message || 'Failed to load upload history')
     } finally {
       setLoadingHistory(false)
+      if (announce || announceValidation) setAnnounceValidation(false)
     }
-  }, [fund_id])
+  }, [fund_id, announceValidation])
 
   // Fetch on fund change
   useEffect(() => {
@@ -125,6 +128,7 @@ const SymbolTab = () => {
                 fundId={fund_id}
                 onSuccess={() => {
                   refetchSymbols()
+                  setAnnounceValidation(false)
                   fetchHistory()
                 }}
               />
@@ -138,7 +142,8 @@ const SymbolTab = () => {
                   fundId={fund_id}
                   onSuccess={() => {
                     refetchSymbols()
-                    fetchHistory()
+                    setAnnounceValidation(true)
+                    fetchHistory({ announce: true })
                   }}
                 />
               </div>
@@ -186,7 +191,11 @@ const SymbolTab = () => {
 
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <h6 className="m-0">Upload History</h6>
-                  <Button variant="outline-secondary" size="sm" onClick={fetchHistory} disabled={!fund_id || loadingHistory}>
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => fetchHistory()}
+                    disabled={!fund_id || loadingHistory}>
                     {loadingHistory ? 'Refreshing…' : 'Refresh'}
                   </Button>
                 </div>
