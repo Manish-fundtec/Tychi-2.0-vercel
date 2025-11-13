@@ -482,6 +482,22 @@ export const BasicForm = () => {
     'fund_description',
     
   ]
+  const REQUIRED_FIELDS = useMemo(
+    () =>
+      new Set([
+        'fund_name',
+        'fund_description',
+        'fund_address',
+        'incorp_date',
+        'reporting_start_date',
+        'fy_ends_on',
+        'reporting_frequency',
+        'reporting_currency',
+        'decimal_precision',
+        'commission_accounting_method',
+      ]),
+    [],
+  )
   const tradesExist = useMemo(() => {
     if (hasTrades) return true
     if (!formData) return false
@@ -505,6 +521,7 @@ export const BasicForm = () => {
     if (tradesExist) return EDITABLE_WHEN_TRADES.includes(field)
     return EDITABLE_WHEN_NO_TRADES.includes(field)
   }
+  const isFieldRequired = (field) => isEditing && REQUIRED_FIELDS.has(field)
   const roField = (field) => !canEditField(field) // for text/number
   const disField = (field) => !canEditField(field) // for select/date/checkbox
 
@@ -550,7 +567,7 @@ export const BasicForm = () => {
               value={formData.fund_name || ''}
               onChange={onChange('fund_name')}
               readOnly={roField('fund_name')}
-              required
+              required={isFieldRequired('fund_name')}
             />
             <Feedback type="invalid" tooltip>
               Please enter fund name
@@ -578,7 +595,9 @@ export const BasicForm = () => {
               value={formData.fund_description || ''}
               onChange={onChange('fund_description')}
               readOnly={roField('fund_description')}
+              required={isFieldRequired('fund_description')}
             />
+            {isFieldRequired('fund_description') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -589,7 +608,9 @@ export const BasicForm = () => {
               value={formData.fund_address || ''}
               onChange={onChange('fund_address')}
               readOnly={roField('fund_address')}
+              required={isFieldRequired('fund_address')}
             />
+            {isFieldRequired('fund_address') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -601,10 +622,12 @@ export const BasicForm = () => {
               disabled={disField('incorp_date')}
               max={reportingStartDate || undefined}
               isInvalid={isEditing && incorpAfterReporting}
+              required={isFieldRequired('incorp_date')}
             />
             {isEditing && incorpAfterReporting && (
               <div className="invalid-feedback d-block">Incorporation date must be less than or equal to Reporting Start Date.</div>
             )}
+            {isFieldRequired('incorp_date') && !incorpAfterReporting && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -616,15 +639,22 @@ export const BasicForm = () => {
               disabled={disField('reporting_start_date')}
               min={incorpDate || undefined}
               isInvalid={isEditing && incorpAfterReporting}
+              required={isFieldRequired('reporting_start_date')}
             />
             {isEditing && incorpAfterReporting && (
               <div className="invalid-feedback d-block">Reporting Start Date must be greater than or equal to Incorporation Date.</div>
             )}
+            {isFieldRequired('reporting_start_date') && !incorpAfterReporting && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
             <FormLabel>Financial Year Ends On</FormLabel>
-            <Form.Select type="text" value={formData.fy_ends_on || ''} onChange={onChange('fy_ends_on')} disabled={disField('fy_ends_on')}>
+            <Form.Select
+              type="text"
+              value={formData.fy_ends_on || ''}
+              onChange={onChange('fy_ends_on')}
+              disabled={disField('fy_ends_on')}
+              required={isFieldRequired('fy_ends_on')}>
               <option value="">Select</option>
               <option value="January">January</option>
               <option value="February">February</option>
@@ -639,6 +669,7 @@ export const BasicForm = () => {
               <option value="November">November</option>
               <option value="December">December</option>
             </Form.Select>
+            {isFieldRequired('fy_ends_on') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -647,13 +678,15 @@ export const BasicForm = () => {
               type="text"
               value={formData.reporting_frequency || ''}
               onChange={onChange('reporting_frequency')}
-              disabled={disField('reporting_frequency')}>
+              disabled={disField('reporting_frequency')}
+              required={isFieldRequired('reporting_frequency')}>
               <option value="">Select</option>
               <option value="Daily">Daily</option>
               <option value="Monthly">Monthly</option>
               <option value="Quarterly">Quarterly</option>
               <option value="Annually">Annually</option>
             </Form.Select>
+            {isFieldRequired('reporting_frequency') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -662,7 +695,8 @@ export const BasicForm = () => {
               type="text"
               value={formData.reporting_currency || ''}
               onChange={onChange('reporting_currency')}
-              disabled={disField('reporting_currency')}>
+              disabled={disField('reporting_currency')}
+              required={isFieldRequired('reporting_currency')}>
               <option value="">Select</option>
               {currencies
                 .slice()
@@ -673,6 +707,7 @@ export const BasicForm = () => {
                   </option>
                 ))}
             </Form.Select>
+            {isFieldRequired('reporting_currency') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -686,12 +721,14 @@ export const BasicForm = () => {
                   decimal_precision: e.target.value === '' ? '' : Number(e.target.value),
                 }))
               }
-              disabled={disField('decimal_precision')}>
+              disabled={disField('decimal_precision')}
+              required={isFieldRequired('decimal_precision')}>
               <option value="1">1</option>
               <option value="2">2</option>
               <option value="3">3</option>
               <option value="4">4</option>
             </Form.Select>
+            {isFieldRequired('decimal_precision') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -700,11 +737,13 @@ export const BasicForm = () => {
               type="text"
               value={commissionLabel(formData.commission_accounting_method)}
               onChange={onChange('commission_accounting_method')}
-              disabled={disField('commission_accounting_method')}>
+              disabled={disField('commission_accounting_method')}
+              required={isFieldRequired('commission_accounting_method')}>
               <option value="">Select</option>
               <option value="capitalize">Capitalize</option>
               <option value="expense">Expense</option>
             </Form.Select>
+            {isFieldRequired('commission_accounting_method') && <Feedback type="invalid">Required</Feedback>}
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
@@ -1489,6 +1528,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
   const [exchanges, setExchanges] = useState([])
   const [assetTypes, setAssetTypes] = useState([])
+  const [duplicateError, setDuplicateError] = useState('')
 
   useEffect(() => {
     if (symbol) {
@@ -1526,6 +1566,9 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
+    if (name === 'symbol_name' && duplicateError) {
+      setDuplicateError('')
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -1551,12 +1594,13 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         onSuccess?.()
         onClose?.()
         console.log('📤 Submitting payload:', payload)
+        setDuplicateError('')
       } catch (err) {
         const status = err?.response?.status
         const duplicateMessage = err?.response?.data?.error
         if (status === 409 && duplicateMessage) {
           console.warn('⚠️ Duplicate symbol detected:', duplicateMessage)
-          alert(duplicateMessage)
+          setDuplicateError(duplicateMessage)
         } else {
           console.error('❌ Failed to submit symbol form:', err)
         }
@@ -1576,8 +1620,15 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
       <FormGroup className="col-md-6">
         <FormLabel>Symbol Name</FormLabel>
-        <FormControl name="symbol_name" type="text" required value={form.symbol_name} onChange={handleChange} />
-        <Feedback type="invalid">Required</Feedback>
+        <FormControl
+          name="symbol_name"
+          type="text"
+          required
+          value={form.symbol_name}
+          onChange={handleChange}
+          isInvalid={!!duplicateError}
+        />
+        <Feedback type="invalid">{duplicateError || 'Required'}</Feedback>
       </FormGroup>
 
       <FormGroup className="col-md-6">
