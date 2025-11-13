@@ -78,38 +78,6 @@ export default function TradesData() {
     refreshTrades()
   }, [refreshTrades])
 
-  // 3) fetch upload history
-  // const fetchTradeHistory = useCallback(async () => {
-  //   if (!fundId) {
-  //     setHistory([])
-  //     return
-  //   }
-
-  //   try {
-  //     setLoadingHistory(true)
-  //     setHistoryError('')
-  //     // 👇 this is the route we just created in backend
-  //     const { data } = await api.get('/api/v1/trade/uploads/history', {
-  //       params: { fund_id: fundId },
-  //     })
-
-  //     // backend returns { success, data, count }
-  //     const rows = Array.isArray(data?.data) ? data.data : []
-  //     setHistory(rows)
-  //   } catch (err) {
-  //     console.error('[Trades] fetch trade upload history failed:', err)
-  //     setHistoryError(err?.response?.data?.message || 'Failed to load upload history')
-  //     setHistory([])
-  //   } finally {
-  //     setLoadingHistory(false)
-  //   }
-  // }, [fundId])
-
-  // useEffect(() => {
-  //   if (!fundId) return
-  //   refreshTrades()
-  //   // fetchTradeHistory() //  NEW: also load history when fund changes
-  // }, [fundId, refreshTrades, fetchTradeHistory])
 
   const columnDefs = useMemo(() => {
     return (TradeColDefs || []).map((col) => {

@@ -45,9 +45,23 @@ export const useSymbolData = (fundId) => {
   }
 
   const handleDelete = async (id) => {
-    if (confirm('Are you sure you want to delete this symbol?')) {
+    if (!id) return
+
+    const confirmed = window.confirm('Are you sure you want to delete this symbol?')
+    if (!confirmed) return
+
+    try {
       await deleteSymbol(id)
-      refetchSymbols()
+      await refetchSymbols()
+      window.alert('Symbol deleted successfully.')
+    } catch (err) {
+      console.error('Delete symbol failed:', err)
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Failed to delete symbol.'
+      window.alert(message)
     }
   }
 

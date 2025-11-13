@@ -17,6 +17,8 @@ function getAuthHeaders() {
 const fmt = (v) =>
   Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const EXCLUDED_PARENT_GL_CODES = new Set(['11000', '12000', '21200']);
+
 /**
  * Balance Sheet – pulls only from chartofaccounts + journals (as-of date)
  * Sections: Assets, Liabilities, Equity
@@ -55,12 +57,20 @@ export default function BalanceSheetModal({
         const json = await resp.json();
 
         // backend shape per our repo: { success, data: { assets, liabilities, equity, totals } }
-        const merged =
-          json?.data
-            ? [...(json.data.assets || []), ...(json.data.liabilities || []), ...(json.data.equity || [])]
-            : Array.isArray(json?.rows) ? json.rows : [];
+        const merged = json?.data
+          ? [...(json.data.assets || []), ...(json.data.liabilities || []), ...(json.data.equity || [])]
+          : Array.isArray(json?.rows)
+          ? json.rows
+          : [];
 
-        setRows(Array.isArray(merged) ? merged : []);
+        const filtered = Array.isArray(merged)
+          ? merged.filter((row) => {
+              const glCode = String(row?.gl_code || row?.glNumber || row?.glnumber || '').trim();
+              return glCode && !EXCLUDED_PARENT_GL_CODES.has(glCode);
+            })
+          : [];
+
+        setRows(filtered);
       } catch (e) {
         console.error('[BS] fetch failed', e);
         setErr('Failed to load Balance Sheet.');
@@ -70,6 +80,49 @@ export default function BalanceSheetModal({
       }
     })();
   }, [show, fundId, date, retainedGl]);
+
+  const handleExportCsv = () => {
+    if (!rows?.length) {
+      alert('No balance sheet rows to export.');
+      return;
+    }
+
+    const headers = [
+      { key: 'category', label: 'Category' },
+      { key: 'gl_code', label: 'GL Number' },
+      { key: 'gl_name', label: 'GL Name' },
+      { key: 'amount', label: 'Amount' },
+    ];
+
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? '');
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return '"' + stringValue.replace(/"/g, '""') + '"';
+      }
+      return stringValue;
+    };
+
+    const formatValue = (key, value) => (key === 'amount' ? fmt(value) : value ?? '');
+
+    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const dataRows = rows.map((row) =>
+      headers
+        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+        .join(','),
+    );
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `balance-sheet-${fundId || 'fund'}-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // group, sort, totals, check
   const {
@@ -185,7 +238,10 @@ export default function BalanceSheetModal({
         )}
       </Modal.Body>
 
-      <Modal.Footer>
+      <Modal.Footer className="d-flex justify-content-end gap-2">
+        <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
+          Export CSV
+        </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>
     </Modal>

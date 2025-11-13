@@ -196,7 +196,19 @@ export default function Reconciliation2Page() {
           statusText: resp.statusText,
           error: errorText
         });
-        throw new Error(`HTTP ${resp.status}: ${errorText || resp.statusText}`);
+        let message = `HTTP ${resp.status}`;
+        if (errorText) {
+          try {
+            const parsed = JSON.parse(errorText);
+            message =
+              (typeof parsed?.message === 'string' && parsed.message) ||
+              (typeof parsed?.error === 'string' && parsed.error) ||
+              message;
+          } catch (_) {
+            message = errorText;
+          }
+        }
+        throw new Error(message);
       }
       
       const json = await resp.json();
@@ -259,7 +271,7 @@ export default function Reconciliation2Page() {
       }
     } catch (e) {
       console.error('[reconciliation2] reopen failed:', e);
-      alert('Failed to reopen reconciliation');
+      alert(e?.message || 'Failed to reopen reconciliation');
     }
   };
 
@@ -318,18 +330,46 @@ export default function Reconciliation2Page() {
           statement_balance: Number(statementBalance || 0)
         })
       });
+      const raw = await resp.text().catch(() => '');
+      
       if (!resp.ok) {
-        const errorText = await resp.text().catch(() => '');
-        console.error('[reconciliation2] Reconcile failed:', {
-          status: resp.status,
-          statusText: resp.statusText,
-          error: errorText
-        });
-        throw new Error(`HTTP ${resp.status}: ${errorText || resp.statusText}`);
+        let message = `HTTP ${resp.status}`;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            message =
+              (typeof parsed?.message === 'string' && parsed.message) ||
+              (typeof parsed?.error === 'string' && parsed.error) ||
+              message;
+          } catch (_) {
+            message = raw;
+          }
+        }
+        console.error('[reconciliation2] Reconcile failed:', message);
+        throw new Error(message);
       }
       
-      const json = await resp.json();
+      let json = null;
+      if (raw) {
+        try {
+          json = JSON.parse(raw);
+        } catch (_) {
+          json = null;
+        }
+      }
       
+      if (json && json.success === false) {
+        const serverMessage =
+          (typeof json.message === 'string' && json.message) ||
+          (typeof json.error === 'string' && json.error) ||
+          'Failed to reconcile.';
+        throw new Error(serverMessage);
+      }
+      
+      if (!json) {
+        json = {};
+      }
+       
       // Log full response for debugging
       console.log('[reconciliation2] Reconcile response:', {
         success: json?.success,
@@ -403,7 +443,7 @@ export default function Reconciliation2Page() {
       }
     } catch (e) {
       console.error('[reconciliation2] reconcile failed:', e);
-      alert('Failed to reconcile');
+      alert(e?.message || 'Failed to reconcile');
     }
   };
 

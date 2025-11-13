@@ -127,10 +127,39 @@ const ReportsPage = () => {
 
   // Optional: one place to download any report using selectedDate + fundId
   const handleDownloadReport = (report, format) => {
-    if (!fundId || !selectedDate) return alert('Missing fund or period date.')
-    const slug = report.title.toLowerCase().replace(/\s+/g, '-')
-    const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/${slug}?date=${encodeURIComponent(selectedDate)}&format=${encodeURIComponent(format)}`
-    // simple open; you can switch to fetch + blob download if needed
+    if (!fundId || !selectedDate) {
+      alert('Missing fund or period date.')
+      return
+    }
+
+    const title = String(report?.title || '').trim().toLowerCase()
+
+    const endpointConfig = {
+      'lot summary': { path: 'lot-summary', params: { scope: 'MTD' } },
+      rpnl: { path: 'realized-pnl' },
+      'purchase & sales': { path: 'sales-purchase', params: { scope: 'monthly' } },
+      'balance sheet': { path: 'balance-sheet-journals', params: { retained_gl: '34000' } },
+      'profit and loss': { path: 'pnl' },
+      'trial balance': { path: 'gl-trial', params: { scope: 'MTD' } },
+      'trial balance qtd': { path: 'gl-trial', params: { scope: 'QTD' } },
+      'trial balance ytd': { path: 'gl-trial', params: { scope: 'YTD' } },
+      'gl reports': { path: 'gl', params: { scope: 'MTD' } },
+    }
+
+    const config = endpointConfig[title]
+    if (!config) {
+      alert(`Download not configured for "${report?.title}" yet.`)
+      return
+    }
+
+    const params = new URLSearchParams({ date: selectedDate, format })
+    if (config.params) {
+      Object.entries(config.params).forEach(([key, value]) => {
+        if (value != null && value !== '') params.set(key, value)
+      })
+    }
+
+    const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/${config.path}?${params.toString()}`
     window.open(url, '_blank')
   }
 
@@ -207,7 +236,7 @@ const ReportsPage = () => {
                                 <Button variant="outline-primary" size="sm" onClick={() => handleViewReport(report)}>
                                   <Eye size={16} /> View
                                 </Button>
-                                <Dropdown>
+                                {/* <Dropdown>
                                   <Dropdown.Toggle variant="outline-success" size="sm" className="d-flex align-items-center">
                                     <Download size={16} />
                                   </Dropdown.Toggle>
@@ -217,7 +246,7 @@ const ReportsPage = () => {
                                     <DropdownItem onClick={() => handleDownloadReport(report, 'pdf')}>📕 PDF</DropdownItem>
                                     <DropdownItem onClick={() => handleDownloadReport(report, 'txt')}>📜 TXT</DropdownItem>
                                   </Dropdown.Menu>
-                                </Dropdown>
+                                </Dropdown> */}
                               </div>
                             </CardBody>
                           </Card>

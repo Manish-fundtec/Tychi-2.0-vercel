@@ -19,10 +19,16 @@ const DeleteTradeButton = (props) => {
       // Remove from grid without reload
       if (props.api) props.api.applyTransaction({ remove: [props.data] });
 
-      alert('Trade deleted successfully');
-    } catch (error) {
-      console.error(error);
-      alert(error?.response?.data?.error || 'Failed to delete trade');
+      window.alert('Symbol deleted successfully.')
+    } catch (err) {
+      console.error('Delete symbol failed:', err)
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Failed to delete symbol.'
+      window.alert(message)
+    
     } finally {
       setLoading(false);
     }

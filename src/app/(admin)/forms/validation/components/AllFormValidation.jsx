@@ -329,6 +329,7 @@ export const AddTrade = ({ onClose, onCreated }) => {
   const [fundId, setFundId] = useState('')
   const [orgId, setOrgId] = useState('')
   const [amountLocked, setAmountLocked] = useState(true)
+  const [reportingStartDate, setReportingStartDate] = useState('')
 
   const [calc, setCalc] = useState({
     commissionMethod: '',
@@ -360,6 +361,18 @@ export const AddTrade = ({ onClose, onCreated }) => {
       const decoded = jwt.decode(token)
       setFundId(decoded?.fund_id || '')
       setOrgId(decoded?.org_id || '')
+
+      const rawRsd =
+        decoded?.fund?.reporting_start_date ||
+        decoded?.reporting_start_date ||
+        decoded?.reportingStartDate ||
+        decoded?.RSD ||
+        decoded?.fund_start_date
+
+      if (rawRsd) {
+        const match = String(rawRsd).match(/^\d{4}-\d{2}-\d{2}/)
+        setReportingStartDate(match ? match[0] : String(rawRsd).slice(0, 10))
+      }
     } catch (err) {
       console.error('Error decoding token:', err)
     }
@@ -497,6 +510,12 @@ export const AddTrade = ({ onClose, onCreated }) => {
       return
     }
 
+    if (reportingStartDate && formData.trade_date < reportingStartDate) {
+      alert(`Trade date cannot be earlier than fund start date (${reportingStartDate}).`)
+      setValidated(true)
+      return
+    }
+
     const price = toNum(formData.price)
     const commission = toNum(formData.commission)
     if (price === 0 && commission !== 0) {
@@ -563,7 +582,14 @@ export const AddTrade = ({ onClose, onCreated }) => {
 
       <FormGroup className="position-relative col-md-6">
         <FormLabel>Date</FormLabel>
-        <FormControl type="date" name="trade_date" value={formData.trade_date} onChange={handleChange} required />
+        <FormControl
+          type="date"
+          name="trade_date"
+          value={formData.trade_date}
+          onChange={handleChange}
+          required
+          min={reportingStartDate || undefined}
+        />
         <Feedback type="invalid" tooltip>
           Please enter a Date.
         </Feedback>

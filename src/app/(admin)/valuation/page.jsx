@@ -215,9 +215,40 @@ export default function ReviewsPage() {
         credentials: 'include',
         body: JSON.stringify({ date: row.date }),
       });
+
+      const raw = await resp.text().catch(() => '');
+
       if (!resp.ok) {
-        const txt = await resp.text().catch(() => '');
-        throw new Error(`HTTP ${resp.status} ${txt}`);
+        let message = `HTTP ${resp.status}`;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            message =
+              (typeof parsed?.message === 'string' && parsed.message) ||
+              (typeof parsed?.error === 'string' && parsed.error) ||
+              message;
+          } catch (_) {
+            message = raw;
+          }
+        }
+        throw new Error(message);
+      }
+
+      let parsed = null;
+      if (raw) {
+        try {
+          parsed = JSON.parse(raw);
+        } catch (_) {
+          // ignore malformed JSON, treat as plain text success
+        }
+      }
+
+      if (parsed && parsed.success === false) {
+        const serverMessage =
+          (typeof parsed.message === 'string' && parsed.message) ||
+          (typeof parsed.error === 'string' && parsed.error) ||
+          'Revert failed.';
+        throw new Error(serverMessage);
       }
 
       // refresh UI: mark this row reverted and recompute "latest completed"
@@ -235,8 +266,9 @@ export default function ReviewsPage() {
 
       alert('Reverted successfully.');
     } catch (e) {
+      const message = e?.message || 'Revert failed.';
       console.error('[Valuation] revert failed:', e);
-      alert('Revert failed.');
+      alert(message);
     }
   }
 

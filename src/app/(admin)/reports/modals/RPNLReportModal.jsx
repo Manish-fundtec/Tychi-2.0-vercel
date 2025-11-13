@@ -38,9 +38,55 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const json = await resp.json();
 
-        // backend handler returns: { ok, period, rows, totals, count }
-        setRows(Array.isArray(json?.rows) ? json.rows : []);
-        setTotals(json?.totals || { quantity:0, closingProceeds:0, longTermRpnl:0, shortTermRpnl:0, totalRpnl:0 });
+        const rawRows = Array.isArray(json?.rows) ? json.rows : [];
+        const mappedRows = rawRows.map((r) => {
+          const openPrice = Number(r.openPrice ?? r.open_price ?? 0);
+          const closePrice = Number(r.closePrice ?? r.close_price ?? 0);
+          const quantity = Number(r.quantity ?? 0);
+          const closingProceeds = closePrice * quantity;
+          return {
+            symbol: r.symbol,
+            tradeId: r.tradeId ?? r.trade_id,
+            lotId: r.lotId ?? r.lot_id,
+            openDate: (r.openDate ?? r.open_date ?? '').slice(0, 10),
+            openPrice,
+            closeDate: (r.closeDate ?? r.close_date ?? '').slice(0, 10),
+            closePrice,
+            quantity,
+            closingProceeds,
+            longTermRpnl: Number(r.longTermRpnl ?? r.long_term_rpnl ?? 0),
+            shortTermRpnl: Number(r.shortTermRpnl ?? r.short_term_rpnl ?? 0),
+            totalRpnl: Number(r.totalRpnl ?? r.total_rpnl ?? 0),
+          };
+        });
+
+        setRows(mappedRows);
+
+        const totalsFromApi = json?.totals || {};
+        const totalsComputed = {
+          quantity:
+            totalsFromApi.quantity != null
+              ? Number(totalsFromApi.quantity)
+              : mappedRows.reduce((sum, r) => sum + Number(r.quantity || 0), 0),
+          closingProceeds:
+            totalsFromApi.closingProceeds != null || totalsFromApi.closing_proceeds != null
+              ? Number(totalsFromApi.closingProceeds ?? totalsFromApi.closing_proceeds)
+              : mappedRows.reduce((sum, r) => sum + Number(r.closingProceeds || 0), 0),
+          longTermRpnl:
+            totalsFromApi.longTermRpnl != null || totalsFromApi.long_term_rpnl != null
+              ? Number(totalsFromApi.longTermRpnl ?? totalsFromApi.long_term_rpnl)
+              : mappedRows.reduce((sum, r) => sum + Number(r.longTermRpnl || 0), 0),
+          shortTermRpnl:
+            totalsFromApi.shortTermRpnl != null || totalsFromApi.short_term_rpnl != null
+              ? Number(totalsFromApi.shortTermRpnl ?? totalsFromApi.short_term_rpnl)
+              : mappedRows.reduce((sum, r) => sum + Number(r.shortTermRpnl || 0), 0),
+          totalRpnl:
+            totalsFromApi.totalRpnl != null || totalsFromApi.total_rpnl != null
+              ? Number(totalsFromApi.totalRpnl ?? totalsFromApi.total_rpnl)
+              : mappedRows.reduce((sum, r) => sum + Number(r.totalRpnl || 0), 0),
+        };
+
+        setTotals(totalsComputed);
         console.log('[RPNL] rows:', json?.rows?.length, json);  // << debug
       } catch (e) {
         console.error('[RPNL] fetch failed', e);
@@ -51,6 +97,71 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       }
     })();
   }, [show, fundId, date, orgId]);
+
+  const handleExportCsv = () => {
+    if (!rows?.length) {
+      alert('No realized P&L rows to export.');
+      return;
+    }
+
+    const headers = [
+      { key: 'symbol', label: 'Symbol' },
+      { key: 'tradeId', label: 'Trade ID' },
+      { key: 'lotId', label: 'Lot ID' },
+      { key: 'openDate', label: 'Open Date' },
+      { key: 'openPrice', label: 'Open Price' },
+      { key: 'closeDate', label: 'Close Date' },
+      { key: 'closePrice', label: 'Close Price' },
+      { key: 'closingProceeds', label: 'Closing Proceeds' },
+      { key: 'quantity', label: 'Quantity' },
+      { key: 'longTermRpnl', label: 'Long Term RPNL' },
+      { key: 'shortTermRpnl', label: 'Short Term RPNL' },
+      { key: 'totalRpnl', label: 'Total RPNL' },
+    ];
+
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? '');
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return '"' + stringValue.replace(/"/g, '""') + '"';
+      }
+      return stringValue;
+    };
+
+    const formatValue = (key, value) => {
+      switch (key) {
+        case 'openPrice':
+        case 'closePrice':
+        case 'closingProceeds':
+        case 'longTermRpnl':
+        case 'shortTermRpnl':
+        case 'totalRpnl':
+          return fmt(value);
+        case 'quantity':
+          return fmt(value);
+        default:
+          return value ?? '';
+      }
+    };
+
+    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const dataRows = rows.map((row) =>
+      headers
+        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+        .join(','),
+    );
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `realized-pnl-${fundId || 'fund'}-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Modal show={show} onHide={handleClose} size="xl" centered>
@@ -79,6 +190,7 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
                   <th>Open Price</th>
                   <th>Close Date</th>
                   <th>Close Price</th>
+                  <th className="text-end">Closing Proceeds</th>
                   <th className="text-end">Quantity</th>
                   <th className="text-end">Long Term RPNL</th>
                   <th className="text-end">Short Term RPNL</th>
@@ -95,6 +207,7 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
                     <td>{fmt(r.openPrice)}</td>
                     <td>{r.closeDate ?? ''}</td>
                     <td>{fmt(r.closePrice)}</td>
+                    <td className="text-end">{fmt(r.closingProceeds)}</td>
                     <td className="text-end">{fmt(r.quantity)}</td>
                     <td className="text-end">{fmt(r.longTermRpnl)}</td>
                     <td className="text-end">{fmt(r.shortTermRpnl)}</td>
@@ -104,6 +217,7 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
 
                 <tr className="table-light fw-semibold">
                   <td colSpan={7}>Totals</td>
+                  <td className="text-end">{fmt(totals.closingProceeds)}</td>
                   <td className="text-end">{fmt(totals.quantity)}</td>
                   <td className="text-end">{fmt(totals.longTermRpnl)}</td>
                   <td className="text-end">{fmt(totals.shortTermRpnl)}</td>
@@ -115,7 +229,10 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
         )}
       </Modal.Body>
 
-      <Modal.Footer>
+      <Modal.Footer className="d-flex justify-content-end gap-2">
+        <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
+          Export CSV
+        </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>
     </Modal>

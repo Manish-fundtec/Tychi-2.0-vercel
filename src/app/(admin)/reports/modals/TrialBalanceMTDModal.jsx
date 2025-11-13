@@ -32,6 +32,8 @@ const glToCategory = (gl) => {
   return 'Other';
 };
 
+const EXCLUDED_PARENT_GL_CODES = new Set(['11000', '12000', '21200']);
+
 export default function TrialBalanceModalGrouped({
   show,
   handleClose,
@@ -67,7 +69,10 @@ export default function TrialBalanceModalGrouped({
           debit: Number(r.debit_amount ?? r.debit ?? 0),
           credit: Number(r.credit_amount ?? r.credit ?? 0),
           closing: Number(r.closing_balance ?? r.closingbalance ?? 0),
-        }));
+        })).filter(item => {
+          const code = String(item.glNumber || '').trim();
+          return code && !EXCLUDED_PARENT_GL_CODES.has(code);
+        });
 
         setRows(data);
       } catch (e) {
@@ -135,6 +140,57 @@ export default function TrialBalanceModalGrouped({
     const grand = { opening: G_open, debit: G_dr, credit: G_cr, closing: G_close };
     return { sections, grand };
   }, [rows]);
+
+  const handleExportCsv = () => {
+    const flatRows = groups.sections.flatMap((sec) =>
+      sec.rows.map((r) => ({ ...r, category: sec.category })),
+    );
+
+    if (!flatRows.length) {
+      alert('No trial balance rows to export.');
+      return;
+    }
+
+    const headers = [
+      { key: 'category', label: 'Category' },
+      { key: 'glNumber', label: 'GL Number' },
+      { key: 'glName', label: 'GL Name' },
+      { key: 'opening', label: 'Opening Balance' },
+      { key: 'debit', label: 'Debit' },
+      { key: 'credit', label: 'Credit' },
+      { key: 'closing', label: 'Closing Balance' },
+    ];
+
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? '');
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return '"' + stringValue.replace(/"/g, '""') + '"';
+      }
+      return stringValue;
+    };
+
+    const formatValue = (key, value) =>
+      ['opening', 'debit', 'credit', 'closing'].includes(key) ? fmt(value) : value ?? '';
+
+    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const dataRows = flatRows.map((row) =>
+      headers
+        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+        .join(','),
+    );
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `trial-balance-${scope}-${fundId || 'fund'}-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Modal show={show} onHide={handleClose} size="xl" centered>
@@ -223,7 +279,10 @@ export default function TrialBalanceModalGrouped({
         )}
       </Modal.Body>
 
-      <Modal.Footer>
+      <Modal.Footer className="d-flex justify-content-end gap-2">
+        <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
+          Export CSV
+        </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>
     </Modal>
