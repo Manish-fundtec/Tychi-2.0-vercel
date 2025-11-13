@@ -125,10 +125,10 @@ export default function BalanceSheetModal({
   };
 
   // group, sort, totals, check
-  const {
-    assets, liabilities, equity,
-    totA, totL, totE, diff,
-  } = useMemo(() => {
+const {
+  assets, liabilities, equity,
+  totA, totL, totE, totalLiabilitiesAndEquity,
+} = useMemo(() => {
     const byCat = (cat) =>
       rows
         .filter(r => String(r.category || '').toLowerCase() === cat)
@@ -149,10 +149,9 @@ export default function BalanceSheetModal({
     const totL = sum(liabilities, 'amount');
     const totE = sum(equity, 'amount');
 
-    // Accounting check: Assets ?= Liabilities + Equity
-    const diff = totA - (totL + totE);
+  const totalLiabilitiesAndEquity = totL + totE;
 
-    return { assets, liabilities, equity, totA, totL, totE, diff };
+  return { assets, liabilities, equity, totA, totL, totE, totalLiabilitiesAndEquity };
   }, [rows]);
 
   const renderSection = (title, data) => (
@@ -219,21 +218,12 @@ export default function BalanceSheetModal({
                   <td className="text-end">{fmt(totE)}</td>
                 </tr>
 
-                {/* BALANCE CHECK */}
-                <tr className={`table-light fw-bold ${Math.abs(diff) > 0.005 ? 'text-danger' : 'text-success'}`}>
-                  <td colSpan={2}>
-                    Balance Check (A − (L + E))
-                  </td>
-                  <td className="text-end">{fmt(diff)}</td>
+                <tr className="table-light fw-bold">
+                  <td colSpan={2}>Total Liabilities &amp; Equities</td>
+                  <td className="text-end">{fmt(totalLiabilitiesAndEquity)}</td>
                 </tr>
               </tbody>
             </Table>
-            {/* hint if not balanced */}
-            {Math.abs(diff) > 0.005 && (
-              <div className="small text-danger">
-                Not balanced: investigate journals, category mapping, or retained earnings GL.
-              </div>
-            )}
           </div>
         )}
       </Modal.Body>
