@@ -990,20 +990,34 @@ export const ToggleBetweenModals = ({
     const rows = []
     agGridRef.current?.api?.forEachNode((n) => rows.push({ ...n.data }))
 
-    const entries = rows
-      .filter((r) => r.name && r.price !== '' && Number.isFinite(Number(r.price)) && Number(r.price) >= 0)
-      .map((r) => ({ symbol: r.name, price: Number(r.price) }))
+    const entries = []
+    for (const r of rows) {
+      const name = (r?.name || '').trim()
+      if (!name) continue
 
-    if (!entries.length) {
-      setManualError('Please enter at least one valid non-negative price.')
-      return
+      const value = r?.price
+
+      if (value === '' || value === null || typeof value === 'undefined') {
+        entries.push({ symbol: name, price: null })
+        continue
+      }
+
+      const priceNum = Number(value)
+      if (!Number.isFinite(priceNum) || priceNum < 0) {
+        setManualError(`Invalid price for ${name}. Please enter a non-negative number.`)
+        return
+      }
+
+      entries.push({ symbol: name, price: priceNum })
     }
+
+    const payload = entries.length ? entries : [{ symbol: '', price: null }]
 
     try {
       setManualError('')
       setSavingManual(true)
 
-      await postManualPricing(entries)
+      await postManualPricing(payload)
 
       // Close ALL modals after successful save
       setManualOpen(false)
