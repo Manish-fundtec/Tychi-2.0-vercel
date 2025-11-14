@@ -1588,7 +1588,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
     cusip: '',
     contract_size: '',
     exchange_id: '',
-    assettype_id: '',
+    asset_type_id: '',
   })
 
   const [exchanges, setExchanges] = useState([])
@@ -1603,7 +1603,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         cusip: symbol.cusip || '',
         contract_size: symbol.contract_size || '',
         exchange_id: symbol.exchange_id || '',
-        asset_type_id: symbol.assettype_id || '',
+        asset_type_id: symbol.asset_type_id || symbol.assettype_id || '',
       })
     }
   }, [symbol])

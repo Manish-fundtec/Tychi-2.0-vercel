@@ -23,6 +23,12 @@ import { symbolColDefs } from '@/assets/tychiData/columnDefs'
 import api from '@/lib/api/axios' // NEW: for history fetch
 import Cookies from 'js-cookie'
 
+const normalizeStatusText = (value) => String(value || '')
+  .replace(/<[^>]+>/g, '')
+  .replace(/&nbsp;/gi, ' ')
+  .trim()
+  .toLowerCase()
+
 const SymbolTab = () => {
   const { fund_id } = useDashboardToken() || {}
   const { symbols, refetchSymbols, editingSymbol, setEditingSymbol, showModal, setShowModal, handleEdit, handleDelete } = useSymbolData(fund_id)
@@ -41,18 +47,18 @@ const SymbolTab = () => {
       { headerName: 'File Name', field: 'file_name', sortable: true, filter: true, flex: 1 },
       {
         headerName: 'Status',
-        field: 'status',
+        field: 'plain_status',
         sortable: true,
         filter: true,
         flex: 1,
-        cellRenderer: (params) => {
-          const status = (params?.value || '').toString()
-          const s = status.toLowerCase()
-          let cls = 'badge bg-secondary'
-          if (s === 'validated' || s === 'success') cls = 'badge bg-success'
-          else if (s === 'failed' || s === 'error') cls = 'badge bg-danger'
-          else if (s === 'pending' || s === 'processing') cls = 'badge bg-warning'
-          return `<span class="${cls}">${status}</span>`
+        valueFormatter: (params) => {
+          const raw = params?.data?.plain_status || ''
+          if (!raw) return params?.value || ''
+          return raw.replace(/\b\w/g, (c) => c.toUpperCase())
+        },
+        cellClassRules: {
+          'text-success fw-semibold': (p) => p?.data?.plain_status === 'completed',
+          'text-danger fw-semibold': (p) => p?.data?.plain_status === 'validation failed',
         },
       },
       {
@@ -86,16 +92,26 @@ const SymbolTab = () => {
       else if (Array.isArray(payload?.data)) rows = payload.data
       else if (Array.isArray(payload?.data?.rows)) rows = payload.data.rows
       // normalize uploaded_at if your API returns created_at instead
-      const normalized = rows.map((r) => ({
-        ...r,
-        uploaded_at: r.date_and_time || r.uploaded_at || r.created_at || null,
-      }))
+      const normalized = rows
+        .map((r) => ({
+          ...r,
+          uploaded_at: r.date_and_time || r.uploaded_at || r.created_at || null,
+          plain_status: normalizeStatusText(r.status),
+        }))
+        .sort((a, b) => {
+          const aTime = a.uploaded_at ? new Date(a.uploaded_at).getTime() : 0
+          const bTime = b.uploaded_at ? new Date(b.uploaded_at).getTime() : 0
+          return bTime - aTime
+        })
       setHistory(normalized)
 
       const topLevelFailed = typeof payload === 'object' && payload !== null && payload.status === 'Validation Failed'
-      const rowFailed = rows.some((row) => String(row.status || '').toLowerCase() === 'validation failed')
       const shouldAlert = announce || announceValidation
-      if (shouldAlert && (topLevelFailed || rowFailed)) {
+      const latestRowFailed = normalized.length
+        ? normalizeStatusText(normalized[0].status) === 'validation failed'
+        : false
+
+      if (shouldAlert && (topLevelFailed || latestRowFailed)) {
         alert('Symbol upload validation failed. Check loader history for details.')
       }
     } catch (err) {
@@ -220,6 +236,10 @@ const SymbolTab = () => {
                   <AgGridReact
                     rowData={history}
                     columnDefs={historyColDefs}
+                    rowClassRules={{
+                      'bg-success-subtle': (p) => p?.data?.plain_status === 'completed',
+                      'bg-danger-subtle text-black': (p) => p?.data?.plain_status === 'validation failed',
+                    }}
                     pagination
                     paginationPageSize={10}
                     defaultColDef={{ sortable: true, filter: true, resizable: true }}
