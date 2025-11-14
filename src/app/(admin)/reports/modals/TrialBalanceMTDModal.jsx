@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, Fragment } from 'react';
 import Cookies from 'js-cookie';
 import { Button, Modal, Table, Form, Row, Col, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
+import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -45,6 +46,20 @@ export default function TrialBalanceModalGrouped({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const exportHeaders = useMemo(
+    () => [
+      { key: 'category', label: 'Category' },
+      { key: 'glNumber', label: 'GL Number' },
+      { key: 'glName', label: 'GL Name' },
+      { key: 'opening', label: 'Opening Balance' },
+      { key: 'debit', label: 'Debit' },
+      { key: 'credit', label: 'Credit' },
+      { key: 'closing', label: 'Closing Balance' },
+    ],
+    [],
+  );
+  const formatExportValue = (key, value) =>
+    ['opening', 'debit', 'credit', 'closing'].includes(String(key)) ? fmt(value) : value ?? '';
 
   // fetch TB rows
   useEffect(() => {
@@ -151,16 +166,6 @@ export default function TrialBalanceModalGrouped({
       return;
     }
 
-    const headers = [
-      { key: 'category', label: 'Category' },
-      { key: 'glNumber', label: 'GL Number' },
-      { key: 'glName', label: 'GL Name' },
-      { key: 'opening', label: 'Opening Balance' },
-      { key: 'debit', label: 'Debit' },
-      { key: 'credit', label: 'Credit' },
-      { key: 'closing', label: 'Closing Balance' },
-    ];
-
     const escapeCsv = (value) => {
       const stringValue = String(value ?? '');
       if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
@@ -169,13 +174,10 @@ export default function TrialBalanceModalGrouped({
       return stringValue;
     };
 
-    const formatValue = (key, value) =>
-      ['opening', 'debit', 'credit', 'closing'].includes(key) ? fmt(value) : value ?? '';
-
-    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const headerRow = exportHeaders.map(({ label }) => escapeCsv(label)).join(',');
     const dataRows = flatRows.map((row) =>
-      headers
-        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+      exportHeaders
+        .map(({ key }) => escapeCsv(formatExportValue(key, row[key])))
         .join(','),
     );
 
@@ -190,6 +192,21 @@ export default function TrialBalanceModalGrouped({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+  const handleExportXlsx = () => {
+    const flatRows = groups.sections.flatMap((sec) =>
+      sec.rows.map((r) => ({ ...r, category: sec.category })),
+    );
+    if (!flatRows.length) {
+      alert('No trial balance rows to export.');
+      return;
+    }
+    const aoa = buildAoaFromHeaders(exportHeaders, flatRows, formatExportValue);
+    exportAoaToXlsx({
+      fileName: `trial-balance-${scope}-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Trial Balance',
+      aoa,
+    });
   };
 
   return (
@@ -282,6 +299,9 @@ export default function TrialBalanceModalGrouped({
       <Modal.Footer className="d-flex justify-content-end gap-2">
         <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
           Export CSV
+        </Button>
+        <Button variant="outline-primary" size="sm" disabled={!rows?.length || loading} onClick={handleExportXlsx}>
+          Export XLSX
         </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>

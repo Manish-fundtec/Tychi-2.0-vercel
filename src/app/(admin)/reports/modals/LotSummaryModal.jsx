@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, Fragment } from 'react';
 import Cookies from 'js-cookie';
 import { Button, Modal, Table, Spinner, Form } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
+import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -66,6 +67,25 @@ export default function LotSummaryModal({
   const [totalsBySymbol, setTotalsBySymbol] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const exportHeaders = useMemo(
+    () => [
+      { key: 'symbol_name', label: 'Symbol' },
+      { key: 'lot_id', label: 'Lot ID' },
+      { key: 'balance_quantity', label: 'Balance Quantity' },
+      { key: 'cost_per_unit', label: 'Cost/Unit' },
+      { key: 'amount', label: 'Amount' },
+      { key: 'market_price', label: 'Market Price' },
+      { key: 'market_value', label: 'Market Value' },
+      { key: 'upnl', label: 'UPNL' },
+    ],
+    [],
+  );
+  const formatExportValue = (key, value) =>
+    ['balance_quantity', 'cost_per_unit', 'amount', 'market_price', 'market_value', 'upnl'].includes(
+      String(key),
+    )
+      ? fmt(value)
+      : value ?? '';
 
   useEffect(() => {
     if (!show) return;
@@ -122,16 +142,7 @@ export default function LotSummaryModal({
       return;
     }
 
-    const headers = [
-      { key: 'symbol_name', label: 'Symbol' },
-      { key: 'lot_id', label: 'Lot ID' },
-      { key: 'balance_quantity', label: 'Balance Quantity' },
-      { key: 'cost_per_unit', label: 'Cost/Unit' },
-      { key: 'amount', label: 'Amount' },
-      { key: 'market_price', label: 'Market Price' },
-      { key: 'market_value', label: 'Market Value' },
-      { key: 'upnl', label: 'UPNL' },
-    ];
+    const headers = exportHeaders;
 
     const escapeCsv = (value) => {
       const stringValue = String(value ?? '');
@@ -141,19 +152,7 @@ export default function LotSummaryModal({
       return stringValue;
     };
 
-    const formatValue = (key, value) => {
-      switch (key) {
-        case 'balance_quantity':
-        case 'cost_per_unit':
-        case 'amount':
-        case 'market_price':
-        case 'market_value':
-        case 'upnl':
-          return fmt(value);
-        default:
-          return value ?? '';
-      }
-    };
+    const formatValue = formatExportValue;
 
     const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
     const dataRows = rows.map((row) =>
@@ -173,6 +172,20 @@ export default function LotSummaryModal({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportXlsx = () => {
+    if (!rows?.length) {
+      alert('No lot records to export.');
+      return;
+    }
+
+    const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    exportAoaToXlsx({
+      fileName: `lot-summary-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Lot Summary',
+      aoa,
+    });
   };
 
   // Group by symbol
@@ -351,6 +364,9 @@ export default function LotSummaryModal({
       <Modal.Footer className="d-flex justify-content-end gap-2">
         <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
           Export CSV
+        </Button>
+        <Button variant="outline-primary" size="sm" disabled={!rows?.length || loading} onClick={handleExportXlsx}>
+          Export XLSX
         </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>

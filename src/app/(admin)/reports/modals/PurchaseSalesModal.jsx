@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import { Button, Modal, Table, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
+import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -27,6 +28,20 @@ export default function SalesPurchaseModal({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const exportHeaders = useMemo(
+    () => [
+      { key: 'symbol', label: 'Symbol' },
+      { key: 'open_long', label: 'Open Long' },
+      { key: 'close_long', label: 'Close Long' },
+      { key: 'open_short', label: 'Open Short' },
+      { key: 'close_short', label: 'Close Short' },
+    ],
+    [],
+  );
+  const formatExportValue = (key, value) =>
+    ['open_long', 'close_long', 'open_short', 'close_short'].includes(String(key))
+      ? `${reportingCurrency}${fmt(value)}`
+      : value ?? '';
 
   useEffect(() => {
     if (!show || !fundId || !date) return;
@@ -58,14 +73,6 @@ export default function SalesPurchaseModal({
       return;
     }
 
-    const headers = [
-      { key: 'symbol', label: 'Symbol' },
-      { key: 'open_long', label: 'Open Long' },
-      { key: 'close_long', label: 'Close Long' },
-      { key: 'open_short', label: 'Open Short' },
-      { key: 'close_short', label: 'Close Short' },
-    ];
-
     const escapeCsv = (value) => {
       const stringValue = String(value ?? '');
       if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
@@ -74,15 +81,10 @@ export default function SalesPurchaseModal({
       return stringValue;
     };
 
-    const formatValue = (key, value) =>
-      ['open_long', 'close_long', 'open_short', 'close_short'].includes(key)
-        ? `${reportingCurrency}${fmt(value)}`
-        : value ?? '';
-
-    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const headerRow = exportHeaders.map(({ label }) => escapeCsv(label)).join(',');
     const dataRows = rows.map((row) =>
-      headers
-        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+      exportHeaders
+        .map(({ key }) => escapeCsv(formatExportValue(key, row[key])))
         .join(','),
     );
 
@@ -97,6 +99,20 @@ export default function SalesPurchaseModal({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportXlsx = () => {
+    if (!rows?.length) {
+      alert('No sales & purchase rows to export.');
+      return;
+    }
+
+    const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    exportAoaToXlsx({
+      fileName: `sales-purchase-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Sales & Purchase',
+      aoa,
+    });
   };
 
   const totals = useMemo(() => {
@@ -162,6 +178,9 @@ export default function SalesPurchaseModal({
       <Modal.Footer className="d-flex justify-content-end gap-2">
         <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
           Export CSV
+        </Button>
+        <Button variant="outline-primary" size="sm" disabled={!rows?.length || loading} onClick={handleExportXlsx}>
+          Export XLSX
         </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>

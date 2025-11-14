@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import { Button, Modal, Table, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
+import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -20,6 +21,35 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
   const [totals, setTotals] = useState({ quantity:0, closingProceeds:0, longTermRpnl:0, shortTermRpnl:0, totalRpnl:0 });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const exportHeaders = useMemo(
+    () => [
+      { key: 'symbol', label: 'Symbol' },
+      { key: 'tradeId', label: 'Trade ID' },
+      { key: 'lotId', label: 'Lot ID' },
+      { key: 'openDate', label: 'Open Date' },
+      { key: 'openPrice', label: 'Open Price' },
+      { key: 'closeDate', label: 'Close Date' },
+      { key: 'closePrice', label: 'Close Price' },
+      { key: 'closingProceeds', label: 'Closing Proceeds' },
+      { key: 'quantity', label: 'Quantity' },
+      { key: 'longTermRpnl', label: 'Long Term RPNL' },
+      { key: 'shortTermRpnl', label: 'Short Term RPNL' },
+      { key: 'totalRpnl', label: 'Total RPNL' },
+    ],
+    [],
+  );
+  const formatExportValue = (key, value) => {
+    const numericKeys = [
+      'openPrice',
+      'closePrice',
+      'closingProceeds',
+      'quantity',
+      'longTermRpnl',
+      'shortTermRpnl',
+      'totalRpnl',
+    ];
+    return numericKeys.includes(String(key)) ? fmt(value) : value ?? '';
+  };
 
   useEffect(() => {
     if (!show || !fundId || !date) return;
@@ -104,21 +134,6 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       return;
     }
 
-    const headers = [
-      { key: 'symbol', label: 'Symbol' },
-      { key: 'tradeId', label: 'Trade ID' },
-      { key: 'lotId', label: 'Lot ID' },
-      { key: 'openDate', label: 'Open Date' },
-      { key: 'openPrice', label: 'Open Price' },
-      { key: 'closeDate', label: 'Close Date' },
-      { key: 'closePrice', label: 'Close Price' },
-      { key: 'closingProceeds', label: 'Closing Proceeds' },
-      { key: 'quantity', label: 'Quantity' },
-      { key: 'longTermRpnl', label: 'Long Term RPNL' },
-      { key: 'shortTermRpnl', label: 'Short Term RPNL' },
-      { key: 'totalRpnl', label: 'Total RPNL' },
-    ];
-
     const escapeCsv = (value) => {
       const stringValue = String(value ?? '');
       if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
@@ -127,26 +142,10 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       return stringValue;
     };
 
-    const formatValue = (key, value) => {
-      switch (key) {
-        case 'openPrice':
-        case 'closePrice':
-        case 'closingProceeds':
-        case 'longTermRpnl':
-        case 'shortTermRpnl':
-        case 'totalRpnl':
-          return fmt(value);
-        case 'quantity':
-          return fmt(value);
-        default:
-          return value ?? '';
-      }
-    };
-
-    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const headerRow = exportHeaders.map(({ label }) => escapeCsv(label)).join(',');
     const dataRows = rows.map((row) =>
-      headers
-        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+      exportHeaders
+        .map(({ key }) => escapeCsv(formatExportValue(key, row[key])))
         .join(','),
     );
 
@@ -161,6 +160,20 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportXlsx = () => {
+    if (!rows?.length) {
+      alert('No realized P&L rows to export.');
+      return;
+    }
+
+    const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    exportAoaToXlsx({
+      fileName: `realized-pnl-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'RPNL',
+      aoa,
+    });
   };
 
   return (
@@ -232,6 +245,9 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       <Modal.Footer className="d-flex justify-content-end gap-2">
         <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
           Export CSV
+        </Button>
+        <Button variant="outline-primary" size="sm" disabled={!rows?.length || loading} onClick={handleExportXlsx}>
+          Export XLSX
         </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import { Button, Modal, Table, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
+import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -26,6 +27,21 @@ export default function ProfitLossModal({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const exportHeaders = useMemo(
+    () => [
+      { key: 'category', label: 'Category' },
+      { key: 'gl_code', label: 'GL Number' },
+      { key: 'gl_name', label: 'GL Name' },
+      { key: 'mtd_amount', label: 'MTD' },
+      { key: 'qtd_amount', label: 'QTD' },
+      { key: 'ytd_amount', label: 'YTD' },
+    ],
+    [],
+  );
+  const formatExportValue = (key, value) =>
+    ['mtd_amount', 'qtd_amount', 'ytd_amount'].includes(String(key))
+      ? fmt(value)
+      : value ?? '';
 
   // fetch P&L rows
   // useEffect(() => {
@@ -120,15 +136,6 @@ export default function ProfitLossModal({
       return;
     }
 
-    const headers = [
-      { key: 'category', label: 'Category' },
-      { key: 'gl_code', label: 'GL Number' },
-      { key: 'gl_name', label: 'GL Name' },
-      { key: 'mtd_amount', label: 'MTD' },
-      { key: 'qtd_amount', label: 'QTD' },
-      { key: 'ytd_amount', label: 'YTD' },
-    ];
-
     const escapeCsv = (value) => {
       const stringValue = String(value ?? '');
       if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
@@ -136,14 +143,10 @@ export default function ProfitLossModal({
       }
       return stringValue;
     };
-
-    const formatValue = (key, value) =>
-      ['mtd_amount', 'qtd_amount', 'ytd_amount'].includes(key) ? fmt(value) : value ?? '';
-
-    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const headerRow = exportHeaders.map(({ label }) => escapeCsv(label)).join(',');
     const dataRows = rows.map((row) =>
-      headers
-        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+      exportHeaders
+        .map(({ key }) => escapeCsv(formatExportValue(key, row[key])))
         .join(','),
     );
 
@@ -158,6 +161,19 @@ export default function ProfitLossModal({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportXlsx = () => {
+    if (!rows?.length) {
+      alert('No P&L rows to export.');
+      return;
+    }
+    const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    exportAoaToXlsx({
+      fileName: `profit-loss-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'P&L',
+      aoa,
+    });
   };
 
   // group & totals
@@ -287,6 +303,9 @@ export default function ProfitLossModal({
       <Modal.Footer className="d-flex justify-content-end gap-2">
         <Button variant="outline-success" size="sm" disabled={!rows?.length || loading} onClick={handleExportCsv}>
           Export CSV
+        </Button>
+        <Button variant="outline-primary" size="sm" disabled={!rows?.length || loading} onClick={handleExportXlsx}>
+          Export XLSX
         </Button>
         <Button variant="secondary" onClick={handleClose}>
           Close

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import { Modal, Button, Form, Row, Col, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
+import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -37,6 +38,30 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
   const [drTotal, setDrTotal] = useState(0);
   const [crTotal, setCrTotal] = useState(0);
   const [closing, setClosing] = useState(0);
+
+  const exportHeaders = useMemo(
+    () => [
+      { key: 'date', label: 'Date' },
+      { key: 'journalid', label: 'Journal ID' },
+      { key: 'accountname', label: 'Account Name' },
+      { key: 'description', label: 'Description' },
+      { key: 'dramount', label: 'Dr Amount' },
+      { key: 'cramount', label: 'Cr Amount' },
+      { key: 'runningbalance', label: 'Running Balance' },
+    ],
+    [],
+  );
+
+  const formatExportValue = (key, value) => {
+    switch (key) {
+      case 'dramount':
+      case 'cramount':
+      case 'runningbalance':
+        return value != null && value !== '' ? fmt(value) : '';
+      default:
+        return value ?? '';
+    }
+  };
 
   // pagination
   const [page, setPage] = useState(1);
@@ -146,16 +171,6 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
       return;
     }
 
-    const headers = [
-      { key: 'date', label: 'Date' },
-      { key: 'journalid', label: 'Journal ID' },
-      { key: 'accountname', label: 'Account Name' },
-      { key: 'description', label: 'Description' },
-      { key: 'dramount', label: 'Dr Amount' },
-      { key: 'cramount', label: 'Cr Amount' },
-      { key: 'runningbalance', label: 'Running Balance' },
-    ];
-
     const escapeCsv = (value) => {
       const stringValue = String(value ?? '');
       if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
@@ -164,21 +179,10 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
       return stringValue;
     };
 
-    const formatValue = (key, value) => {
-      switch (key) {
-        case 'dramount':
-        case 'cramount':
-        case 'runningbalance':
-          return value != null && value !== '' ? fmt(value) : '';
-        default:
-          return value ?? '';
-      }
-    };
-
-    const headerRow = headers.map(({ label }) => escapeCsv(label)).join(',');
+    const headerRow = exportHeaders.map(({ label }) => escapeCsv(label)).join(',');
     const dataRows = rows.map((row) =>
-      headers
-        .map(({ key }) => escapeCsv(formatValue(key, row[key])))
+      exportHeaders
+        .map(({ key }) => escapeCsv(formatExportValue(key, row[key])))
         .join(','),
     );
 
@@ -193,6 +197,20 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const exportXlsx = () => {
+    if (!rows?.length) {
+      alert('No GL rows to export.');
+      return;
+    }
+
+    const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    exportAoaToXlsx({
+      fileName: `gl-report-${fundId || 'fund'}-${date || ''}`,
+      sheetName: 'GL Report',
+      aoa,
+    });
   };
 
   return (
@@ -241,6 +259,9 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
               </Button>
               <Button variant="outline-primary" size="sm" onClick={exportCsv} disabled={!rows.length}>
                 Export CSV
+              </Button>
+              <Button variant="outline-success" size="sm" onClick={exportXlsx} disabled={!rows.length}>
+                Export XLSX
               </Button>
             </Col>
           </Row>
@@ -359,6 +380,9 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
       <Modal.Footer className="d-flex justify-content-end gap-2">
         <Button variant="outline-success" size="sm" onClick={exportCsv} disabled={!rows.length || loading}>
           Export CSV
+        </Button>
+        <Button variant="outline-primary" size="sm" onClick={exportXlsx} disabled={!rows.length || loading}>
+          Export XLSX
         </Button>
         <Button variant="secondary" onClick={handleClose}>Close</Button>
       </Modal.Footer>

@@ -68,6 +68,7 @@
     "simplebar-react": "^3.2.6",
     "swiper": "^11.1.11",
     "swr": "^2.3.6",
+    "xlsx": "^0.18.5",
     "yup": "^1.4.0"
   },
   "devDependencies": {
