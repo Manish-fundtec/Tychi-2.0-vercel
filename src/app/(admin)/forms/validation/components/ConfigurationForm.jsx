@@ -249,6 +249,16 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
   const [validated, setValidated] = useState(false)
   const [errors, setErrors] = useState({})
 
+  useEffect(() => {
+    if (!assetType) return
+    setFormData({
+      closure_rule: assetType?.closure_rule || '',
+      long_term_rule: assetType?.long_term_rule || '',
+    })
+    setErrors({})
+    setValidated(false)
+  }, [assetType])
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData((prev) => ({
