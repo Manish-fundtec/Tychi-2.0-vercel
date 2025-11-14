@@ -1606,7 +1606,7 @@ export const ToggleBetweenModals = ({
   )
 }
 
-export const TradeModal = ({ onCreated }) => {
+export const TradeModal = ({ onSuccess }) => {
   const { isOpen, size, className, toggleModal, openModalWithSize } = useModal()
 
   return (
@@ -1620,7 +1620,12 @@ export const TradeModal = ({ onCreated }) => {
           <h5 className="modal-title h4">Add Trades</h5>
         </Modal.Header>
         <Modal.Body>
-          <AddTrade onClose={toggleModal} onCreated={onCreated} />
+          <AddTrade
+            onClose={toggleModal}
+            onCreated={() => {
+              if (typeof onSuccess === 'function') onSuccess()
+            }}
+          />
         </Modal.Body>
       </Modal>
     </>

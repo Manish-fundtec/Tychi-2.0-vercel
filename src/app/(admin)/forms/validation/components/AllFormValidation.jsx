@@ -540,23 +540,22 @@ export const AddTrade = ({ onClose, onCreated }) => {
 
     try {
       setIsSaving(true)
-      await addTrade(payload)
-
-      // close modal first
-      // if (onClose) onClose()
-      if (onClose) {
-        console.log('Calling onClose() to close modal...')
-        onClose()
+      const res = await addTrade(payload)
+      if (res?.success) {
+        onClose?.()
+        alert(res?.message || 'Trade added successfully')
+        onCreated?.(res?.trade || null)
+        setValidated(false)
+      } else {
+        const errMsg = res?.message || 'Failed to add trade.'
+        alert(errMsg)
+        return
       }
-
-      // refresh parent after closing
-      if (onCreated) onCreated()
-
-      // optional toast/alert
-      setTimeout(() => alert('Trade created successfully'), 0)
     } catch (err) {
       console.error('Create trade failed:', err)
-      alert(err?.response?.data?.error || err.message || 'Server error')
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Server error'
+      alert(errMsg)
+      return
     } finally {
       setIsSaving(false)
     }
