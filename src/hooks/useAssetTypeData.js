@@ -75,5 +75,9 @@ export const useAssetTypeData = () => {
     }
   }, []);
 
-  return { assetTypes, toggleAssetTypeStatus, fundId, checkAssetTypeHasSymbols };
+  const refetchAssetTypes = () => {
+    if (fundId) fetchAssetTypes(fundId);
+  };
+
+  return { assetTypes, toggleAssetTypeStatus, fundId, checkAssetTypeHasSymbols, refetchAssetTypes };
 };

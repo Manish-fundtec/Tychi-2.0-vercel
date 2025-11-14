@@ -249,6 +249,16 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
   const [validated, setValidated] = useState(false)
   const [errors, setErrors] = useState({})
 
+  useEffect(() => {
+    if (!assetType) return
+    setFormData({
+      closure_rule: assetType?.closure_rule || '',
+      long_term_rule: assetType?.long_term_rule || '',
+    })
+    setErrors({})
+    setValidated(false)
+  }, [assetType])
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData((prev) => ({
@@ -1588,7 +1598,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
     cusip: '',
     contract_size: '',
     exchange_id: '',
-    assettype_id: '',
+    asset_type_id: '',
   })
 
   const [exchanges, setExchanges] = useState([])
@@ -1603,7 +1613,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         cusip: symbol.cusip || '',
         contract_size: symbol.contract_size || '',
         exchange_id: symbol.exchange_id || '',
-        asset_type_id: symbol.assettype_id || '',
+        asset_type_id: symbol.asset_type_id || symbol.assettype_id || '',
       })
     }
   }, [symbol])

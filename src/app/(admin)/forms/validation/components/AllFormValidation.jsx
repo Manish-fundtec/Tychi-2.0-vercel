@@ -17,6 +17,7 @@ import jwt from 'jsonwebtoken'
 import api from '../../../../../lib/api/axios'
 import { uploadTradeFile, createTrade } from '@/lib/api/uploadTrade'
 import { addTrade } from '@/lib/api/trades'
+import { getExchangesByFundId } from '@/lib/api/exchange'
 import currencies from 'currency-formatter/currencies'
 import { jwtDecode } from 'jwt-decode'
 import { fetchChartOfAccounts } from '@/lib/api/reports'
@@ -326,6 +327,7 @@ export const AddTrade = ({ onClose, onCreated }) => {
   const [isSaving, setIsSaving] = useState(false)
   const [brokers, setBrokers] = useState([])
   const [symbols, setSymbols] = useState([])
+  const [exchangeLookup, setExchangeLookup] = useState({})
   const [fundId, setFundId] = useState('')
   const [orgId, setOrgId] = useState('')
   const [amountLocked, setAmountLocked] = useState(true)
@@ -383,11 +385,29 @@ export const AddTrade = ({ onClose, onCreated }) => {
     if (!fundId) return
     ;(async () => {
       try {
-        const [b, s] = await Promise.allSettled([api.get(`/api/v1/broker/fund/${fundId}`), api.get(`/api/v1/symbols/fund/${fundId}`)])
+        const [b, s, e] = await Promise.allSettled([
+          api.get(`/api/v1/broker/fund/${fundId}`),
+          api.get(`/api/v1/symbols/fund/${fundId}`),
+          getExchangesByFundId(fundId),
+        ])
         setBrokers(b.status === 'fulfilled' ? unwrap(b.value) : [])
         setSymbols(s.status === 'fulfilled' ? unwrap(s.value) : [])
-      } catch (e) {
-        console.error('Dropdown fetch error', e)
+
+        if (e.status === 'fulfilled') {
+          const list = e.value?.data || []
+          const lookup = {}
+          list.forEach((ex) => {
+            const key = ex.exchange_uid || ex.exchange_id || ex.exchangeid
+            if (!key) return
+            lookup[key] = ex.exchange_name || ex.name || ex.exchangeid || ''
+          })
+          setExchangeLookup(lookup)
+        } else {
+          setExchangeLookup({})
+        }
+      } catch (err) {
+        console.error('Dropdown fetch error', err)
+        setExchangeLookup({})
       }
     })()
   }, [fundId])
@@ -500,6 +520,11 @@ export const AddTrade = ({ onClose, onCreated }) => {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
+    const tradeBeforeRsd =
+      reportingStartDate &&
+      formData.trade_date &&
+      new Date(`${formData.trade_date}T00:00:00Z`).getTime() < new Date(`${reportingStartDate}T00:00:00Z`).getTime()
+
     // Basic client-side checks
     if (!orgId || !fundId) {
       alert('Missing org_id / fund_id in token')
@@ -510,8 +535,8 @@ export const AddTrade = ({ onClose, onCreated }) => {
       return
     }
 
-    if (reportingStartDate && formData.trade_date < reportingStartDate) {
-      alert(`Trade date cannot be earlier than fund start date (${reportingStartDate}).`)
+    if (tradeBeforeRsd) {
+      alert(`Trade date cannot be earlier than Reporting Start Date (${reportingStartDate}).`)
       setValidated(true)
       return
     }
@@ -540,23 +565,22 @@ export const AddTrade = ({ onClose, onCreated }) => {
 
     try {
       setIsSaving(true)
-      await addTrade(payload)
-
-      // close modal first
-      // if (onClose) onClose()
-      if (onClose) {
-        console.log('Calling onClose() to close modal...')
-        onClose()
+      const res = await addTrade(payload)
+      if (res?.success) {
+        onClose?.()
+        alert(res?.message || 'Trade added successfully')
+        onCreated?.(res?.trade || null)
+        setValidated(false)
+      } else {
+        const errMsg = res?.message || 'Failed to add trade.'
+        alert(errMsg)
+        return
       }
-
-      // refresh parent after closing
-      if (onCreated) onCreated()
-
-      // optional toast/alert
-      setTimeout(() => alert('Trade created successfully'), 0)
     } catch (err) {
       console.error('Create trade failed:', err)
-      alert(err?.response?.data?.error || err.message || 'Server error')
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Server error'
+      alert(errMsg)
+      return
     } finally {
       setIsSaving(false)
     }
@@ -568,12 +592,22 @@ export const AddTrade = ({ onClose, onCreated }) => {
         <FormLabel>Symbol Name</FormLabel>
         <Form.Select required name="symbol_id" value={formData.symbol_id} onChange={handleChange}>
           <option value="">-- Select Symbol --</option>
-          {symbols.map((symbol) => (
-            // store symbol_id as value; show the name in the label
-            <option key={symbol.symbol_id} value={symbol.symbol_id}>
-              {symbol.symbol_name} {symbol.symbol_id}
-            </option>
-          ))}
+          {symbols.map((symbol, idx) => {
+            const optionKey = symbol.symbol_uid || `${symbol.symbol_id || symbol.symbol_name || 'symbol'}-${idx}`
+            const exchangeLabel =
+              exchangeLookup?.[symbol.exchange_id] ||
+              exchangeLookup?.[symbol.exchange_uid] ||
+              symbol.exchange_name ||
+              symbol.exchange ||
+              symbol.exchange_obj?.exchange_name ||
+              ''
+            const label = symbol.symbol_name || symbol.symbol_id || 'Unnamed Symbol'
+            return (
+              <option key={optionKey} value={symbol.symbol_id}>
+                {exchangeLabel ? `${label} — ${exchangeLabel}` : label}
+              </option>
+            )
+          })}
         </Form.Select>
         <Feedback type="invalid" tooltip>
           Please select a Symbol.
@@ -589,9 +623,16 @@ export const AddTrade = ({ onClose, onCreated }) => {
           onChange={handleChange}
           required
           min={reportingStartDate || undefined}
+          isInvalid={
+            reportingStartDate &&
+            formData.trade_date &&
+            new Date(`${formData.trade_date}T00:00:00Z`).getTime() < new Date(`${reportingStartDate}T00:00:00Z`).getTime()
+          }
         />
         <Feedback type="invalid" tooltip>
-          Please enter a Date.
+          {reportingStartDate
+            ? `Trade date must be on or after ${reportingStartDate}.`
+            : 'Please enter a Date.'}
         </Feedback>
       </FormGroup>
 
