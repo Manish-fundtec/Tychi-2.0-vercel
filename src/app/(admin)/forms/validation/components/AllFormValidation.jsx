@@ -520,6 +520,11 @@ export const AddTrade = ({ onClose, onCreated }) => {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
+    const tradeBeforeRsd =
+      reportingStartDate &&
+      formData.trade_date &&
+      new Date(`${formData.trade_date}T00:00:00Z`).getTime() < new Date(`${reportingStartDate}T00:00:00Z`).getTime()
+
     // Basic client-side checks
     if (!orgId || !fundId) {
       alert('Missing org_id / fund_id in token')
@@ -530,8 +535,8 @@ export const AddTrade = ({ onClose, onCreated }) => {
       return
     }
 
-    if (reportingStartDate && formData.trade_date < reportingStartDate) {
-      alert(`Trade date cannot be earlier than fund start date (${reportingStartDate}).`)
+    if (tradeBeforeRsd) {
+      alert(`Trade date cannot be earlier than Reporting Start Date (${reportingStartDate}).`)
       setValidated(true)
       return
     }
@@ -618,9 +623,16 @@ export const AddTrade = ({ onClose, onCreated }) => {
           onChange={handleChange}
           required
           min={reportingStartDate || undefined}
+          isInvalid={
+            reportingStartDate &&
+            formData.trade_date &&
+            new Date(`${formData.trade_date}T00:00:00Z`).getTime() < new Date(`${reportingStartDate}T00:00:00Z`).getTime()
+          }
         />
         <Feedback type="invalid" tooltip>
-          Please enter a Date.
+          {reportingStartDate
+            ? `Trade date must be on or after ${reportingStartDate}.`
+            : 'Please enter a Date.'}
         </Feedback>
       </FormGroup>
 
