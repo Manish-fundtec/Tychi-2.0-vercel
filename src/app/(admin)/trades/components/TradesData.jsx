@@ -81,14 +81,39 @@ export default function TradesData() {
 
   const columnDefs = useMemo(() => {
     return (TradeColDefs || []).map((col) => {
-      if (col?.field !== 'trade_date') return col
-      return {
-        ...col,
-        valueFormatter: (p) => {
-          const raw = p?.value ? String(p.value).slice(0, 10) : ''
-          return formatYmd(raw, fmt)
-        },
+      if (col?.field === 'trade_date') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const raw = p?.value ? String(p.value).slice(0, 10) : ''
+            return formatYmd(raw, fmt)
+          },
+        }
       }
+
+      if (col?.field === 'computed_amount') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const value = p?.value
+            if (value === null || value === undefined || value === '') return '—'
+            const num = Number(value)
+            if (Number.isNaN(num)) return value
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            const amtLabel = (() => {
+              const rawAmount = p?.data?.amount
+              if (typeof rawAmount === 'string') {
+                const parts = rawAmount.trim().split(/\s+/)
+                if (parts.length > 1) return parts[parts.length - 1]
+              }
+              return ''
+            })()
+            return amtLabel ? `${formatted} ${amtLabel}` : formatted
+          },
+        }
+      }
+
+      return col
     })
   }, [fmt])
 

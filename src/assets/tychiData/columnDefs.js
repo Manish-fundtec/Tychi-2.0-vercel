@@ -95,7 +95,18 @@ export const TradeColDefs = [
 
   { field: 'price', headerName: 'Price', flex: 1 },
   { field: 'quantity', headerName: 'Quantity', flex: 1 },
-  { field: 'amount', headerName: 'Amount', flex: 1 },
+  {
+    field: 'amount',
+    headerName: 'Amount',
+    flex: 1,
+    
+  },
+  {
+    field: 'computed_amount',
+    headerName: 'Gross Amount',
+    flex: 1,
+    
+  },
   // ✅ Action column with delete button
   {
     headerName: 'Action',
