@@ -70,10 +70,26 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
 
         const rawRows = Array.isArray(json?.rows) ? json.rows : [];
         const mappedRows = rawRows.map((r) => {
-          const openPrice = Number(r.openPrice ?? r.open_price ?? 0);
-          const closePrice = Number(r.closePrice ?? r.close_price ?? 0);
+          const openPrice = Number(r.openPrice ?? r.open_price ?? r.lot_price ?? 0);
+          const closePrice = Number(r.closePrice ?? r.close_price ?? r.current_price ?? 0);
           const quantity = Number(r.quantity ?? 0);
-          const closingProceeds = closePrice * quantity;
+          const closingProceeds =
+            Number(r.closingProceeds ?? r.closing_proceeds ?? closePrice * quantity);
+          const longTermRpnl = Number(
+            r.longTermRpnl ?? r.long_term_rpnl ?? r.longTerm ?? r.long_term ?? 0,
+          );
+          const shortTermRpnl = Number(
+            r.shortTermRpnl ?? r.short_term_rpnl ?? r.shortTerm ?? r.short_term ?? 0,
+          );
+          const totalRpnl = Number(
+            r.totalRpnl ??
+              r.total_rpnl ??
+              r.rpnl ??
+              r.realizedPnl ??
+              r.realized_pnl ??
+              longTermRpnl +
+                shortTermRpnl,
+          );
           return {
             symbol: r.symbol,
             tradeId: r.tradeId ?? r.trade_id,
@@ -84,9 +100,9 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
             closePrice,
             quantity,
             closingProceeds,
-            longTermRpnl: Number(r.longTermRpnl ?? r.long_term_rpnl ?? 0),
-            shortTermRpnl: Number(r.shortTermRpnl ?? r.short_term_rpnl ?? 0),
-            totalRpnl: Number(r.totalRpnl ?? r.total_rpnl ?? 0),
+            longTermRpnl,
+            shortTermRpnl,
+            totalRpnl,
           };
         });
 
