@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community'
 import { TradeColDefs } from '@/assets/tychiData/columnDefs'
@@ -18,9 +18,12 @@ import {
   Tabs,
   Tab,
   Button,
-  Alert, //  NEW: Tabs, Tab, Button, Alert
+  Alert,
+  Modal,
 } from 'react-bootstrap'
 import { TradeModal, UploadTradeModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
+import { deleteTrade } from '@/lib/api/trades'
+import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
 
 // Register all Community features
 ModuleRegistry.registerModules([AllCommunityModule])
@@ -29,8 +32,9 @@ export default function TradesData() {
   const [rowData, setRowData] = useState([])
   const [loading, setLoading] = useState(true)
   const [fundId, setFundId] = useState('')
-  const [rows, setRows] = useState([])
-  const [err, setErr] = useState('')
+  const [selectedRows, setSelectedRows] = useState([])
+  const [viewTrade, setViewTrade] = useState(null)
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
 
   // 1) Get fundId from dashboardToken cookie (support multiple key styles)
   useEffect(() => {
@@ -71,6 +75,7 @@ export default function TradesData() {
       setRowData([])
     } finally {
       setLoading(false)
+      setSelectedRows([])
     }
   }, [fund_id, fundId])
 
@@ -149,6 +154,139 @@ export default function TradesData() {
     fetchTradeHistory()
   }, [fetchTradeHistory])
 
+  const gridApiRef = useRef(null)
+
+  const onGridReady = useCallback((params) => {
+    gridApiRef.current = params.api
+  }, [])
+
+  const updateSelectionState = useCallback(() => {
+    if (!gridApiRef.current) return
+    setSelectedRows(gridApiRef.current.getSelectedRows())
+  }, [])
+
+  const onSelectionChanged = useCallback(() => {
+    updateSelectionState()
+  }, [updateSelectionState])
+
+  const handleSelectAll = useCallback(() => {
+    if (!gridApiRef.current) return
+    gridApiRef.current.selectAll()
+    updateSelectionState()
+  }, [updateSelectionState])
+
+  const handleClearSelection = useCallback(() => {
+    if (!gridApiRef.current) return
+    gridApiRef.current.deselectAll()
+    updateSelectionState()
+  }, [updateSelectionState])
+
+  const tradeExportHeaders = useMemo(
+    () => [
+      { key: 'trade_id', label: 'Trade ID' },
+      { key: 'trade_date', label: 'Trade Date', value: (row) => (row?.trade_date ? String(row.trade_date).slice(0, 10) : '') },
+      { key: 'symbol_name', label: 'Symbol' },
+      { key: 'symbol_code', label: 'Symbol Code' },
+      { key: 'price', label: 'Price' },
+      { key: 'quantity', label: 'Quantity' },
+      { key: 'amount', label: 'Amount' },
+      { key: 'computed_amount', label: 'Gross Amount' },
+      { key: 'trade_type', label: 'Trade Type' },
+      { key: 'broker_name', label: 'Broker' },
+    ],
+    [],
+  )
+
+  const formatExportValue = useCallback((key, value) => {
+    if (typeof value === 'number') {
+      return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    }
+    return value ?? ''
+  }, [])
+
+  const escapeCsv = (value) => {
+    const stringValue = String(value ?? '')
+    if (/[",\n]/.test(stringValue)) {
+      return `"${stringValue.replace(/"/g, '""')}"`
+    }
+    return stringValue
+  }
+
+  const handleExport = useCallback(
+    (format) => {
+      const rowsToExport = selectedRows
+      if (!rowsToExport.length) {
+        alert('Please select at least one trade to export.')
+        return
+      }
+      const aoa = buildAoaFromHeaders(tradeExportHeaders, rowsToExport, formatExportValue)
+      if (format === 'xlsx') {
+        exportAoaToXlsx({
+          fileName: `trades-${new Date().toISOString().slice(0, 10)}`,
+          sheetName: 'Trades',
+          aoa,
+        })
+        return
+      }
+      const csvContent = aoa.map((row) => row.map((cell) => escapeCsv(cell)).join(',')).join('\n')
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `trades-${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    },
+    [selectedRows, tradeExportHeaders, formatExportValue],
+  )
+
+  const confirmAndDeleteTrades = useCallback(
+    async (trades) => {
+      const deletable = trades.filter((t) => t?.trade_id)
+      if (!deletable.length) {
+        alert('No trades selected for deletion.')
+        return
+      }
+      if (!confirm(`Delete ${deletable.length} trade(s)? This cannot be undone.`)) return
+      setBulkActionLoading(true)
+      try {
+        for (const trade of deletable) {
+          await deleteTrade(trade.trade_id)
+        }
+        await refreshTrades()
+        gridApiRef.current?.deselectAll()
+        setSelectedRows([])
+      } catch (error) {
+        console.error('[Trades] bulk delete failed', error)
+        alert(error?.message || 'Failed to delete selected trades.')
+      } finally {
+        setBulkActionLoading(false)
+      }
+    },
+    [refreshTrades],
+  )
+
+  const handleSingleDelete = useCallback(
+    (trade) => {
+      confirmAndDeleteTrades([trade])
+    },
+    [confirmAndDeleteTrades],
+  )
+
+  const handleBulkDelete = useCallback(() => {
+    confirmAndDeleteTrades(selectedRows)
+  }, [confirmAndDeleteTrades, selectedRows])
+
+  const handleViewTrade = useCallback((trade) => {
+    setViewTrade(trade || null)
+  }, [])
+
+  const closeViewModal = useCallback(() => setViewTrade(null), [])
+
+  const selectedCount = selectedRows.length
+
   const historyColDefs = useMemo(
     () => [
       { headerName: 'File ID', field: 'file_id', width: 280 },
@@ -206,8 +344,30 @@ export default function TradesData() {
                     Select a fund to view trades.
                   </Alert>
                 )}
+                <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
+                  <Button variant="outline-secondary" size="sm" onClick={handleSelectAll} disabled={!rowData.length || loading}>
+                    Select All
+                  </Button>
+                  <Button variant="outline-secondary" size="sm" onClick={handleClearSelection} disabled={!selectedRows.length}>
+                    Clear Selection
+                  </Button>
+                  <Button variant="outline-danger" size="sm" onClick={handleBulkDelete} disabled={!selectedRows.length || bulkActionLoading}>
+                    {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
+                  </Button>
+                  <Button variant="outline-success" size="sm" onClick={() => handleExport('csv')} disabled={!selectedRows.length}>
+                    Export CSV
+                  </Button>
+                  <Button variant="outline-primary" size="sm" onClick={() => handleExport('xlsx')} disabled={!selectedRows.length}>
+                    Export XLSX
+                  </Button>
+                  <span className="text-muted ms-auto">
+                    Selected: {selectedCount} / {rowData.length}
+                  </span>
+                </div>
                 <div style={{ width: '100%' }}>
                   <AgGridReact
+                    onGridReady={onGridReady}
+                    onSelectionChanged={onSelectionChanged}
                     rowData={rowData}
                     columnDefs={columnDefs}
                     pagination={true}
@@ -218,6 +378,11 @@ export default function TradesData() {
                       filter: true,
                       resizable: true,
                     }}
+                    context={{
+                      onViewTrade: handleViewTrade,
+                      onDeleteTrade: handleSingleDelete,
+                    }}
+                    suppressRowClickSelection={false}
                     domLayout="autoHeight"
                     overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">Loading...</span>' : undefined}
                   />
@@ -275,6 +440,35 @@ export default function TradesData() {
           {/*  NEW: /Tabs */}
         </Card>
       </Col>
+      <Modal show={!!viewTrade} onHide={closeViewModal} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Trade Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {!viewTrade && <p className="mb-0 text-muted">No trade selected.</p>}
+          {viewTrade && (
+            <div className="table-responsive">
+              <table className="table table-sm table-striped align-middle">
+                <tbody>
+                  {Object.entries(viewTrade).map(([key, value]) => (
+                    <tr key={key}>
+                      <th style={{ width: 200 }} className="text-uppercase text-muted small">
+                        {key}
+                      </th>
+                      <td>{value === null || value === undefined || value === '' ? '—' : String(value)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={closeViewModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Row>
   )
 }
