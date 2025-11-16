@@ -51,120 +51,51 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
     []
   );
 
-  const formatExportValue = (key, value) => {
-    const numericKeys = [
-      'openPrice',
-      'closePrice',
-      'closingProceeds',
-      'quantity',
-      'longTermRpnl',
-      'shortTermRpnl',
-      'totalRpnl',
-    ];
-    return numericKeys.includes(String(key)) ? fmt(value) : value ?? '';
-  };
-
-  /* ---------------------- FETCH ---------------------- */
   useEffect(() => {
-    if (!show || !fundId || !date) return;
+    if (!show || !fundId || !date) return; // ❗ SAFE
 
     (async () => {
       try {
         setLoading(true);
         setErr('');
+
         const params = new URLSearchParams();
         params.set('date', date);
-
-        // corrected to backend expected: org_id
         if (orgId) params.set('org_id', orgId);
 
-        const url = `${apiBase}/api/v1/reports/${encodeURIComponent(
-          fundId
-        )}/realized-pnl?${params.toString()}`;
+        const url = `${apiBase}/api/v1/reports/${fundId}/realized-pnl?${params.toString()}`;
 
-        const resp = await fetch(url, {
-          headers: getAuthHeaders(),
-          credentials: 'include',
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const resp = await fetch(url, { headers: getAuthHeaders() });
 
-        const json = await resp.json();
-        const rawRows = json?.rows ?? [];
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
 
-        const mapped = rawRows.map((r) => ({
+        const data = await resp.json();
+
+        const mappedRows = data.rows.map((r) => ({
           symbol: r.symbol,
           tradeId: r.tradeId,
           lotId: r.lotId,
           openDate: r.openDate?.slice(0, 10),
           closeDate: r.closeDate?.slice(0, 10),
-          openPrice: Number(r.openPrice || 0),
-          closePrice: Number(r.closePrice || 0),
-          quantity: Number(r.quantity || 0),
-          closingProceeds: Number(r.closingProceeds || 0),
-          longTermRpnl: Number(r.longTermRpnl || 0),
-          shortTermRpnl: Number(r.shortTermRpnl || 0),
-          totalRpnl: Number(r.totalRpnl || 0),
+          openPrice: Number(r.openPrice),
+          closePrice: Number(r.closePrice),
+          quantity: Number(r.quantity),
+          closingProceeds: Number(r.closingProceeds),
+          longTermRpnl: Number(r.longTermRpnl),
+          shortTermRpnl: Number(r.shortTermRpnl),
+          totalRpnl: Number(r.totalRpnl),
         }));
 
-        setRows(mapped);
-
-        setTotals({
-          quantity: Number(json?.totals?.quantity ?? 0),
-          closingProceeds: Number(json?.totals?.closingProceeds ?? 0),
-          longTermRpnl: Number(json?.totals?.longTermRpnl ?? 0),
-          shortTermRpnl: Number(json?.totals?.shortTermRpnl ?? 0),
-          totalRpnl: Number(json?.totals?.totalRpnl ?? 0),
-        });
-      } catch (e) {
-        console.error('[RPNL] fetch failed', e);
-        setErr('Failed to load RPNL report.');
-        setRows([]);
+        setRows(mappedRows);
+        setTotals(data.totals);
+      } catch (err) {
+        console.error(err);
+        setErr('Failed to load.');
       } finally {
         setLoading(false);
       }
     })();
   }, [show, fundId, date, orgId]);
-
-  /* ------------------- EXPORT CSV -------------------- */
-  const handleExportCsv = () => {
-    if (!rows.length) return alert('No rows to export.');
-
-    const escape = (v) => {
-      const s = String(v ?? '');
-      return /[,\"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-
-    const header = exportHeaders.map((h) => escape(h.label)).join(',');
-    const data = rows
-      .map((row) =>
-        exportHeaders
-          .map(({ key }) => escape(formatExportValue(key, row[key])))
-          .join(',')
-      )
-      .join('\n');
-
-    const blob = new Blob(['\ufeff' + header + '\n' + data], {
-      type: 'text/csv;charset=utf-8;',
-    });
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `RPNL-${fundId}-${date}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  /* ------------------- Export Excel ------------------ */
-  const handleExportXlsx = () => {
-    if (!rows.length) return alert('No rows to export.');
-    const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
-    exportAoaToXlsx({
-      fileName: `RPNL-${fundId}-${date}`,
-      sheetName: 'RPNL',
-      aoa,
-    });
-  };
 
   return (
     <Modal show={show} onHide={handleClose} size="xl" centered>
@@ -176,11 +107,10 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       </Modal.Header>
 
       <Modal.Body>
-        {err && <div className="text-danger mb-2">{err}</div>}
+        {err && <div className="text-danger">{err}</div>}
+
         {loading ? (
-          <div className="d-flex align-items-center gap-2 text-muted">
-            <Spinner size="sm" /> Loading…
-          </div>
+          <Spinner />
         ) : (
           <div className="table-responsive">
             <Table bordered hover size="sm">
@@ -197,7 +127,7 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
                   <th className="text-end">Quantity</th>
                   <th className="text-end">Long Term</th>
                   <th className="text-end">Short Term</th>
-                  <th className="text-end">Total RPNL</th>
+                  <th className="text-end">Total</th>
                 </tr>
               </thead>
 
@@ -219,7 +149,7 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
                   </tr>
                 ))}
 
-                <tr className="table-light fw-semibold">
+                <tr className="table-light fw-bold">
                   <td colSpan={7}>Totals</td>
                   <td className="text-end">{fmt(totals.closingProceeds)}</td>
                   <td className="text-end">{fmt(totals.quantity)}</td>
@@ -234,12 +164,6 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       </Modal.Body>
 
       <Modal.Footer>
-        <Button size="sm" variant="outline-success" onClick={handleExportCsv}>
-          Export CSV
-        </Button>
-        <Button size="sm" variant="outline-primary" onClick={handleExportXlsx}>
-          Export XLSX
-        </Button>
         <Button variant="secondary" onClick={handleClose}>
           Close
         </Button>
