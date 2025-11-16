@@ -48,72 +48,164 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       { key: 'shortTermRpnl', label: 'Short Term RPNL' },
       { key: 'totalRpnl', label: 'Total RPNL' },
     ],
-    []
+    [],
   );
 
-  useEffect(() => {
-    if (!show || !fundId || !date) return; // ❗ SAFE
+  const formatExportValue = (key, value) => {
+    const numericKeys = [
+      'openPrice',
+      'closePrice',
+      'closingProceeds',
+      'quantity',
+      'longTermRpnl',
+      'shortTermRpnl',
+      'totalRpnl',
+    ];
+    return numericKeys.includes(String(key)) ? fmt(value) : value ?? '';
+  };
 
-    (async () => {
-      try {
-        setLoading(true);
-        setErr('');
+  /** -------------------------
+   **    LOAD RPNL (FIXED)
+   ** ------------------------*/
+  const loadRPNL = async () => {
+    try {
+      setLoading(true);
+      setErr('');
+      setRows([]);
+      setTotals({
+        quantity: 0,
+        closingProceeds: 0,
+        longTermRpnl: 0,
+        shortTermRpnl: 0,
+        totalRpnl: 0,
+      });
 
-        const params = new URLSearchParams();
-        params.set('date', date);
-        if (orgId) params.set('org_id', orgId);
-
-        const url = `${apiBase}/api/v1/reports/${fundId}/realized-pnl?${params.toString()}`;
-
-        const resp = await fetch(url, { headers: getAuthHeaders() });
-
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-
-        const data = await resp.json();
-
-        const mappedRows = data.rows.map((r) => ({
-          symbol: r.symbol,
-          tradeId: r.tradeId,
-          lotId: r.lotId,
-          openDate: r.openDate?.slice(0, 10),
-          closeDate: r.closeDate?.slice(0, 10),
-          openPrice: Number(r.openPrice),
-          closePrice: Number(r.closePrice),
-          quantity: Number(r.quantity),
-          closingProceeds: Number(r.closingProceeds),
-          longTermRpnl: Number(r.longTermRpnl),
-          shortTermRpnl: Number(r.shortTermRpnl),
-          totalRpnl: Number(r.totalRpnl),
-        }));
-
-        setRows(mappedRows);
-        setTotals(data.totals);
-      } catch (err) {
-        console.error(err);
-        setErr('Failed to load.');
-      } finally {
-        setLoading(false);
+      // Prevent empty date issue
+      if (!date || date.trim() === '') {
+        setErr('Invalid reporting date.');
+        return;
       }
-    })();
+
+      const params = new URLSearchParams();
+      params.set('date', date);
+      if (orgId) params.set('org_id', orgId);
+
+      const resp = await fetch(
+        `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/realized-pnl?${params.toString()}`,
+        { headers: getAuthHeaders(), credentials: 'include' }
+      );
+
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const json = await resp.json();
+      const rawRows = Array.isArray(json?.rows) ? json.rows : [];
+
+      const mappedRows = rawRows.map((r) => ({
+        symbol: r.symbol,
+        tradeId: r.tradeId ?? r.trade_id,
+        lotId: r.lotId ?? r.lot_id,
+        openDate: (r.openDate ?? r.open_date ?? '').slice(0, 10),
+        openPrice: Number(r.openPrice ?? r.open_price ?? r.lot_price ?? 0),
+        closeDate: (r.closeDate ?? r.close_date ?? '').slice(0, 10),
+        closePrice: Number(r.closePrice ?? r.close_price ?? r.current_price ?? 0),
+        quantity: Number(r.quantity ?? 0),
+        closingProceeds: Number(r.closingProceeds ?? r.closing_proceeds ?? 0),
+        longTermRpnl: Number(r.longTermRpnl ?? r.long_term_rpnl ?? 0),
+        shortTermRpnl: Number(r.shortTermRpnl ?? r.short_term_rpnl ?? 0),
+        totalRpnl: Number(r.totalRpnl ?? r.total_rpnl ?? 0),
+      }));
+
+      setRows(mappedRows);
+      setTotals(json?.totals || {});
+    } catch (e) {
+      console.error('[RPNL] fetch failed', e);
+      setErr('Failed to load RPNL data.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** ----------------------------------------------------
+   ** FIX: PREVENT DOUBLE CALL + prevent undefined date
+   ** ---------------------------------------------------*/
+  useEffect(() => {
+    if (!show) return;
+    if (!fundId) return;
+    if (!date || date.trim() === '') return;
+
+    loadRPNL();
   }, [show, fundId, date, orgId]);
+
+  /** EXPORT CSV */
+  const handleExportCsv = () => {
+    if (!rows?.length) {
+      alert('No realized P&L rows to export.');
+      return;
+    }
+
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? '');
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return '"' + stringValue.replace(/"/g, '""') + '"';
+      }
+      return stringValue;
+    };
+
+    const headerRow = exportHeaders.map(({ label }) => escapeCsv(label)).join(',');
+    const dataRows = rows.map((row) =>
+      exportHeaders.map(({ key }) => escapeCsv(formatExportValue(key, row[key]))).join(','),
+    );
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `realized-pnl-${fundId}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  /** EXPORT XLSX */
+  const handleExportXlsx = () => {
+    if (!rows?.length) {
+      alert('No realized P&L rows to export.');
+      return;
+    }
+
+    const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    exportAoaToXlsx({
+      fileName: `realized-pnl-${fundId}-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'RPNL',
+      aoa,
+    });
+  };
+
+  /** --------------------- UI ----------------------- */
+
+  if (!show) return null; // prevent mount flickers
 
   return (
     <Modal show={show} onHide={handleClose} size="xl" centered>
       <Modal.Header closeButton>
         <Modal.Title>
-          <Eye size={18} className="me-2" /> REALIZED P&L
-          <span className="ms-2 text-muted">{date}</span>
+          <Eye className="me-2" size={18} /> REALIZED P&L
+          <span className="text-muted ms-2">{date || ''}</span>
         </Modal.Title>
       </Modal.Header>
 
       <Modal.Body>
-        {err && <div className="text-danger">{err}</div>}
+        {err && <div className="text-danger mb-2">{err}</div>}
 
         {loading ? (
-          <Spinner />
+          <div className="d-flex align-items-center gap-2 text-muted">
+            <Spinner size="sm" /> Loading…
+          </div>
         ) : (
           <div className="table-responsive">
-            <Table bordered hover size="sm">
+            <Table bordered hover size="sm" className="align-middle">
               <thead>
                 <tr>
                   <th>Symbol</th>
@@ -125,9 +217,9 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
                   <th>Close Price</th>
                   <th className="text-end">Closing Proceeds</th>
                   <th className="text-end">Quantity</th>
-                  <th className="text-end">Long Term</th>
-                  <th className="text-end">Short Term</th>
-                  <th className="text-end">Total</th>
+                  <th className="text-end">Long Term RPNL</th>
+                  <th className="text-end">Short Term RPNL</th>
+                  <th className="text-end">Total RPNL</th>
                 </tr>
               </thead>
 
@@ -149,7 +241,7 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
                   </tr>
                 ))}
 
-                <tr className="table-light fw-bold">
+                <tr className="table-light fw-semibold">
                   <td colSpan={7}>Totals</td>
                   <td className="text-end">{fmt(totals.closingProceeds)}</td>
                   <td className="text-end">{fmt(totals.quantity)}</td>
@@ -163,7 +255,13 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
         )}
       </Modal.Body>
 
-      <Modal.Footer>
+      <Modal.Footer className="d-flex justify-content-end gap-2">
+        <Button variant="outline-success" size="sm" disabled={!rows?.length} onClick={handleExportCsv}>
+          Export CSV
+        </Button>
+        <Button variant="outline-primary" size="sm" disabled={!rows?.length} onClick={handleExportXlsx}>
+          Export XLSX
+        </Button>
         <Button variant="secondary" onClick={handleClose}>
           Close
         </Button>
