@@ -213,28 +213,48 @@ export default function TradesData() {
   }
 
   // Export filtered or selected rows (selected checkboxes take priority)
+  // Also respects pagination - only exports rows visible on current page
   const handleExport = useCallback(
     (format) => {
       // Step 1️⃣ - Check if user has selected rows (checkboxes)
       // If selected rows exist, export only those
-      // Otherwise, export all filtered rows
+      // Otherwise, export filtered rows from current pagination page only
       let rowsToExport = []
 
       if (selectedRows.length > 0) {
         // User selected specific rows - export only selected
         rowsToExport = selectedRows
       } else {
-        // No selection - export all filtered rows
+        // No selection - export filtered rows from current page only
         if (gridApiRef.current) {
+          // Get pagination info: current page and page size
+          const currentPage = gridApiRef.current.paginationGetCurrentPage() || 0 // page number (0, 1, 2, ...)
+          const pageSize = gridApiRef.current.paginationGetPageSize() || 10 // rows per page (10, 20, etc.)
+          
+          // Calculate start and end index for current page
+          const startIndex = currentPage * pageSize // e.g., page 0 = 0, page 1 = 10, page 2 = 20
+          const endIndex = startIndex + pageSize // e.g., 0+10=10, 10+10=20, 20+10=30
+
+          // Get all filtered rows first
+          const allFilteredRows = []
           gridApiRef.current.forEachNodeAfterFilterAndSort((node) => {
             if (node.data) {
-              rowsToExport.push(node.data)
+              allFilteredRows.push(node.data)
             }
           })
+
+          // Then get only the rows for current page
+          // e.g., if page 1 (index 0) with page size 10: get rows 0-9
+          // e.g., if page 2 (index 1) with page size 10: get rows 10-19
+          rowsToExport = allFilteredRows.slice(startIndex, endIndex)
         }
-        // If no filtered rows, fall back to all rows
-        if (rowsToExport.length === 0) {
-          rowsToExport = rowData
+        // If no filtered rows, fall back to all rows from current page
+        if (rowsToExport.length === 0 && rowData.length > 0) {
+          const currentPage = gridApiRef.current?.paginationGetCurrentPage() || 0
+          const pageSize = gridApiRef.current?.paginationGetPageSize() || 10
+          const startIndex = currentPage * pageSize
+          const endIndex = startIndex + pageSize
+          rowsToExport = rowData.slice(startIndex, endIndex)
         }
       }
 
@@ -394,7 +414,7 @@ export default function TradesData() {
                     Selected: {selectedCount} / {rowData.length}
                   </span>
                 </div>
-                <div style={{ width: '100%' }}>
+                <div className="ag-theme-alpine" style={{ width: '100%', height: 600 }}>
                   <AgGridReact
                     onGridReady={onGridReady}
                     onSelectionChanged={onSelectionChanged}
@@ -403,6 +423,7 @@ export default function TradesData() {
                     pagination={true}
                     rowSelection="multiple"
                     paginationPageSize={10}
+                    paginationPageSizeSelector={[10, 25, 50, 100]}
                     defaultColDef={{
                       sortable: true,
                       filter: true,
@@ -413,7 +434,6 @@ export default function TradesData() {
                       onDeleteTrade: handleSingleDelete,
                     }}
                     suppressRowClickSelection={false}
-                    domLayout="autoHeight"
                     overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">Loading...</span>' : undefined}
                   />
                 </div>
