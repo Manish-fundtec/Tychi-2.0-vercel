@@ -29,34 +29,10 @@ const toLabel = (list, value) => {
   return m ? m.label : value || '-'
 }
 
-// Format GL code value with parent path (used in valueFormatter)
-const formatGLValue = (value, codeToParentPathMap, codeToNameMap) => {
-  if (!value || value === 'BROKER_CASH') {
-    return value === 'BROKER_CASH' ? 'Respective Broker cash' : value || '-'
-  }
-
-  const code = String(value)
-  const name = codeToNameMap[code] || ''
-  const parentPath = codeToParentPathMap[code] || []
-
-  // Format: code - parent_path - name
-  if (parentPath.length > 0) {
-    return `${code} - ${parentPath.join(' - ')} - ${name}`
-  } else if (name) {
-    return `${code} - ${name}`
-  } else {
-    return code
-  }
-}
-
 // Special value formatter for Trade section
-const formatTradeValue = (list, value, section, codeToParentPathMap, codeToNameMap) => {
+const formatTradeValue = (list, value, section) => {
   if (section === 'Trade') {
     if (value === 'BROKER_CASH') return 'Respective Broker cash'
-  }
-  // Use formatGLValue for consistent formatting with parent path
-  if (codeToParentPathMap && codeToNameMap) {
-    return formatGLValue(value, codeToParentPathMap, codeToNameMap)
   }
   return toLabel(list, value)
 }
@@ -69,9 +45,6 @@ export default function MappingTab({ fund_id: fundIdProp }) {
 
   // [{ value: '14100', label: '14100 — Investment Long — Cost — Stock' }, ...]
   const [glOptions, setGlOptions] = useState([])
-  // Store parent path map and name map for valueFormatter
-  const [codeToParentPathMap, setCodeToParentPathMap] = useState({})
-  const [codeToNameMap, setCodeToNameMap] = useState({})
 
   // { 'Trade': [{id,asset,long,short,setoff}, ...], ... }
   const [rowsBySection, setRowsBySection] = useState({})
@@ -101,82 +74,22 @@ export default function MappingTab({ fund_id: fundIdProp }) {
   // ========================================
   // This useEffect loads the dropdown options for Long/Short/Setoff columns
   // Data comes from: /api/v1/chart-of-accounts/postable/${fundId}
-  // Format: [{ value: "13110", label: "13110 - Investment Long - Cost - Stock" }, ...]
+  // Format: [{ value: "13110", label: "13110 - Stock" }, ...]
   // This data is used in the AgGrid dropdown editors
   useEffect(() => {
     if (!fundId) return
     ;(async () => {
       try {
-        // Step 1: Fetch hierarchical chart of accounts to build parent lookup map
-        const hierarchicalRes = await api.get(`/api/v1/chart-of-accounts/fund/${fundId}`)
-        const hierarchicalData = Array.isArray(hierarchicalRes.data?.data) ? hierarchicalRes.data.data : []
-
-        // Root categories to exclude from parent path (most parent categories)
-        const ROOT_CATEGORIES = ['Asset', 'Liability', 'Equity', 'Income', 'Expense']
-
-        // Build lookup maps: code -> name, and code -> full parent path
-        const nameMap = {}
-        const parentPathMap = {}
-
-        // Recursive function to build lookup maps and full parent paths
-        const buildLookup = (nodes, parentPath = []) => {
-          for (const node of nodes || []) {
-            const code = String(node.gl_code || node.code || '')
-            const name = node.gl_name || node.name || ''
-
-            // Store code to name mapping
-            nameMap[code] = name
-
-            // Filter out root categories from parent path
-            const filteredParentPath = parentPath.filter((p) => !ROOT_CATEGORIES.includes(p))
-
-            // Store full parent path (excluding root categories)
-            // Format: [parent, grandparent, ...] without root categories
-            parentPathMap[code] = [...filteredParentPath]
-
-            // For children, build new path that includes current node
-            const newPath = [...parentPath, name]
-
-            // Recursively process children with updated path
-            if (node.children && Array.isArray(node.children)) {
-              buildLookup(node.children, newPath)
-            }
-          }
-        }
-
-        buildLookup(hierarchicalData)
-
-        // Store maps in state for valueFormatter
-        setCodeToNameMap(nameMap)
-        setCodeToParentPathMap(parentPathMap)
-
-        // Step 2: Fetch postable accounts for mapping dropdown
+        // FETCH: Get Chart of Accounts data from database
         const r = await api.get(`/api/v1/chart-of-accounts/postable/${fundId}`, {
           params: { excludeRoots: true, onlyLeaves: false }, // show 11000, 12000 etc too
         })
 
-        // Step 3: Transform to dropdown format with parent path
-        const list = (Array.isArray(r.data) ? r.data : []).map((a) => {
-          const code = String(a.code)
-          const name = a.name || a.gl_name || nameMap[code] || ''
-          const parentPath = parentPathMap[code] || []
-
-          // Format: code - parent_path - name
-          // Build label with full parent path if available
-          let label = code
-          if (parentPath.length > 0) {
-            // Join parent path with " - " separator
-            label = `${code} - ${parentPath.join(' - ')} - ${name}`
-          } else {
-            // No parent, just code - name
-            label = `${code} - ${name}`
-          }
-
-          return {
-            value: code, // Used as the actual value stored in database
-            label, // What user sees in dropdown
-          }
-        })
+        // TRANSFORM: Convert API data to dropdown format
+        const list = (Array.isArray(r.data) ? r.data : []).map((a) => ({
+          value: String(a.code), // Used as the actual value stored in database
+          label: `${a.code} - ${a.name}`, // What user sees in dropdown
+        }))
 
         //  ADD: Special options for Trade section
         const brokerCashOption = {
@@ -282,11 +195,10 @@ export default function MappingTab({ fund_id: fundIdProp }) {
           }
         : undefined, // Uses values from glOptions (13110, 14000, etc.)
 
-      //  DISPLAY: This shows what user sees in the cell (Long, Short, Setoff columns)
-      // Uses same formatting as dropdown labels with parent path
+      //  DISPLAY: This shows what user sees in the cell
       valueFormatter: (p) => {
         const section = p?.context?.sectionName
-        return formatTradeValue(glOptions, p.value, section, codeToParentPathMap, codeToNameMap)
+        return formatTradeValue(glOptions, p.value, section)
       },
       // deny same-code duplicates within row
       valueSetter: (p) => {
@@ -314,7 +226,7 @@ export default function MappingTab({ fund_id: fundIdProp }) {
       makeEditableCol('short', 'Short'),
       makeEditableCol('setoff', 'Setoff'),
     ]
-  }, [glOptions, isEditMode, codeToParentPathMap, codeToNameMap])
+  }, [glOptions, isEditMode])
 
   /** Save one row back */
   const saveRow = async (row) => {
