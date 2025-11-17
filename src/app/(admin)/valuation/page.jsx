@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState ,useCallback } from 'react';
 import Cookies from 'js-cookie';
 import { Card, CardBody, CardHeader, CardTitle, Col, Dropdown, Modal, Row, Button } from 'react-bootstrap';
 import { Eye, RotateCcw } from 'lucide-react';
@@ -126,43 +126,44 @@ export default function ReviewsPage() {
     setFundId(getFundIdFromCookie());
   }, []);
 
-  // fetch reporting periods when fundId exists
+  const fetchReportingPeriods = useCallback(async () => {
+    if (!fundId) return;
+    setLoading(true);
+    setErr('');
+    try {
+      const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`;
+      const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json(); // { rows, count }
+      const rows = (json?.rows || []).map((r, i) => ({
+        srNo: i + 1,
+        month: r.period_name || '-',           // e.g. "July (1–31)"
+        date: (r.end_date || '').slice(0, 10), // end_date is the pricing date
+        status: String(r.status || 'completed').toLowerCase(),
+        raw: r,
+      }));
+
+      const latestCompleted =
+        rows
+          .filter((it) => (it.status || '').toLowerCase() === 'completed' && it.date)
+          .map((it) => it.date)
+          .sort()
+          .pop() || null;
+      latestCompletedDateRef.current = latestCompleted;
+
+      setRowData(rows);
+    } catch (e) {
+      console.error('[Valuation] load periods failed:', e);
+      setErr('Failed to load reporting periods.');
+    } finally {
+      setLoading(false);
+    }
+  }, [fundId]);
+
   useEffect(() => {
     if (!fundId) return;
-    (async () => {
-      setLoading(true);
-      setErr('');
-      try {
-        const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`;
-        const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const json = await resp.json(); // { rows, count }
-        const rows = (json?.rows || []).map((r, i) => ({
-          srNo: i + 1,
-          month: r.period_name || '-',           // e.g. "July (1–31)"
-          date: (r.end_date || '').slice(0, 10), // end_date is the pricing date
-          status: String(r.status || 'completed').toLowerCase(),
-          raw: r,
-        }));
-
-        // compute latest completed date (ISO string)
-        const latestCompleted =
-          rows
-            .filter((it) => (it.status || '').toLowerCase() === 'completed' && it.date)
-            .map((it) => it.date)
-            .sort()
-            .pop() || null;
-        latestCompletedDateRef.current = latestCompleted;
-
-        setRowData(rows);
-      } catch (e) {
-        console.error('[Valuation] load periods failed:', e);
-        setErr('Failed to load reporting periods.');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [fundId]);
+    fetchReportingPeriods();
+  }, [fundId, fetchReportingPeriods]);
 
   async function handleViewSymbols(row) {
     if (!row || !fundId) return;
@@ -280,7 +281,10 @@ export default function ReviewsPage() {
             <CardHeader className="d-flex justify-content-between align-items-center bg-light">
               <CardTitle as="h4">Valuation</CardTitle>
               <Dropdown>
-                <ToggleBetweenModals apiBase={apiBase} />
+                <ToggleBetweenModals
+                  apiBase={apiBase}
+                  onPricingRefresh={fetchReportingPeriods}
+                />
               </Dropdown>
             </CardHeader>
 
