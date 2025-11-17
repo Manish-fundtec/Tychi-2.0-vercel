@@ -179,20 +179,43 @@ const JournalsPage = () => {
   }, [])
 
   // Export only filtered rows (rows visible after user filters/searches)
+  // Also respects pagination - only exports rows visible on current page
   const handleExport = useCallback(
     (format) => {
-      // Step 1️⃣ - Get all rows visible after filter/search
-      const visibleRows = []
+      // Step 1️⃣ - Get filtered rows from current pagination page only
+      let rowsToExport = []
+
       if (gridApiRef.current) {
+        // Get pagination info: current page and page size
+        const currentPage = gridApiRef.current.paginationGetCurrentPage() || 0 // page number (0, 1, 2, ...)
+        const pageSize = gridApiRef.current.paginationGetPageSize() || 10 // rows per page (10, 20, etc.)
+        
+        // Calculate start and end index for current page
+        const startIndex = currentPage * pageSize // e.g., page 0 = 0, page 1 = 10, page 2 = 20
+        const endIndex = startIndex + pageSize // e.g., 0+10=10, 10+10=20, 20+10=30
+
+        // Get all filtered rows first
+        const allFilteredRows = []
         gridApiRef.current.forEachNodeAfterFilterAndSort((node) => {
           if (node.data) {
-            visibleRows.push(node.data)
+            allFilteredRows.push(node.data)
           }
         })
-      }
 
-      // If no filtered rows, fall back to all rows
-      const rowsToExport = visibleRows.length > 0 ? visibleRows : rowData
+        // Then get only the rows for current page
+        // e.g., if page 1 (index 0) with page size 10: get rows 0-9
+        // e.g., if page 2 (index 1) with page size 10: get rows 10-19
+        rowsToExport = allFilteredRows.slice(startIndex, endIndex)
+      }
+      
+      // If no filtered rows, fall back to all rows from current page
+      if (rowsToExport.length === 0 && rowData.length > 0) {
+        const currentPage = gridApiRef.current?.paginationGetCurrentPage() || 0
+        const pageSize = gridApiRef.current?.paginationGetPageSize() || 10
+        const startIndex = currentPage * pageSize
+        const endIndex = startIndex + pageSize
+        rowsToExport = rowData.slice(startIndex, endIndex)
+      }
 
       if (!rowsToExport.length) {
         alert('No journal records to export. Please check your filters or add some journals.')
@@ -273,6 +296,7 @@ const JournalsPage = () => {
                     columnDefs={columnDefsfordate}
                     pagination
                     paginationPageSize={10}
+                    paginationPageSizeSelector={[10, 25, 50, 100]}
                     defaultColDef={{ sortable: true, filter: true, resizable: true }}
                   />
                 )}
