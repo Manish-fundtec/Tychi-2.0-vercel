@@ -305,9 +305,9 @@ export const symbolColDefs = [
   { field: 'symbol_name', headerName: 'Symbol Name', sortable: true, filter: true, flex: 1 },
   { field: 'isin', headerName: 'ISIN', sortable: true, filter: true, flex: 1 },
   { field: 'cusip', headerName: 'CUSIP', sortable: true, filter: true, flex: 1 },
-  { field: 'asset_type_id', headerName: 'Asset Type ID', sortable: true, filter: true, flex: 1 },
+  // { field: 'asset_type_id', headerName: 'Asset Type ID', sortable: true, filter: true, flex: 1 },
   { field: 'asset_type_name', headerName: 'Asset Type Name', sortable: true, filter: true, flex: 1 },
-  { field: 'exchange_id', headerName: 'Exchange ID', sortable: true, filter: true, flex: 1 },
+  // { field: 'exchange_id', headerName: 'Exchange ID', sortable: true, filter: true, flex: 1 },
   { field: 'exchange_name', headerName: 'Exchange Name', sortable: true, filter: true, flex: 1 },
   { field: 'contract_size', headerName: 'Contract Size', sortable: true, filter: true, flex: 1 },
   {
