@@ -627,11 +627,12 @@ export function computePricingWindow(reportingFrequency, reportingStartDate, las
 }
 
 export const ToggleBetweenModals = ({
-  tokenData, // { fund_id, reporting_frequency, selected_period, pricing_date, ... }
-  symbolsLoading, // optional boolean (unused here; local loading state is used)
-  symbolsError, // optional string   (unused here; local error state is used)
-  onSaveManual, // async (entries: {symbol, price}[]) => void
-  onUploadFile, // async (file: File) => void   <-- preferred upload path if provided
+  tokenData,
+  symbolsLoading,
+  symbolsError,
+  onSaveManual,
+  onUploadFile,
+  onPricingRefresh,
 }) => {
   // ───────────────────────────────
   // Modal switches
@@ -896,6 +897,10 @@ export const ToggleBetweenModals = ({
       setAdhocOpen(false)
       setFile(null)
       setFileError('')
+
+      if (typeof onPricingRefresh === 'function') {
+        onPricingRefresh()
+      }
     } catch (e) {
       console.error('[Upload Pricing] Error:', e)
       setFileError(e?.message || 'Upload failed.')
@@ -1024,6 +1029,10 @@ export const ToggleBetweenModals = ({
       setChooserOpen(false)
       setUploadOpen(false)
       setAdhocOpen(false)
+
+      if (typeof onPricingRefresh === 'function') {
+        onPricingRefresh()
+      }
 
       // refresh last pricing date
       try {
@@ -1244,6 +1253,10 @@ export const ToggleBetweenModals = ({
       setCustomRows([])
       setStartDate('')
       setEndDate('')
+
+      if (typeof onPricingRefresh === 'function') {
+        onPricingRefresh()
+      }
 
       try {
         if (currentFundId) {
