@@ -212,34 +212,64 @@ export default function TradesData() {
     return stringValue
   }
 
+  // Export filtered or selected rows (selected checkboxes take priority)
   const handleExport = useCallback(
     (format) => {
-      const rowsToExport = selectedRows
+      // Step 1️⃣ - Check if user has selected rows (checkboxes)
+      // If selected rows exist, export only those
+      // Otherwise, export all filtered rows
+      let rowsToExport = []
+
+      if (selectedRows.length > 0) {
+        // User selected specific rows - export only selected
+        rowsToExport = selectedRows
+      } else {
+        // No selection - export all filtered rows
+        if (gridApiRef.current) {
+          gridApiRef.current.forEachNodeAfterFilterAndSort((node) => {
+            if (node.data) {
+              rowsToExport.push(node.data)
+            }
+          })
+        }
+        // If no filtered rows, fall back to all rows
+        if (rowsToExport.length === 0) {
+          rowsToExport = rowData
+        }
+      }
+
       if (!rowsToExport.length) {
-        alert('Please select at least one trade to export.')
+        alert('No trades to export. Please select rows or check your filters.')
         return
       }
+
+      // Step 2️⃣ - Convert to export format using headers and formatter
       const aoa = buildAoaFromHeaders(tradeExportHeaders, rowsToExport, formatExportValue)
+
+      // Step 3️⃣ - Export based on format
+      const exportDate = new Date().toISOString().slice(0, 10)
       if (format === 'xlsx') {
         exportAoaToXlsx({
-          fileName: `trades-${new Date().toISOString().slice(0, 10)}`,
+          fileName: selectedRows.length > 0 ? `trades-selected-${exportDate}` : `trades-filtered-${exportDate}`,
           sheetName: 'Trades',
           aoa,
         })
         return
       }
+
+      // Step 4️⃣ - Create CSV file and download
       const csvContent = aoa.map((row) => row.map((cell) => escapeCsv(cell)).join(',')).join('\n')
       const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `trades-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = selectedRows.length > 0 ? `trades-selected-${exportDate}.csv` : `trades-filtered-${exportDate}.csv`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
     },
-    [selectedRows, tradeExportHeaders, formatExportValue],
+    [selectedRows, rowData, tradeExportHeaders, formatExportValue],
   )
 
   const confirmAndDeleteTrades = useCallback(
@@ -354,11 +384,11 @@ export default function TradesData() {
                   <Button variant="outline-danger" size="sm" onClick={handleBulkDelete} disabled={!selectedRows.length || bulkActionLoading}>
                     {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
                   </Button>
-                  <Button variant="outline-success" size="sm" onClick={() => handleExport('csv')} disabled={!selectedRows.length}>
-                    Export CSV
+                  <Button variant="outline-success" size="sm" onClick={() => handleExport('csv')} disabled={!rowData.length || loading}>
+                    {selectedRows.length > 0 ? `Export Selected CSV (${selectedRows.length})` : 'Export Filtered CSV'}
                   </Button>
-                  <Button variant="outline-primary" size="sm" onClick={() => handleExport('xlsx')} disabled={!selectedRows.length}>
-                    Export XLSX
+                  <Button variant="outline-primary" size="sm" onClick={() => handleExport('xlsx')} disabled={!rowData.length || loading}>
+                    {selectedRows.length > 0 ? `Export Selected XLSX (${selectedRows.length})` : 'Export Filtered XLSX'}
                   </Button>
                   <span className="text-muted ms-auto">
                     Selected: {selectedCount} / {rowData.length}
