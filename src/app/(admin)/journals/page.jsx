@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Dropdown, Spinner, Alert, Button } from 'react-bootstrap'
 import api from '../../../lib/api/axios'
@@ -9,6 +9,7 @@ import { jwtDecode } from 'jwt-decode'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { formatYmd } from '../../../../src/lib/dateFormat'
 import { journalColDefs as sharedJournalColDefs } from '@/assets/tychiData/columnDefs'
+import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
 const MGLEntryModal = dynamic(() => import('../base-ui/modals/components/AllModals').then((mod) => mod.MGLEntryModal), { ssr: false })
@@ -19,6 +20,7 @@ const JournalsPage = () => {
   const [loading, setLoading] = useState(false)
   const [errMsg, setErrMsg] = useState('')
   const [fundId, setFundId] = useState('')
+  const gridApiRef = useRef(null)
 
   const defaultJournalColDefs = useMemo(
     () => [
@@ -141,51 +143,92 @@ const JournalsPage = () => {
     }
   };
 
-  const handleExportCsv = () => {
-    if (!rowData?.length) {
-      alert('No journal records to export.')
-      return
-    }
+  // Grid ready callback to store grid API reference
+  const onGridReady = useCallback((params) => {
+    gridApiRef.current = params.api
+  }, [])
 
-    const fields = (defaultJournalColDefs || [])
-      .filter((col) => col.field)
-      .map((col) => ({ field: col.field, header: col.headerName || col.field }))
+  // Export headers for journals
+  const journalExportHeaders = useMemo(
+    () =>
+      (defaultJournalColDefs || [])
+        .filter((col) => col.field)
+        .map((col) => ({ key: col.field, label: col.headerName || col.field })),
+    [defaultJournalColDefs],
+  )
 
-    const formatCell = (field, value) => {
-      if (field === 'journal_date') {
+  // Format export values
+  const formatExportValue = useCallback(
+    (key, value) => {
+      if (key === 'journal_date') {
         const raw = value ? String(value).slice(0, 10) : ''
         return raw ? formatYmd(raw, fmt) : ''
       }
       return value ?? ''
-    }
+    },
+    [fmt],
+  )
 
-    const escapeCsv = (value) => {
-      const stringValue = String(value ?? '')
-      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-        return '"' + stringValue.replace(/"/g, '""') + '"'
+  // CSV escape helper
+  const escapeCsv = useCallback((value) => {
+    const stringValue = String(value ?? '')
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return '"' + stringValue.replace(/"/g, '""') + '"'
+    }
+    return stringValue
+  }, [])
+
+  // Export only filtered rows (rows visible after user filters/searches)
+  const handleExport = useCallback(
+    (format) => {
+      // Step 1️⃣ - Get all rows visible after filter/search
+      const visibleRows = []
+      if (gridApiRef.current) {
+        gridApiRef.current.forEachNodeAfterFilterAndSort((node) => {
+          if (node.data) {
+            visibleRows.push(node.data)
+          }
+        })
       }
-      return stringValue
-    }
 
-    const headerRow = fields.map(({ header }) => escapeCsv(header)).join(',')
-    const dataRows = rowData.map((row) =>
-      fields
-        .map(({ field }) => escapeCsv(formatCell(field, row[field])))
-        .join(','),
-    )
+      // If no filtered rows, fall back to all rows
+      const rowsToExport = visibleRows.length > 0 ? visibleRows : rowData
 
-    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    const timestamp = new Date().toISOString().slice(0, 10)
-    link.href = url
-    link.download = `journals-${fundId || 'fund'}-${timestamp}.csv`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-  }
+      if (!rowsToExport.length) {
+        alert('No journal records to export. Please check your filters or add some journals.')
+        return
+      }
+
+      // Step 2️⃣ - Convert to export format using headers and formatter
+      const aoa = buildAoaFromHeaders(journalExportHeaders, rowsToExport, formatExportValue)
+
+      // Step 3️⃣ - Export based on format
+      const exportDate = new Date().toISOString().slice(0, 10)
+      if (format === 'xlsx') {
+        exportAoaToXlsx({
+          fileName: `journals-filtered-${fundId || 'fund'}-${exportDate}`,
+          sheetName: 'Journals',
+          aoa,
+        })
+        return
+      }
+
+      // Step 4️⃣ - Create CSV file and download
+      const headerRow = journalExportHeaders.map(({ label }) => escapeCsv(label)).join(',')
+      const dataRows = aoa.map((row) => row.map((cell) => escapeCsv(cell)).join(','))
+      const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n')
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `journals-filtered-${fundId || 'fund'}-${exportDate}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    },
+    [rowData, journalExportHeaders, formatExportValue, escapeCsv, fundId],
+  )
   return (
     <Row>
       <Col xl={12}>
@@ -196,10 +239,18 @@ const JournalsPage = () => {
               <Button
                 variant="outline-success"
                 size="sm"
-                disabled={!rowData?.length}
-                onClick={handleExportCsv}
+                disabled={!rowData?.length || loading}
+                onClick={() => handleExport('csv')}
               >
-                Export CSV
+                ExportCSV
+              </Button>
+              <Button
+                variant="outline-primary"
+                size="sm"
+                disabled={!rowData?.length || loading}
+                onClick={() => handleExport('xlsx')}
+              >
+                Export XLSX
               </Button>
             </div>
           </CardHeader>
@@ -217,6 +268,7 @@ const JournalsPage = () => {
               <div className="ag-theme-alpine" style={{ height: 550, width: '100%' }}>
                 {columnDefs.length > 0 && (
                   <AgGridReact
+                    onGridReady={onGridReady}
                     rowData={rowData}
                     columnDefs={columnDefsfordate}
                     pagination
