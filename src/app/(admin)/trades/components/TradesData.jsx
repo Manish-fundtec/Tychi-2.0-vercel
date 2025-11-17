@@ -272,6 +272,33 @@ export default function TradesData() {
     [selectedRows, rowData, tradeExportHeaders, formatExportValue],
   )
 
+  // Find the latest trade based on created_at, trade_date, or trade_id
+  const getLatestTrade = useCallback(() => {
+    if (!rowData || rowData.length === 0) return null
+
+    return rowData.reduce((latest, current) => {
+      // Compare by created_at first (most reliable)
+      const latestCreated = latest?.created_at ? new Date(latest.created_at).getTime() : 0
+      const currentCreated = current?.created_at ? new Date(current.created_at).getTime() : 0
+
+      if (currentCreated > latestCreated) return current
+      if (currentCreated < latestCreated) return latest
+
+      // If created_at is same or missing, compare by trade_date
+      const latestDate = latest?.trade_date ? new Date(latest.trade_date).getTime() : 0
+      const currentDate = current?.trade_date ? new Date(current.trade_date).getTime() : 0
+
+      if (currentDate > latestDate) return current
+      if (currentDate < latestDate) return latest
+
+      // If dates are same, compare by trade_id (assuming sequential IDs)
+      const latestId = latest?.trade_id ? String(latest.trade_id) : ''
+      const currentId = current?.trade_id ? String(current.trade_id) : ''
+
+      return currentId > latestId ? current : latest
+    })
+  }, [rowData])
+
   const confirmAndDeleteTrades = useCallback(
     async (trades) => {
       const deletable = trades.filter((t) => t?.trade_id)
@@ -279,7 +306,26 @@ export default function TradesData() {
         alert('No trades selected for deletion.')
         return
       }
-      if (!confirm(`Delete ${deletable.length} trade(s)? This cannot be undone.`)) return
+
+      // ✅ Validation: Only allow deleting the latest trade
+      const latestTrade = getLatestTrade()
+      if (!latestTrade) {
+        alert('Unable to determine the latest trade. Cannot delete.')
+        return
+      }
+
+      // Check if all selected trades are the latest trade
+      const allAreLatest = deletable.every((trade) => {
+        // Compare by trade_id (most reliable identifier)
+        return trade.trade_id === latestTrade.trade_id
+      })
+
+      if (!allAreLatest) {
+        alert('Only the latest trade can be deleted. Please select only the most recent trade.')
+        return
+      }
+
+      if (!confirm(`Delete the latest trade? This cannot be undone.`)) return
       setBulkActionLoading(true)
       try {
         for (const trade of deletable) {
@@ -295,7 +341,7 @@ export default function TradesData() {
         setBulkActionLoading(false)
       }
     },
-    [refreshTrades],
+    [refreshTrades, getLatestTrade],
   )
 
   const handleSingleDelete = useCallback(
@@ -316,6 +362,15 @@ export default function TradesData() {
   const closeViewModal = useCallback(() => setViewTrade(null), [])
 
   const selectedCount = selectedRows.length
+
+  // Check if selected trades can be deleted (only latest trade can be deleted)
+  const canDeleteSelected = useMemo(() => {
+    if (selectedRows.length === 0) return false
+    const latestTrade = getLatestTrade()
+    if (!latestTrade) return false
+    // Only allow delete if exactly one trade is selected and it's the latest
+    return selectedRows.length === 1 && selectedRows[0]?.trade_id === latestTrade.trade_id
+  }, [selectedRows, getLatestTrade])
 
   const historyColDefs = useMemo(
     () => [
@@ -381,7 +436,12 @@ export default function TradesData() {
                   <Button variant="outline-secondary" size="sm" onClick={handleClearSelection} disabled={!selectedRows.length}>
                     Clear Selection
                   </Button>
-                  <Button variant="outline-danger" size="sm" onClick={handleBulkDelete} disabled={!selectedRows.length || bulkActionLoading}>
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={!canDeleteSelected || bulkActionLoading}
+                    title={!canDeleteSelected && selectedRows.length > 0 ? 'Only the latest trade can be deleted' : ''}>
                     {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
                   </Button>
                   <Button variant="outline-success" size="sm" onClick={() => handleExport('csv')} disabled={!rowData.length || loading}>
@@ -411,6 +471,7 @@ export default function TradesData() {
                     context={{
                       onViewTrade: handleViewTrade,
                       onDeleteTrade: handleSingleDelete,
+                      latestTradeId: getLatestTrade()?.trade_id || null,
                     }}
                     suppressRowClickSelection={false}
                     domLayout="autoHeight"
