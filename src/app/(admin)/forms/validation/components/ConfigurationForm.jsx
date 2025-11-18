@@ -443,6 +443,12 @@ export const BasicForm = () => {
       const updated = await updateFund(fund_id, payload)
       setFormData(updated)
       setIsEditing(false)
+      
+      // Refresh dashboard token to get updated decimal_precision and other fund settings
+      // The backend should update the token cookie after fund update
+      // Force a page reload to refresh all components using the token
+      window.location.reload()
+      
       alert('✅ Fund updated')
     } catch (err) {
       console.error('Save failed:', err)

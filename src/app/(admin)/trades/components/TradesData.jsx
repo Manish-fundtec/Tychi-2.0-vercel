@@ -8,6 +8,7 @@ import Cookies from 'js-cookie'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { formatYmd } from '../../../../../src/lib/dateFormat'
 import { jwtDecode } from 'jwt-decode'
+import currencies from 'currency-formatter/currencies'
 import {
   Col,
   Card,
@@ -60,6 +61,15 @@ export default function TradesData() {
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
   const fund_id = dashboard?.fund_id || ''
+  const decimalPrecision = Number(dashboard?.decimal_precision || dashboard?.fund?.decimal_precision || 2) || 2
+  
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || ''
+    if (!reportingCurrency) return ''
+    const currency = currencies.find((c) => c.code === reportingCurrency)
+    return currency?.symbol || ''
+  }, [dashboard])
 
   const refreshTrades = useCallback(async () => {
     const currentFundId = fund_id || fundId
@@ -96,6 +106,62 @@ export default function TradesData() {
         }
       }
 
+      // Format Quantity column - use decimal precision
+      if (col?.field === 'quantity') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const value = p?.value
+            if (value === null || value === undefined || value === '') return '—'
+            const num = Number(value)
+            if (Number.isNaN(num)) return value
+            return num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+          },
+        }
+      }
+
+      // Format Price column same as Amount and Gross Amount - use currency symbol at front
+      if (col?.field === 'price') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const value = p?.value
+            if (value === null || value === undefined || value === '') return '—'
+            const num = Number(value)
+            if (Number.isNaN(num)) return value
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            return currencySymbol ? `${currencySymbol}${formatted}` : formatted
+          },
+        }
+      }
+
+      // Format Amount column - use currency symbol at front
+      if (col?.field === 'amount') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const value = p?.value
+            if (typeof value === 'string' && value.trim()) {
+              // If amount is already a formatted string, try to extract number and reformat with symbol
+              const numMatch = value.replace(/,/g, '').match(/[\d.]+/)
+              if (numMatch) {
+                const num = Number(numMatch[0])
+                if (!Number.isNaN(num)) {
+                  const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+                  return currencySymbol ? `${currencySymbol}${formatted}` : formatted
+                }
+              }
+              return value
+            }
+            if (value === null || value === undefined || value === '') return '—'
+            const num = Number(value)
+            if (Number.isNaN(num)) return value
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            return currencySymbol ? `${currencySymbol}${formatted}` : formatted
+          },
+        }
+      }
+
       if (col?.field === 'computed_amount') {
         return {
           ...col,
@@ -104,23 +170,15 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-            const amtLabel = (() => {
-              const rawAmount = p?.data?.amount
-              if (typeof rawAmount === 'string') {
-                const parts = rawAmount.trim().split(/\s+/)
-                if (parts.length > 1) return parts[parts.length - 1]
-              }
-              return ''
-            })()
-            return amtLabel ? `${formatted} ${amtLabel}` : formatted
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
       }
 
       return col
     })
-  }, [fmt])
+  }, [fmt, currencySymbol, decimalPrecision])
 
   // History state
   const [history, setHistory] = useState([])

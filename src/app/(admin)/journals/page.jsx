@@ -10,6 +10,7 @@ import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { formatYmd } from '../../../../src/lib/dateFormat'
 import { journalColDefs as sharedJournalColDefs } from '@/assets/tychiData/columnDefs'
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
+import currencies from 'currency-formatter/currencies'
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
 const MGLEntryModal = dynamic(() => import('../base-ui/modals/components/AllModals').then((mod) => mod.MGLEntryModal), { ssr: false })
@@ -106,20 +107,48 @@ const JournalsPage = () => {
 
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
+  const decimalPrecision = Number(dashboard?.decimal_precision || dashboard?.fund?.decimal_precision || 2) || 2
+  
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || ''
+    if (!reportingCurrency) return ''
+    const currency = currencies.find((c) => c.code === reportingCurrency)
+    return currency?.symbol || ''
+  }, [dashboard])
+  
   // Optional UX: show a lightweight state until token is ready
   // define columnDefs here (NOT inside JSX)
   const columnDefsfordate = useMemo(() => {
     return (defaultJournalColDefs || []).map((col) => {
-      if (col?.field !== 'journal_date') return col
-      return {
-        ...col,
-        valueFormatter: (p) => {
-          const raw = p?.value ? String(p.value).slice(0, 10) : ''
-          return formatYmd(raw, fmt) // 'MM/DD/YYYY' or 'DD/MM/YYYY'
-        },
+      if (col?.field === 'journal_date') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const raw = p?.value ? String(p.value).slice(0, 10) : ''
+            return formatYmd(raw, fmt) // 'MM/DD/YYYY' or 'DD/MM/YYYY'
+          },
+        }
       }
+      
+      // Format Amount column - use currency symbol at front
+      if (col?.field === 'amount') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const value = p?.value
+            if (value === null || value === undefined || value === '') return '—'
+            const num = Number(value)
+            if (Number.isNaN(num)) return value
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            return currencySymbol ? `${currencySymbol}${formatted}` : formatted
+          },
+        }
+      }
+      
+      return col
     })
-  }, [fmt])
+  }, [fmt, currencySymbol, defaultJournalColDefs, decimalPrecision])
 
   const fetchData = async () => {
     if (!fundId) return;

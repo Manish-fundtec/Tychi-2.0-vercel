@@ -10,6 +10,7 @@ import api from '@/lib/api/axios'
 import { formatYmd } from '@/lib/dateFormat'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { AddManualJournal } from '../forms/validation/components/AllFormValidation'
+import currencies from 'currency-formatter/currencies'
 
 const ManualJournalPage = () => {
   const [fundId, setFundId] = useState(null)
@@ -201,6 +202,15 @@ const ManualJournalPage = () => {
 
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
+  const decimalPrecision = Number(dashboard?.decimal_precision || dashboard?.fund?.decimal_precision || 2) || 2
+  
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || ''
+    if (!reportingCurrency) return ''
+    const currency = currencies.find((c) => c.code === reportingCurrency)
+    return currency?.symbol || ''
+  }, [dashboard])
 
   // columns (safe defaults)
   const columnDefs = useMemo(
@@ -224,7 +234,14 @@ const ManualJournalPage = () => {
         sortable: true,
         filter: true,
         width: 120,
-        valueFormatter: (p) => (p.value != null ? Number(p.value).toLocaleString() : ''),
+        valueFormatter: (p) => {
+          const value = p?.value
+          if (value === null || value === undefined || value === '') return '—'
+          const num = Number(value)
+          if (Number.isNaN(num)) return value
+          const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+          return currencySymbol ? `${currencySymbol}${formatted}` : formatted
+        },
         cellClass: 'text-end',
         flex: 1,
       },
@@ -254,7 +271,7 @@ const ManualJournalPage = () => {
         },
       },
     ],
-    [fmt],
+    [fmt, currencySymbol, decimalPrecision],
   )
 
   const historyColDefs = useMemo(
