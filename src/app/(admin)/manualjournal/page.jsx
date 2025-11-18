@@ -202,6 +202,7 @@ const ManualJournalPage = () => {
 
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
+  const decimalPrecision = Number(dashboard?.decimal_precision || dashboard?.fund?.decimal_precision || 2) || 2
   
   // Get currency symbol from reporting_currency
   const currencySymbol = useMemo(() => {
@@ -238,7 +239,7 @@ const ManualJournalPage = () => {
           if (value === null || value === undefined || value === '') return '—'
           const num = Number(value)
           if (Number.isNaN(num)) return value
-          const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
           return currencySymbol ? `${currencySymbol}${formatted}` : formatted
         },
         cellClass: 'text-end',
@@ -270,7 +271,7 @@ const ManualJournalPage = () => {
         },
       },
     ],
-    [fmt, currencySymbol],
+    [fmt, currencySymbol, decimalPrecision],
   )
 
   const historyColDefs = useMemo(

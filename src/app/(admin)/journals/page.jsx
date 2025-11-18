@@ -107,6 +107,7 @@ const JournalsPage = () => {
 
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
+  const decimalPrecision = Number(dashboard?.decimal_precision || dashboard?.fund?.decimal_precision || 2) || 2
   
   // Get currency symbol from reporting_currency
   const currencySymbol = useMemo(() => {
@@ -139,7 +140,7 @@ const JournalsPage = () => {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -147,7 +148,7 @@ const JournalsPage = () => {
       
       return col
     })
-  }, [fmt, currencySymbol, defaultJournalColDefs])
+  }, [fmt, currencySymbol, defaultJournalColDefs, decimalPrecision])
 
   const fetchData = async () => {
     if (!fundId) return;

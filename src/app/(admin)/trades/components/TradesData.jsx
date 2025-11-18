@@ -61,6 +61,7 @@ export default function TradesData() {
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
   const fund_id = dashboard?.fund_id || ''
+  const decimalPrecision = Number(dashboard?.decimal_precision || dashboard?.fund?.decimal_precision || 2) || 2
   
   // Get currency symbol from reporting_currency
   const currencySymbol = useMemo(() => {
@@ -105,6 +106,20 @@ export default function TradesData() {
         }
       }
 
+      // Format Quantity column - use decimal precision
+      if (col?.field === 'quantity') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const value = p?.value
+            if (value === null || value === undefined || value === '') return '—'
+            const num = Number(value)
+            if (Number.isNaN(num)) return value
+            return num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+          },
+        }
+      }
+
       // Format Price column same as Amount and Gross Amount - use currency symbol at front
       if (col?.field === 'price') {
         return {
@@ -114,7 +129,7 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -132,7 +147,7 @@ export default function TradesData() {
               if (numMatch) {
                 const num = Number(numMatch[0])
                 if (!Number.isNaN(num)) {
-                  const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
                   return currencySymbol ? `${currencySymbol}${formatted}` : formatted
                 }
               }
@@ -141,7 +156,7 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -155,7 +170,7 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -163,7 +178,7 @@ export default function TradesData() {
 
       return col
     })
-  }, [fmt, currencySymbol])
+  }, [fmt, currencySymbol, decimalPrecision])
 
   // History state
   const [history, setHistory] = useState([])
