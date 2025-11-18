@@ -281,19 +281,12 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
     e.stopPropagation()
     setValidated(true)
 
-    // Helper function to check if value is empty/null/undefined/dash/whitespace
-    const isEmpty = (value) => {
-      if (value === null || value === undefined) return true
-      const str = String(value).trim()
-      return str === '' || str === '-' || str === 'null' || str === 'undefined'
-    }
-
     // Validate that both fields have values
     const newErrors = {}
-    if (isEmpty(formData.closure_rule)) {
+    if (!formData.closure_rule || formData.closure_rule === '') {
       newErrors.closure_rule = 'Please select a closure rule'
     }
-    if (isEmpty(formData.long_term_rule)) {
+    if (!formData.long_term_rule || formData.long_term_rule === '') {
       newErrors.long_term_rule = 'Please select a long term rule'
     }
 
