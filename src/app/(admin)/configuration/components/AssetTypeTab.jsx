@@ -6,7 +6,7 @@ import { AssetTypeModal } from '@/app/(admin)/base-ui/modals/components/Configur
 import { Modal, Button } from 'react-bootstrap';
 
 const AssetTypeTab = () => {
-  const { assetTypes, toggleAssetTypeStatus, checkAssetTypeHasSymbols } = useAssetTypeData();
+  const { assetTypes, toggleAssetTypeStatus, checkAssetTypeHasSymbols, refetchAssetTypes } = useAssetTypeData();
   const [showModal, setShowModal] = useState(false);
   const [selectedAssetType, setSelectedAssetType] = useState(null);
   const [fundId, setFundId] = useState(null);
@@ -69,9 +69,14 @@ const AssetTypeTab = () => {
 
       <AssetTypeModal
         show={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={() => {
+          setShowModal(false)
+          refetchAssetTypes()
+        }}
         assetType={selectedAssetType}
-        onSuccess={handleConfirm}
+        onSuccess={() => {
+          refetchAssetTypes()
+        }}
       />
 
       {/* Deactivation Confirmation Modal */}
