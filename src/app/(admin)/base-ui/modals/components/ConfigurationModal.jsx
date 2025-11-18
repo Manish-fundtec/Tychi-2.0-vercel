@@ -72,17 +72,13 @@ export const BadaModal = () => {
 }
 
 export const AssetTypeModal = ({ show, onClose, assetType, onSuccess }) => {
-  const handleSuccess = async () => {
-    if (onSuccess) await onSuccess()
-  }
-
   return (
     <Modal show={show} onHide={onClose} centered>
       <ModalHeader closeButton>
         <h5 className="modal-title">Activate Asset Type</h5>
       </ModalHeader>
       <ModalBody>
-        <AssetTypeForm assetType={assetType} onSuccess={handleSuccess} onClose={onClose} />
+        <AssetTypeForm assetType={assetType} onSuccess={onSuccess} onClose={onClose} />
       </ModalBody>
     </Modal>
   )
