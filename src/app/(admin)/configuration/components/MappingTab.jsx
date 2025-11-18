@@ -8,6 +8,7 @@ import { ClientSideRowModelModule } from 'ag-grid-community'
 import Cookies from 'js-cookie'
 import { jwtDecode } from 'jwt-decode'
 import api from '@/lib/api/axios'
+import { getAssetTypesActive } from '@/lib/api/assetType'
 import { FaEdit, FaSave, FaTimes } from 'react-icons/fa'
 
 // AG Grid modules
@@ -48,6 +49,9 @@ export default function MappingTab({ fund_id: fundIdProp }) {
 
   // { 'Trade': [{id,asset,long,short,setoff}, ...], ... }
   const [rowsBySection, setRowsBySection] = useState({})
+  
+  // Store all active asset types (to ensure all are displayed in each section)
+  const [allAssetTypes, setAllAssetTypes] = useState([])
 
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false)
@@ -107,41 +111,298 @@ export default function MappingTab({ fund_id: fundIdProp }) {
   }, [fundId])
 
   // ========================================
+  // FETCH ALL ACTIVE ASSET TYPES
+  // ========================================
+  // Fetch all active asset types to ensure all are displayed in each section
+  useEffect(() => {
+    if (!fundId) return
+    ;(async () => {
+      try {
+        const res = await getAssetTypesActive(fundId)
+        const assetTypes = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : []
+        setAllAssetTypes(assetTypes)
+      } catch (e) {
+        console.error('Failed to load active asset types:', e)
+        setAllAssetTypes([])
+      }
+    })()
+  }, [fundId])
+
+  // ========================================
   // MAPPING TABLE DATA SOURCE
   // ========================================
   // This loads the actual mapping data that fills the table rows
   // Data comes from: /api/v1/mapping/${fundId}
-  // This data shows which GL codes are mapped to each asset type
+  // Ensures ALL active asset types are shown in each section, even without mappings
   useEffect(() => {
     if (!fundId) return
     ;(async () => {
       try {
         setLoading(true)
         //  FETCH: Get mapping data from database
-        const r = await api.get(`/api/v1/mapping/${fundId}`) // your existing "fetchMappingsByFund"
+        const r = await api.get(`/api/v1/mapping/${fundId}`)
         const data = Array.isArray(r.data?.data) ? r.data.data : r.data
 
-        //  TRANSFORM: Group mapping data by section (Trade, Basis, etc.)
-        const grouped = (data || []).reduce((acc, m) => {
+        //  TRANSFORM: Group mapping data by section and asset type
+        const mappingBySection = (data || []).reduce((acc, m) => {
           const header = m.header_name || 'Other'
-          const row = {
-            id: m.mapping_id,
-            asset: m.assettype_name, // Asset type name (Stock, Futures, etc.)
-            long: m.gl_code_long || '', // GL code for Long position
-            short: m.gl_code_short || '', // GL code for Short position
-            setoff: m.gl_code_setoff || '', // GL code for Setoff
+          const assetName = m.assettype_name
+          
+          if (!acc[header]) acc[header] = {}
+          
+          // Check if value is null or NA
+          const normalizeValue = (value) => {
+            if (value === null || value === undefined) return 'NA'
+            const str = String(value).trim().toUpperCase()
+            if (str === '' || str === 'NA' || str === 'N/A' || str === 'NULL') return 'NA'
+            return value
+          }
+          
+          // Special handling for Futures in Basis section - preserve NA values
+          const isFuturesInBasis = header === 'Basis' && assetName && (
+            assetName.toLowerCase().trim() === 'futures' || 
+            assetName.toLowerCase().trim() === 'future' ||
+            assetName.toLowerCase().includes('futures') ||
+            assetName.toLowerCase().includes('future')
+          )
+          
+          if (isFuturesInBasis) {
+            // For Futures in Basis, preserve null/NA as 'NA'
+            acc[header][assetName] = {
+              id: m.mapping_id,
+              asset: assetName,
+              long: normalizeValue(m.gl_code_long),
+              short: normalizeValue(m.gl_code_short),
+              setoff: normalizeValue(m.gl_code_setoff),
+            }
+          } else {
+            // For all other cases, use empty string if null/NA
+            acc[header][assetName] = {
+              id: m.mapping_id,
+              asset: assetName,
+              long: m.gl_code_long || '',
+              short: m.gl_code_short || '',
+              setoff: m.gl_code_setoff || '',
+            }
+
+            //  ADD: Default values for Trade section
+            if (header === 'Trade') {
+              acc[header][assetName].long = 'BROKER_CASH'
+              acc[header][assetName].short = 'BROKER_CASH'
+              acc[header][assetName].setoff = '14000'
+            }
           }
 
-          //  ADD: Default values for Trade section - always set these values
-          if (header === 'Trade') {
-            row.long = 'BROKER_CASH'
-            row.short = 'BROKER_CASH'
-            row.setoff = '14000' // Investment Clearing GL code
-          }
-
-          ;(acc[header] ||= []).push(row)
           return acc
         }, {})
+
+        //  ENSURE ALL ACTIVE ASSET TYPES ARE IN EACH SECTION
+        // For each section, create rows for all active asset types (merge with existing mappings)
+        // Helper function to get default GL codes based on asset type
+        const getDefaultGLCodes = (assetTypeName, section) => {
+          // Default values for Trade section
+          if (section === 'Trade') {
+            return { long: 'BROKER_CASH', short: 'BROKER_CASH', setoff: '14000' }
+          }
+          // Default values for Short Term RPNL section
+          if (section === 'Short Term RPNL') {
+            return { long: '41200', short: '41200', setoff: '14000' }
+          }
+          // Default values for Long Term RPNL section
+          if (section === 'Long Term RPNL') {
+            return { long: '41100', short: '41100', setoff: '14000' }
+          }
+          // Default GL codes for UPNL section based on asset type
+          // Pattern: Long codes start with 132XX, Short codes start with 212XX (same last 3 digits)
+          if (section === 'UPNL') {
+            const name = (assetTypeName || '').toLowerCase().trim()
+            const defaults = {
+              'stock': { long: '13210', short: '21210' },
+              'futures': { long: '13220', short: '21220' },
+              'future': { long: '13220', short: '21220' }, // Handle singular form
+              'options': { long: '13230', short: '21230' },
+              'option': { long: '13230', short: '21230' }, // Handle singular form
+              'bonds': { long: '13240', short: '21240' },
+              'bond': { long: '13240', short: '21240' }, // Handle singular form
+              'digital asset': { long: '13250', short: '21250' },
+              'digitalasset': { long: '13250', short: '21250' }, // Handle no space
+              'partnerships': { long: '13260', short: '21260' },
+              'partnership': { long: '13260', short: '21260' }, // Handle singular form
+              'master funds': { long: '13270', short: '21270' },
+              'masterfunds': { long: '13270', short: '21270' }, // Handle no space
+              'master fund': { long: '13270', short: '21270' }, // Handle singular form
+              'other': { long: '13280', short: '21280' },
+            }
+            const result = defaults[name] || null
+            if (result) {
+              result.setoff = '42000' // UPNL Setoff
+            }
+            return result
+          }
+          // Default GL codes for Basis and other sections based on asset type
+          // Pattern: Long codes start with 13XXX, Short codes start with 21XXX (same last 3 digits)
+          const name = (assetTypeName || '').toLowerCase().trim()
+          const defaults = {
+            'stock': { long: '13110', short: '21110' },
+            'futures': { long: '13120', short: '21120' },
+            'future': { long: '13120', short: '21120' }, // Handle singular form
+            'options': { long: '13130', short: '21130' },
+            'option': { long: '13130', short: '21130' }, // Handle singular form
+            'bonds': { long: '13140', short: '21140' },
+            'bond': { long: '13140', short: '21140' }, // Handle singular form
+            'digital asset': { long: '13150', short: '21150' },
+            'digitalasset': { long: '13150', short: '21150' }, // Handle no space
+            'partnerships': { long: '13160', short: '21160' },
+            'partnership': { long: '13160', short: '21160' }, // Handle singular form
+            'master funds': { long: '13170', short: '21170' },
+            'masterfunds': { long: '13170', short: '21170' }, // Handle no space
+            'master fund': { long: '13170', short: '21170' }, // Handle singular form
+            'other': { long: '13180', short: '21180' },
+          }
+          const result = defaults[name] || null
+          if (result) {
+            result.setoff = '14000' // Investment Clearing
+          }
+          return result
+        }
+        
+         // Helper function to check if a value is empty or "NA"
+         const isEmptyOrNA = (value) => {
+           const str = String(value || '').trim().toUpperCase()
+           return !str || str === 'NA' || str === 'N/A'
+         }
+         
+         // Helper function to check if asset is Futures in Basis section
+         const isFuturesInBasis = (assetName, section) => {
+           const name = (assetName || '').toLowerCase().trim()
+           return section === 'Basis' && (
+             name === 'futures' || 
+             name === 'future' || 
+             name.includes('futures') ||
+             name.includes('future')
+           )
+         }
+         
+         // Helper function to check if asset is Futures in UPNL section
+         const isFuturesInUPNL = (assetName, section) => {
+           const name = (assetName || '').toLowerCase().trim()
+           return section === 'UPNL' && (name === 'futures' || name === 'future')
+         }
+         
+         const grouped = {}
+         for (const section of SECTIONS) {
+           grouped[section] = allAssetTypes.map((assetType) => {
+             const assetName = assetType.assettype_name || assetType.name || assetType.asset_type_name || ''
+             
+             // Check if mapping exists for this asset type in this section
+             const existingMapping = mappingBySection[section]?.[assetName]
+             
+             if (existingMapping) {
+               // Special handling for Futures in Basis section - if mapping has NA, keep it as NA
+               if (isFuturesInBasis(assetName, section)) {
+                 // For Futures in Basis, if values are already 'NA', keep them; otherwise use existing values
+                 // Values are already normalized in mappingBySection processing
+                 return existingMapping
+               }
+               
+               // Special handling for Futures in UPNL section - force to use 13300
+               if (isFuturesInUPNL(assetName, section)) {
+                 existingMapping.long = '13300'
+                 existingMapping.short = '13300'
+                 if (isEmptyOrNA(existingMapping.setoff)) {
+                   existingMapping.setoff = '42000'
+                 }
+                 return existingMapping
+               }
+               
+               // Special handling for UPNL section - force setoff to 42000 for all asset types
+               if (section === 'UPNL') {
+                 if (isEmptyOrNA(existingMapping.setoff)) {
+                   existingMapping.setoff = '42000'
+                 }
+                 // Apply default GL codes for long and short if empty/NA
+                 const defaults = getDefaultGLCodes(assetName, section)
+                 if (defaults) {
+                   if (isEmptyOrNA(existingMapping.long)) {
+                     existingMapping.long = defaults.long
+                   }
+                   if (isEmptyOrNA(existingMapping.short)) {
+                     existingMapping.short = defaults.short
+                   }
+                 }
+                 return existingMapping
+               }
+               
+               // Special handling for Long Term RPNL section - force all to use 41100
+               if (section === 'Long Term RPNL') {
+                 existingMapping.long = '41100'
+                 existingMapping.short = '41100'
+                 if (isEmptyOrNA(existingMapping.setoff)) {
+                   existingMapping.setoff = '14000'
+                 }
+                 return existingMapping
+               }
+               
+               // For all other cases, replace empty/NA values with defaults
+               const defaults = getDefaultGLCodes(assetName, section)
+               if (defaults) {
+                 if (isEmptyOrNA(existingMapping.long)) {
+                   existingMapping.long = defaults.long
+                 }
+                 if (isEmptyOrNA(existingMapping.short)) {
+                   existingMapping.short = defaults.short
+                 }
+                 if (isEmptyOrNA(existingMapping.setoff)) {
+                   existingMapping.setoff = defaults.setoff
+                 }
+               }
+               return existingMapping
+             }
+             
+             // Create empty row for asset type without mapping
+             const emptyRow = {
+               id: null, // No mapping_id yet
+               asset: assetName,
+               long: '',
+               short: '',
+               setoff: '',
+             }
+             
+             // Special handling for Futures in UPNL section - set 13300 for long and short
+             if (isFuturesInUPNL(assetName, section)) {
+               emptyRow.long = '13300'
+               emptyRow.short = '13300'
+               emptyRow.setoff = '42000'
+             }
+             // Special handling for Futures in Basis section - set NA for all three fields if no mapping
+             else if (isFuturesInBasis(assetName, section)) {
+               emptyRow.long = 'NA'
+               emptyRow.short = 'NA'
+               emptyRow.setoff = 'NA'
+             }
+             // Special handling for UPNL section - apply defaults with 42000 setoff
+             else if (section === 'UPNL') {
+               const defaults = getDefaultGLCodes(assetName, section)
+               if (defaults) {
+                 emptyRow.long = defaults.long
+                 emptyRow.short = defaults.short
+                 emptyRow.setoff = '42000'
+               } else {
+                 emptyRow.setoff = '42000'
+               }
+             } else {
+               // Apply default values for all other cases
+               const defaults = getDefaultGLCodes(assetName, section)
+               if (defaults) {
+                 emptyRow.long = defaults.long
+                 emptyRow.short = defaults.short
+                 emptyRow.setoff = defaults.setoff
+               }
+             }
+             
+             return emptyRow
+           })
+         }
 
         //  STORE: Save grouped mapping data for display in table
         setRowsBySection(grouped)
@@ -152,7 +413,7 @@ export default function MappingTab({ fund_id: fundIdProp }) {
         setLoading(false)
       }
     })()
-  }, [fundId])
+  }, [fundId, allAssetTypes])
 
   // ========================================
   // MAPPING DROPDOWN USAGE IN AGGrid
@@ -260,28 +521,272 @@ export default function MappingTab({ fund_id: fundIdProp }) {
   }
 
   const refreshMappings = useCallback(async () => {
+    if (!fundId || allAssetTypes.length === 0) return
+    
     const r = await api.get(`/api/v1/mapping/${fundId}`)
     const data = Array.isArray(r.data?.data) ? r.data.data : r.data
 
-    const grouped = (data || []).reduce((acc, m) => {
+    // Group mapping data by section and asset type
+    const mappingBySection = (data || []).reduce((acc, m) => {
       const header = m.header_name || 'Other'
-      const row = {
-        id: m.mapping_id,
-        asset: m.assettype_name,
-        long: m.gl_code_long || '',
-        short: m.gl_code_short || '',
-        setoff: m.gl_code_setoff || '',
+      const assetName = m.assettype_name
+      
+      if (!acc[header]) acc[header] = {}
+      
+      // Check if value is null or NA
+      const normalizeValue = (value) => {
+        if (value === null || value === undefined) return 'NA'
+        const str = String(value).trim().toUpperCase()
+        if (str === '' || str === 'NA' || str === 'N/A' || str === 'NULL') return 'NA'
+        return value
       }
-      if (header === 'Trade') {
-        row.long = 'BROKER_CASH'
-        row.short = 'BROKER_CASH'
-        row.setoff = '14000'
+      
+      // Special handling for Futures in Basis section - preserve NA values
+      const isFuturesInBasis = header === 'Basis' && assetName && (
+        assetName.toLowerCase().trim() === 'futures' || 
+        assetName.toLowerCase().trim() === 'future' ||
+        assetName.toLowerCase().includes('futures') ||
+        assetName.toLowerCase().includes('future')
+      )
+      
+      if (isFuturesInBasis) {
+        // For Futures in Basis, preserve null/NA as 'NA'
+        acc[header][assetName] = {
+          id: m.mapping_id,
+          asset: assetName,
+          long: normalizeValue(m.gl_code_long),
+          short: normalizeValue(m.gl_code_short),
+          setoff: normalizeValue(m.gl_code_setoff),
+        }
+      } else {
+        // For all other cases, use empty string if null/NA
+        acc[header][assetName] = {
+          id: m.mapping_id,
+          asset: assetName,
+          long: m.gl_code_long || '',
+          short: m.gl_code_short || '',
+          setoff: m.gl_code_setoff || '',
+        }
+        
+        if (header === 'Trade') {
+          acc[header][assetName].long = 'BROKER_CASH'
+          acc[header][assetName].short = 'BROKER_CASH'
+          acc[header][assetName].setoff = '14000'
+        }
       }
-      ;(acc[header] ||= []).push(row)
+      
       return acc
     }, {})
+
+    // Helper function to get default GL codes based on asset type
+    const getDefaultGLCodes = (assetTypeName, section) => {
+      // Default values for Trade section
+      if (section === 'Trade') {
+        return { long: 'BROKER_CASH', short: 'BROKER_CASH', setoff: '14000' }
+      }
+      // Default values for Short Term RPNL section
+      if (section === 'Short Term RPNL') {
+        return { long: '41200', short: '41200', setoff: '14000' }
+      }
+      // Default values for Long Term RPNL section
+      if (section === 'Long Term RPNL') {
+        return { long: '41100', short: '41100', setoff: '14000' }
+      }
+      // Default GL codes for UPNL section based on asset type
+      // Pattern: Long codes start with 132XX, Short codes start with 212XX (same last 3 digits)
+      if (section === 'UPNL') {
+        const name = (assetTypeName || '').toLowerCase().trim()
+        const defaults = {
+          'stock': { long: '13210', short: '21210' },
+          'futures': { long: '13220', short: '21220' },
+          'future': { long: '13220', short: '21220' }, // Handle singular form
+          'options': { long: '13230', short: '21230' },
+          'option': { long: '13230', short: '21230' }, // Handle singular form
+          'bonds': { long: '13240', short: '21240' },
+          'bond': { long: '13240', short: '21240' }, // Handle singular form
+          'digital asset': { long: '13250', short: '21250' },
+          'digitalasset': { long: '13250', short: '21250' }, // Handle no space
+          'partnerships': { long: '13260', short: '21260' },
+          'partnership': { long: '13260', short: '21260' }, // Handle singular form
+          'master funds': { long: '13270', short: '21270' },
+          'masterfunds': { long: '13270', short: '21270' }, // Handle no space
+          'master fund': { long: '13270', short: '21270' }, // Handle singular form
+          'other': { long: '13280', short: '21280' },
+        }
+        const result = defaults[name] || null
+        if (result) {
+          result.setoff = '42000' // UPNL Setoff
+        }
+        return result
+      }
+      // Default GL codes for Basis and other sections based on asset type
+      // Pattern: Long codes start with 13XXX, Short codes start with 21XXX (same last 3 digits)
+      const name = (assetTypeName || '').toLowerCase().trim()
+      const defaults = {
+        'stock': { long: '13110', short: '21110' },
+        'futures': { long: '13120', short: '21120' },
+        'future': { long: '13120', short: '21120' }, // Handle singular form
+        'options': { long: '13130', short: '21130' },
+        'option': { long: '13130', short: '21130' }, // Handle singular form
+        'bonds': { long: '13140', short: '21140' },
+        'bond': { long: '13140', short: '21140' }, // Handle singular form
+        'digital asset': { long: '13150', short: '21150' },
+        'digitalasset': { long: '13150', short: '21150' }, // Handle no space
+        'partnerships': { long: '13160', short: '21160' },
+        'partnership': { long: '13160', short: '21160' }, // Handle singular form
+        'master funds': { long: '13170', short: '21170' },
+        'masterfunds': { long: '13170', short: '21170' }, // Handle no space
+        'master fund': { long: '13170', short: '21170' }, // Handle singular form
+        'other': { long: '13180', short: '21180' },
+      }
+      const result = defaults[name] || null
+      if (result) {
+        result.setoff = '14000' // Investment Clearing
+      }
+      return result
+    }
+    
+     // Helper function to check if a value is empty or "NA"
+     const isEmptyOrNA = (value) => {
+       const str = String(value || '').trim().toUpperCase()
+       return !str || str === 'NA' || str === 'N/A'
+     }
+     
+      // Helper function to check if asset is Futures in Basis section
+      const isFuturesInBasis = (assetName, section) => {
+        const name = (assetName || '').toLowerCase().trim()
+        return section === 'Basis' && (
+          name === 'futures' || 
+          name === 'future' || 
+          name.includes('futures') ||
+          name.includes('future')
+        )
+      }
+     
+     // Helper function to check if asset is Futures in UPNL section
+     const isFuturesInUPNL = (assetName, section) => {
+       const name = (assetName || '').toLowerCase().trim()
+       return section === 'UPNL' && (name === 'futures' || name === 'future')
+     }
+     
+     // Ensure ALL active asset types are in each section
+     const grouped = {}
+     for (const section of SECTIONS) {
+       grouped[section] = allAssetTypes.map((assetType) => {
+         const assetName = assetType.assettype_name || assetType.name || assetType.asset_type_name || ''
+         
+         // Check if mapping exists for this asset type in this section
+         const existingMapping = mappingBySection[section]?.[assetName]
+         
+         if (existingMapping) {
+           // Special handling for Futures in Basis section - if mapping has NA, keep it as NA
+           if (isFuturesInBasis(assetName, section)) {
+             // For Futures in Basis, if values are already 'NA', keep them; otherwise use existing values
+             // Values are already normalized in mappingBySection processing
+             return existingMapping
+           }
+           
+           // Special handling for Futures in UPNL section - force to use 13300
+           if (isFuturesInUPNL(assetName, section)) {
+             existingMapping.long = '13300'
+             existingMapping.short = '13300'
+             if (isEmptyOrNA(existingMapping.setoff)) {
+               existingMapping.setoff = '42000'
+             }
+             return existingMapping
+           }
+           
+           // Special handling for UPNL section - force setoff to 42000 for all asset types
+           if (section === 'UPNL') {
+             if (isEmptyOrNA(existingMapping.setoff)) {
+               existingMapping.setoff = '42000'
+             }
+             // Apply default GL codes for long and short if empty/NA
+             const defaults = getDefaultGLCodes(assetName, section)
+             if (defaults) {
+               if (isEmptyOrNA(existingMapping.long)) {
+                 existingMapping.long = defaults.long
+               }
+               if (isEmptyOrNA(existingMapping.short)) {
+                 existingMapping.short = defaults.short
+               }
+             }
+             return existingMapping
+           }
+           
+           // Special handling for Long Term RPNL section - force all to use 41100
+           if (section === 'Long Term RPNL') {
+             existingMapping.long = '41100'
+             existingMapping.short = '41100'
+             if (isEmptyOrNA(existingMapping.setoff)) {
+               existingMapping.setoff = '14000'
+             }
+             return existingMapping
+           }
+           
+           // For all other cases, replace empty/NA values with defaults
+           const defaults = getDefaultGLCodes(assetName, section)
+           if (defaults) {
+             if (isEmptyOrNA(existingMapping.long)) {
+               existingMapping.long = defaults.long
+             }
+             if (isEmptyOrNA(existingMapping.short)) {
+               existingMapping.short = defaults.short
+             }
+             if (isEmptyOrNA(existingMapping.setoff)) {
+               existingMapping.setoff = defaults.setoff
+             }
+           }
+           return existingMapping
+         }
+         
+         // Create empty row for asset type without mapping
+         const emptyRow = {
+           id: null,
+           asset: assetName,
+           long: '',
+           short: '',
+           setoff: '',
+         }
+         
+         // Special handling for Futures in UPNL section - set 13300 for long and short
+         if (isFuturesInUPNL(assetName, section)) {
+           emptyRow.long = '13300'
+           emptyRow.short = '13300'
+           emptyRow.setoff = '42000'
+         }
+         // Special handling for Futures in Basis section - set NA for all three fields if no mapping
+         else if (isFuturesInBasis(assetName, section)) {
+           emptyRow.long = 'NA'
+           emptyRow.short = 'NA'
+           emptyRow.setoff = 'NA'
+         }
+         // Special handling for UPNL section - apply defaults with 42000 setoff
+         else if (section === 'UPNL') {
+           const defaults = getDefaultGLCodes(assetName, section)
+           if (defaults) {
+             emptyRow.long = defaults.long
+             emptyRow.short = defaults.short
+             emptyRow.setoff = '42000'
+           } else {
+             emptyRow.setoff = '42000'
+           }
+         } else {
+           // Apply default values for all other cases
+           const defaults = getDefaultGLCodes(assetName, section)
+           if (defaults) {
+             emptyRow.long = defaults.long
+             emptyRow.short = defaults.short
+             emptyRow.setoff = defaults.setoff
+           }
+         }
+         
+         return emptyRow
+       })
+     }
+    
     setRowsBySection(grouped)
-  }, [fundId])
+  }, [fundId, allAssetTypes])
 
   // Handle save all changes
   const handleSave = async () => {
@@ -452,7 +957,7 @@ export default function MappingTab({ fund_id: fundIdProp }) {
               SECTIONS.map((section) => (
                 <div key={section} className="mb-4">
                   <div className="fw-semibold mb-2">{section}</div>
-                  <div className="ag-theme-alpine" style={{ width: '100%', minHeight: 120 }}>
+                  <div className="ag-theme-alpine" style={{ width: '100%' }}>
                     <style jsx>{`
                       .ag-theme-alpine .ag-cell.ag-cell-editable {
                         cursor: pointer;
