@@ -17,10 +17,10 @@ ModuleRegistry.registerModules([ClientSideRowModelModule])
 // Accordion section order
 const SECTIONS = ['Trade', 'Basis', 'Short Term RPNL', 'Long Term RPNL', 'UPNL']
 
-// Some rows are not editable by business rule (e.g., “NA”)
+// Some rows are not editable by business rule (e.g., "NA")
 const NON_EDITABLE_MAP = {
   Basis: {
-    Futures: { long: true, short: true }, // leave setoff editable
+    Futures: { long: true, short: true, setoff: true }, // all three fields NA and non-editable for Futures in Basis
   },
 }
 
@@ -77,22 +77,71 @@ export default function MappingTab({ fund_id: fundIdProp }) {
   // MAPPING DROPDOWN DATA SOURCE
   // ========================================
   // This useEffect loads the dropdown options for Long/Short/Setoff columns
-  // Data comes from: /api/v1/chart-of-accounts/postable/${fundId}
-  // Format: [{ value: "13110", label: "13110 - Stock" }, ...]
+  // Data comes from: /api/v1/chart-of-accounts/fund/${fundId} (hierarchical) and /api/v1/chart-of-accounts/postable/${fundId}
+  // Format: [{ value: "13110", label: "13110 - Investment Long - Cost - Stock" }, ...]
   // This data is used in the AgGrid dropdown editors
   useEffect(() => {
     if (!fundId) return
     ;(async () => {
       try {
-        // FETCH: Get Chart of Accounts data from database
-        const r = await api.get(`/api/v1/chart-of-accounts/postable/${fundId}`, {
-          params: { excludeRoots: true, onlyLeaves: false }, // show 11000, 12000 etc too
-        })
+        // FETCH: Get hierarchical Chart of Accounts data to build parent paths
+        const [hierarchicalRes, postableRes] = await Promise.all([
+          api.get(`/api/v1/chart-of-accounts/fund/${fundId}`),
+          api.get(`/api/v1/chart-of-accounts/postable/${fundId}`, {
+            params: { excludeRoots: true, onlyLeaves: false },
+          })
+        ])
 
-        // TRANSFORM: Convert API data to dropdown format
-        const list = (Array.isArray(r.data) ? r.data : []).map((a) => ({
+        // Build parent lookup map from hierarchical data
+        const hierarchicalData = hierarchicalRes?.data?.data || []
+        const buildParentLookup = (nodes, parentMap = {}, parentPath = []) => {
+          const rootCategories = ['Asset', 'Liability', 'Equity', 'Income', 'Expense']
+          
+          const processNode = (node, currentPath) => {
+            const code = String(node.gl_code || node.code || '')
+            const name = node.gl_name || node.name || ''
+            
+            if (code && name) {
+              // Store parent path (excluding current node and root categories)
+              const filteredPath = currentPath.filter(p => !rootCategories.includes(p))
+              parentMap[code] = filteredPath
+            }
+            
+            // Build path for children (include current node if not root)
+            const childPath = rootCategories.includes(name) ? [] : [...currentPath, name]
+            
+            // Recursively process children
+            if (node.children && node.children.length > 0) {
+              for (const child of node.children) {
+                processNode(child, childPath)
+              }
+            }
+          }
+          
+          for (const node of hierarchicalData || []) {
+            processNode(node, [])
+          }
+          
+          return parentMap
+        }
+        
+        const parentLookup = buildParentLookup(hierarchicalData)
+        
+        // Helper to format label with parent path
+        const formatLabel = (code, name) => {
+          const parentPath = parentLookup[code] || []
+          if (parentPath.length > 0) {
+            // Join parent path and current name: "13110 - Investment Long - Cost - Stock"
+            return `${code} - ${parentPath.join(' - ')} - ${name}`
+          }
+          // Fallback to simple format if no parent path found
+          return `${code} - ${name}`
+        }
+
+        // TRANSFORM: Convert postable API data to dropdown format with full path
+        const list = (Array.isArray(postableRes.data) ? postableRes.data : []).map((a) => ({
           value: String(a.code), // Used as the actual value stored in database
-          label: `${a.code} - ${a.name}`, // What user sees in dropdown
+          label: formatLabel(String(a.code), a.name || ''), // Full path format: "13110 - Investment Long - Cost - Stock"
         }))
 
         //  ADD: Special options for Trade section
@@ -298,12 +347,14 @@ export default function MappingTab({ fund_id: fundIdProp }) {
              const existingMapping = mappingBySection[section]?.[assetName]
              
              if (existingMapping) {
-               // Special handling for Futures in Basis section - if mapping has NA, keep it as NA
-               if (isFuturesInBasis(assetName, section)) {
-                 // For Futures in Basis, if values are already 'NA', keep them; otherwise use existing values
-                 // Values are already normalized in mappingBySection processing
-                 return existingMapping
-               }
+              // Special handling for Futures in Basis section - force all three fields to 'NA'
+              if (isFuturesInBasis(assetName, section)) {
+                // For Futures in Basis, force long, short, and setoff to 'NA'
+                existingMapping.long = 'NA'
+                existingMapping.short = 'NA'
+                existingMapping.setoff = 'NA'
+                return existingMapping
+              }
                
                // Special handling for Futures in UPNL section - force to use 13300
                if (isFuturesInUPNL(assetName, section)) {
@@ -679,12 +730,14 @@ export default function MappingTab({ fund_id: fundIdProp }) {
          const existingMapping = mappingBySection[section]?.[assetName]
          
          if (existingMapping) {
-           // Special handling for Futures in Basis section - if mapping has NA, keep it as NA
-           if (isFuturesInBasis(assetName, section)) {
-             // For Futures in Basis, if values are already 'NA', keep them; otherwise use existing values
-             // Values are already normalized in mappingBySection processing
-             return existingMapping
-           }
+              // Special handling for Futures in Basis section - force all three fields to 'NA'
+              if (isFuturesInBasis(assetName, section)) {
+                // For Futures in Basis, force long, short, and setoff to 'NA'
+                existingMapping.long = 'NA'
+                existingMapping.short = 'NA'
+                existingMapping.setoff = 'NA'
+                return existingMapping
+              }
            
            // Special handling for Futures in UPNL section - force to use 13300
            if (isFuturesInUPNL(assetName, section)) {
