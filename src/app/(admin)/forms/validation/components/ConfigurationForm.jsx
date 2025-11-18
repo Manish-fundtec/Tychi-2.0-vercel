@@ -278,24 +278,22 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    e.stopPropagation()
     setValidated(true)
 
     // Validate that both fields have values
     const newErrors = {}
-    if (!formData.closure_rule || formData.closure_rule === '') {
+    if (!formData.closure_rule) {
       newErrors.closure_rule = 'Please select a closure rule'
     }
-    if (!formData.long_term_rule || formData.long_term_rule === '') {
+    if (!formData.long_term_rule) {
       newErrors.long_term_rule = 'Please select a long term rule'
     }
 
     // If there are errors, set them and prevent submission
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
-      e.stopPropagation()
       console.log('❌ Validation failed:', newErrors)
-      return false
+      return
     }
 
     try {
