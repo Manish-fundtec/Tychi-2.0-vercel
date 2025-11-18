@@ -237,9 +237,9 @@ const JournalsPage = () => {
       }
 
       // Step 4️⃣ - Create CSV file and download
-      const headerRow = journalExportHeaders.map(({ label }) => escapeCsv(label)).join(',')
-      const dataRows = aoa.map((row) => row.map((cell) => escapeCsv(cell)).join(','))
-      const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n')
+      // buildAoaFromHeaders already includes header row as first element, so use aoa directly
+      const csvRows = aoa.map((row) => row.map((cell) => escapeCsv(cell)).join(','))
+      const csvContent = '\ufeff' + csvRows.join('\n')
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
