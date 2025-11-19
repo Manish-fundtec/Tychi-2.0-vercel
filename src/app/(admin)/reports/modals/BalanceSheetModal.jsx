@@ -81,7 +81,21 @@ export default function BalanceSheetModal({
             })
           : [];
 
-        setRows(filtered);
+        // Fix retained earnings sign: GL 34000 should be positive (equity account)
+        const processedRows = filtered.map((row) => {
+          const glCode = String(row?.gl_code || row?.glNumber || row?.glnumber || '').trim();
+          if (glCode === '34000' || glCode === retainedGl) {
+            // Retained earnings is equity, should be positive - flip if negative
+            const amount = Number(row?.amount || 0);
+            return {
+              ...row,
+              amount: amount < 0 ? Math.abs(amount) : amount,
+            };
+          }
+          return row;
+        });
+
+        setRows(processedRows);
       } catch (e) {
         console.error('[BS] fetch failed', e);
         setErr('Failed to load Balance Sheet.');
