@@ -11,6 +11,7 @@ import { formatYmd } from '@/lib/dateFormat'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { AddManualJournal } from '../forms/validation/components/AllFormValidation'
 import currencies from 'currency-formatter/currencies'
+import { getFundDetails } from '@/lib/api/fund'
 
 const ManualJournalPage = () => {
   const [fundId, setFundId] = useState(null)
@@ -25,6 +26,7 @@ const ManualJournalPage = () => {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [activeTab, setActiveTab] = useState('list')
+  const [fundDetails, setFundDetails] = useState(null)
 
   // decode token to get fund_id
   useEffect(() => {
@@ -202,7 +204,35 @@ const ManualJournalPage = () => {
 
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
-  const decimalPrecision = Number(dashboard?.decimal_precision || dashboard?.fund?.decimal_precision || 2) || 2
+  
+  // Fetch fund details to get current decimal_precision
+  useEffect(() => {
+    if (!fundId) {
+      setFundDetails(null)
+      return
+    }
+    
+    const fetchFund = async () => {
+      try {
+        const details = await getFundDetails(fundId)
+        setFundDetails(details)
+      } catch (error) {
+        console.error('Failed to fetch fund details:', error)
+        setFundDetails(null)
+      }
+    }
+    
+    fetchFund()
+  }, [fundId])
+  
+  // Get decimal precision - prioritize fund details from API, then token, then default to 2
+  const decimalPrecision = useMemo(() => {
+    const apiPrecision = fundDetails?.decimal_precision
+    const tokenPrecision = dashboard?.decimal_precision ?? dashboard?.fund?.decimal_precision
+    const precision = apiPrecision ?? tokenPrecision
+    const numPrecision = precision !== null && precision !== undefined ? Number(precision) : null
+    return numPrecision !== null && !isNaN(numPrecision) ? numPrecision : 2
+  }, [fundDetails, dashboard])
   
   // Get currency symbol from reporting_currency
   const currencySymbol = useMemo(() => {

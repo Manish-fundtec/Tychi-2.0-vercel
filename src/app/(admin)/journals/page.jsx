@@ -10,6 +10,7 @@ import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { formatYmd } from '../../../../src/lib/dateFormat'
 import { journalColDefs as sharedJournalColDefs } from '@/assets/tychiData/columnDefs'
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
+import { getFundDetails } from '@/lib/api/fund'
 import currencies from 'currency-formatter/currencies'
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
@@ -21,6 +22,7 @@ const JournalsPage = () => {
   const [loading, setLoading] = useState(false)
   const [errMsg, setErrMsg] = useState('')
   const [fundId, setFundId] = useState('')
+  const [fundDetails, setFundDetails] = useState(null)
   const gridApiRef = useRef(null)
 
   const defaultJournalColDefs = useMemo(
@@ -107,7 +109,35 @@ const JournalsPage = () => {
 
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
-  const decimalPrecision = Number(dashboard?.decimal_precision || dashboard?.fund?.decimal_precision || 2) || 2
+  
+  // Fetch fund details to get current decimal_precision
+  useEffect(() => {
+    if (!fundId) {
+      setFundDetails(null)
+      return
+    }
+    
+    const fetchFund = async () => {
+      try {
+        const details = await getFundDetails(fundId)
+        setFundDetails(details)
+      } catch (error) {
+        console.error('Failed to fetch fund details:', error)
+        setFundDetails(null)
+      }
+    }
+    
+    fetchFund()
+  }, [fundId])
+  
+  // Get decimal precision - prioritize fund details from API, then token, then default to 2
+  const decimalPrecision = useMemo(() => {
+    const apiPrecision = fundDetails?.decimal_precision
+    const tokenPrecision = dashboard?.decimal_precision ?? dashboard?.fund?.decimal_precision
+    const precision = apiPrecision ?? tokenPrecision
+    const numPrecision = precision !== null && precision !== undefined ? Number(precision) : null
+    return numPrecision !== null && !isNaN(numPrecision) ? numPrecision : 2
+  }, [fundDetails, dashboard])
   
   // Get currency symbol from reporting_currency
   const currencySymbol = useMemo(() => {
@@ -148,7 +178,7 @@ const JournalsPage = () => {
       
       return col
     })
-  }, [fmt, currencySymbol, defaultJournalColDefs, decimalPrecision])
+  }, [fmt, decimalPrecision, currencySymbol])
 
   const fetchData = async () => {
     if (!fundId) return;
@@ -193,9 +223,12 @@ const JournalsPage = () => {
         const raw = value ? String(value).slice(0, 10) : ''
         return raw ? formatYmd(raw, fmt) : ''
       }
+      if (key === 'amount' && typeof value === 'number') {
+        return value.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+      }
       return value ?? ''
     },
-    [fmt],
+    [fmt, decimalPrecision],
   )
 
   // CSV escape helper
@@ -266,9 +299,9 @@ const JournalsPage = () => {
       }
 
       // Step 4️⃣ - Create CSV file and download
-      // buildAoaFromHeaders already includes header row as first element, so use aoa directly
-      const csvRows = aoa.map((row) => row.map((cell) => escapeCsv(cell)).join(','))
-      const csvContent = '\ufeff' + csvRows.join('\n')
+      const headerRow = journalExportHeaders.map(({ label }) => escapeCsv(label)).join(',')
+      const dataRows = aoa.map((row) => row.map((cell) => escapeCsv(cell)).join(','))
+      const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n')
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
