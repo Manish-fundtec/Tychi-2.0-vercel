@@ -25,6 +25,7 @@ import {
 import { TradeModal, UploadTradeModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import { deleteTrade } from '@/lib/api/trades'
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
+import { getFundDetails } from '@/lib/api/fund'
 
 // Register all Community features
 ModuleRegistry.registerModules([AllCommunityModule])
@@ -36,6 +37,7 @@ export default function TradesData() {
   const [selectedRows, setSelectedRows] = useState([])
   const [viewTrade, setViewTrade] = useState(null)
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
+  const [fundDetails, setFundDetails] = useState(null)
 
   // 1) Get fundId from dashboardToken cookie (support multiple key styles)
   useEffect(() => {
@@ -61,7 +63,46 @@ export default function TradesData() {
   const dashboard = useDashboardToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
   const fund_id = dashboard?.fund_id || ''
-  const decimalPrecision = Number(dashboard?.decimal_precision || dashboard?.fund?.decimal_precision || 2) || 2
+  
+  // Fetch fund details to get current decimal_precision
+  useEffect(() => {
+    const currentFundId = fund_id || fundId
+    if (!currentFundId) {
+      setFundDetails(null)
+      return
+    }
+    
+    const fetchFund = async () => {
+      try {
+        const details = await getFundDetails(currentFundId)
+        setFundDetails(details)
+      } catch (error) {
+        console.error('Failed to fetch fund details:', error)
+        setFundDetails(null)
+      }
+    }
+    
+    fetchFund()
+  }, [fund_id, fundId])
+  
+  // Get decimal precision - prioritize fund details from API, then token, then default to 2
+  const decimalPrecision = useMemo(() => {
+    // First try fund details from API (most up-to-date)
+    const apiPrecision = fundDetails?.decimal_precision
+    // Then try token values
+    const tokenPrecision = dashboard?.decimal_precision ?? dashboard?.fund?.decimal_precision
+    
+    const precision = apiPrecision ?? tokenPrecision
+    const numPrecision = precision !== null && precision !== undefined ? Number(precision) : null
+    const result = numPrecision !== null && !isNaN(numPrecision) ? numPrecision : 2
+    
+    console.log('🔢 Fund details (API):', fundDetails)
+    console.log('🔢 decimal_precision (API):', apiPrecision)
+    console.log('🔢 decimal_precision (token):', tokenPrecision)
+    console.log('🔢 Final decimalPrecision:', result)
+    
+    return result
+  }, [fundDetails, dashboard])
   
   // Get currency symbol from reporting_currency
   const currencySymbol = useMemo(() => {
@@ -106,20 +147,6 @@ export default function TradesData() {
         }
       }
 
-      // Format Quantity column - use decimal precision
-      if (col?.field === 'quantity') {
-        return {
-          ...col,
-          valueFormatter: (p) => {
-            const value = p?.value
-            if (value === null || value === undefined || value === '') return '—'
-            const num = Number(value)
-            if (Number.isNaN(num)) return value
-            return num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
-          },
-        }
-      }
-
       // Format Price column same as Amount and Gross Amount - use currency symbol at front
       if (col?.field === 'price') {
         return {
@@ -131,6 +158,20 @@ export default function TradesData() {
             if (Number.isNaN(num)) return value
             const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
+          },
+        }
+      }
+
+      // Format Quantity column - use decimal precision (no currency symbol)
+      if (col?.field === 'quantity') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const value = p?.value
+            if (value === null || value === undefined || value === '') return '—'
+            const num = Number(value)
+            if (Number.isNaN(num)) return value
+            return num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
           },
         }
       }
@@ -257,10 +298,10 @@ export default function TradesData() {
 
   const formatExportValue = useCallback((key, value) => {
     if (typeof value === 'number') {
-      return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      return value.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
     }
     return value ?? ''
-  }, [])
+  }, [decimalPrecision])
 
   const escapeCsv = (value) => {
     const stringValue = String(value ?? '')
