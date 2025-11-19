@@ -252,9 +252,10 @@ export default function ReviewsPage() {
         throw new Error(serverMessage);
       }
 
-      // refresh UI: mark this row reverted and recompute "latest completed"
+      // Remove the row from the table and refresh data
       setRowData((prev) => {
-        const next = prev.map((r) => (r.date === row.date ? { ...r, status: 'reverted' } : r));
+        const next = prev.filter((r) => r.date !== row.date);
+        // Recompute latest completed date
         const nextLatest =
           next
             .filter((it) => (it.status || '').toLowerCase() === 'completed' && it.date)
@@ -264,6 +265,9 @@ export default function ReviewsPage() {
         latestCompletedDateRef.current = nextLatest;
         return next;
       });
+
+      // Refresh data from server
+      await fetchReportingPeriods();
 
       alert('Reverted successfully.');
     } catch (e) {
