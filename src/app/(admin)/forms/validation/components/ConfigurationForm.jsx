@@ -247,6 +247,7 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
     long_term_rule: assetType?.long_term_rule || '',
   })
   const [validated, setValidated] = useState(false)
+  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     if (!assetType) return
@@ -254,6 +255,7 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
       closure_rule: assetType?.closure_rule || '',
       long_term_rule: assetType?.long_term_rule || '',
     })
+    setErrors({})
     setValidated(false)
   }, [assetType])
 
@@ -264,20 +266,35 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
       [name]: value,
     }))
     console.log(`📝 ${name} updated to:`, value)
+
+    // Clear error when user makes a selection
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: '',
+      }))
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const formEl = e.currentTarget
+    setValidated(true)
 
-    // Simple HTML5 validation check
-    if (!formEl.checkValidity()) {
-      e.stopPropagation()
-      setValidated(true)
-      return
+    // Validate that both fields have values
+    const newErrors = {}
+    if (!formData.closure_rule) {
+      newErrors.closure_rule = 'Please select a closure rule'
+    }
+    if (!formData.long_term_rule) {
+      newErrors.long_term_rule = 'Please select a long term rule'
     }
 
-    setValidated(true)
+    // If there are errors, set them and prevent submission
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      console.log('❌ Validation failed:', newErrors)
+      return
+    }
 
     try {
       const payload = {
@@ -306,13 +323,14 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
           name="closure_rule"
           value={formData.closure_rule}
           onChange={handleChange}
-          required>
+          required
+          isInvalid={!!errors.closure_rule}>
           <option value="">Select</option>
           <option value="LIFO">LIFO</option>
           <option value="FIFO">FIFO</option>
           <option value="FIRST_SETTLE_THAN_FIFO">FIRST_SETTLE_THAN_FIFO</option>
         </Form.Select>
-        <Feedback type="invalid">Required field</Feedback>
+        <Feedback type="invalid">{errors.closure_rule || 'Please select a closure rule'}</Feedback>
       </FormGroup>
 
       <FormGroup className="position-relative col-md-6">
@@ -321,7 +339,8 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
           name="long_term_rule"
           value={formData.long_term_rule}
           onChange={handleChange}
-          required>
+          required
+          isInvalid={!!errors.long_term_rule}>
           <option value="">Select</option>
           <option value="1 year">1 year</option>
           <option value="2 year">2 year</option>
@@ -329,7 +348,7 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
           <option value="4 year">4 year</option>
           <option value="5 year">5 year</option>
         </Form.Select>
-        <Feedback type="invalid">Required field</Feedback>
+        <Feedback type="invalid">{errors.long_term_rule || 'Please select a long term rule'}</Feedback>
       </FormGroup>
 
       <Col xs={12} className="mt-3">
@@ -415,6 +434,12 @@ export const BasicForm = () => {
       const updated = await updateFund(fund_id, payload)
       setFormData(updated)
       setIsEditing(false)
+      
+      // Refresh dashboard token to get updated decimal_precision and other fund settings
+      // The backend should update the token cookie after fund update
+      // Force a page reload to refresh all components using the token
+      window.location.reload()
+      
       alert('✅ Fund updated')
     } catch (err) {
       console.error('Save failed:', err)
