@@ -216,12 +216,12 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
 
       <FormGroup className="col-md-6">
         <FormLabel>Start Date</FormLabel>
-        <FormControl 
-          name="start_date" 
-          type="date" 
-          required 
-          value={form.start_date} 
-          onChange={handleChange} 
+        <FormControl
+          name="start_date"
+          type="date"
+          required
+          value={form.start_date}
+          onChange={handleChange}
           min={rsd || reportingStartDate || undefined}
           isInvalid={isBeforeRSD}
         />
@@ -247,7 +247,6 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
     long_term_rule: assetType?.long_term_rule || '',
   })
   const [validated, setValidated] = useState(false)
-  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     if (!assetType) return
@@ -255,7 +254,6 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
       closure_rule: assetType?.closure_rule || '',
       long_term_rule: assetType?.long_term_rule || '',
     })
-    setErrors({})
     setValidated(false)
   }, [assetType])
 
@@ -266,35 +264,20 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
       [name]: value,
     }))
     console.log(`📝 ${name} updated to:`, value)
-
-    // Clear error when user makes a selection
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: '',
-      }))
-    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setValidated(true)
+    const formEl = e.currentTarget
 
-    // Validate that both fields have values
-    const newErrors = {}
-    if (!formData.closure_rule) {
-      newErrors.closure_rule = 'Please select a closure rule'
-    }
-    if (!formData.long_term_rule) {
-      newErrors.long_term_rule = 'Please select a long term rule'
-    }
-
-    // If there are errors, set them and prevent submission
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
-      console.log('❌ Validation failed:', newErrors)
+    // Simple HTML5 validation check
+    if (!formEl.checkValidity()) {
+      e.stopPropagation()
+      setValidated(true)
       return
     }
+
+    setValidated(true)
 
     try {
       const payload = {
@@ -319,28 +302,21 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
     <Form noValidate validated={validated} onSubmit={handleSubmit} className="row g-3">
       <FormGroup className="position-relative col-md-6">
         <FormLabel>Closure Rule</FormLabel>
-        <Form.Select
-          name="closure_rule"
-          value={formData.closure_rule}
-          onChange={handleChange}
-          required
-          isInvalid={!!errors.closure_rule}>
+
+        <Form.Select name="closure_rule" value={formData.closure_rule} onChange={handleChange} required>
           <option value="">Select</option>
           <option value="LIFO">LIFO</option>
           <option value="FIFO">FIFO</option>
           <option value="FIRST_SETTLE_THAN_FIFO">FIRST_SETTLE_THAN_FIFO</option>
         </Form.Select>
-        <Feedback type="invalid">{errors.closure_rule || 'Please select a closure rule'}</Feedback>
+
+        <Feedback type="invalid">Required field</Feedback>
       </FormGroup>
 
       <FormGroup className="position-relative col-md-6">
         <FormLabel>Long Term Rule</FormLabel>
-        <Form.Select
-          name="long_term_rule"
-          value={formData.long_term_rule}
-          onChange={handleChange}
-          required
-          isInvalid={!!errors.long_term_rule}>
+
+        <Form.Select name="long_term_rule" value={formData.long_term_rule} onChange={handleChange} required>
           <option value="">Select</option>
           <option value="1 year">1 year</option>
           <option value="2 year">2 year</option>
@@ -348,7 +324,8 @@ export const AssetTypeForm = ({ assetType, onSuccess, onClose }) => {
           <option value="4 year">4 year</option>
           <option value="5 year">5 year</option>
         </Form.Select>
-        <Feedback type="invalid">{errors.long_term_rule || 'Please select a long term rule'}</Feedback>
+
+        <Feedback type="invalid">Required field</Feedback>
       </FormGroup>
 
       <Col xs={12} className="mt-3">
@@ -434,12 +411,6 @@ export const BasicForm = () => {
       const updated = await updateFund(fund_id, payload)
       setFormData(updated)
       setIsEditing(false)
-      
-      // Refresh dashboard token to get updated decimal_precision and other fund settings
-      // The backend should update the token cookie after fund update
-      // Force a page reload to refresh all components using the token
-      window.location.reload()
-      
       alert('✅ Fund updated')
     } catch (err) {
       console.error('Save failed:', err)
@@ -496,7 +467,6 @@ export const BasicForm = () => {
     'reporting_currency',
     'decimal_precision',
     'fund_description',
-    
   ]
   const REQUIRED_FIELDS = useMemo(
     () =>
@@ -522,12 +492,7 @@ export const BasicForm = () => {
     if (typeof has_trades === 'boolean') return has_trades
     if (typeof camelHasTrades === 'boolean') return camelHasTrades
 
-    const numericCount = Number(
-      trade_count ??
-        tradeCount ??
-        trades_count ??
-        (Array.isArray(formData.trades) ? formData.trades.length : 0)
-    )
+    const numericCount = Number(trade_count ?? tradeCount ?? trades_count ?? (Array.isArray(formData.trades) ? formData.trades.length : 0))
 
     return !Number.isNaN(numericCount) && numericCount > 0
   }, [formData, hasTrades])
@@ -1401,7 +1366,7 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
       onClose?.()
     } catch (error) {
       console.error('❌ Failed to submit bank form:', error)
-      
+
       // Handle different types of errors
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
         toast.error('Cannot connect to server. Please check if the backend is running.')
@@ -1429,11 +1394,11 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
 
       <FormGroup className="col-md-6">
         <FormLabel>Start Date</FormLabel>
-        <FormControl 
-          name="start_date" 
-          type="date" 
-          required 
-          value={form.start_date} 
+        <FormControl
+          name="start_date"
+          type="date"
+          required
+          value={form.start_date}
           onChange={handleChange}
           min={rsd || reportingStartDate || undefined}
           isInvalid={isBeforeRSD}
@@ -1447,7 +1412,9 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
       </FormGroup>
 
       <Col xs={12}>
-        <Button type="submit" disabled={isBeforeRSD}>{isEdit ? 'Update' : 'Submit'}</Button>
+        <Button type="submit" disabled={isBeforeRSD}>
+          {isEdit ? 'Update' : 'Submit'}
+        </Button>
       </Col>
     </Form>
   )
@@ -1466,7 +1433,7 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
   })
 
   useEffect(() => {
-    (async () => {
+    ;(async () => {
       try {
         const token = Cookies.get('dashboardToken')
         if (!token) return
@@ -1501,7 +1468,11 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
       } else {
         const isDuplicate = existingExchanges.some((ex) => {
           if (isEdit && exchange?.exchange_uid === ex.exchange_uid) return false
-          return String(ex.exchange_id || '').trim().toLowerCase() === trimmed
+          return (
+            String(ex.exchange_id || '')
+              .trim()
+              .toLowerCase() === trimmed
+          )
         })
         setDuplicateIdError(isDuplicate ? 'Exchange ID already exists for this fund' : '')
       }
@@ -1514,7 +1485,11 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
       } else {
         const isDuplicate = existingExchanges.some((ex) => {
           if (isEdit && exchange?.exchange_uid === ex.exchange_uid) return false
-          return String(ex.exchange_name || '').trim().toLowerCase() === trimmed
+          return (
+            String(ex.exchange_name || '')
+              .trim()
+              .toLowerCase() === trimmed
+          )
         })
         setDuplicateNameError(isDuplicate ? 'Exchange name already exists for this fund' : '')
       }
@@ -1563,27 +1538,13 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
     <Form noValidate validated={validated} onSubmit={handleSubmit} className="row g-3 m-1">
       <FormGroup className="col-md-6">
         <FormLabel>Exchange ID</FormLabel>
-        <FormControl
-          name="exchange_id"
-          type="text"
-          value={form.exchange_id}
-          onChange={handleChange}
-          required
-          isInvalid={!!duplicateIdError}
-        />
+        <FormControl name="exchange_id" type="text" value={form.exchange_id} onChange={handleChange} required isInvalid={!!duplicateIdError} />
         <Feedback type="invalid">{duplicateIdError || 'Please provide exchange ID'}</Feedback>
       </FormGroup>
 
       <FormGroup className="col-md-6">
         <FormLabel>Exchange Name</FormLabel>
-        <FormControl
-          name="exchange_name"
-          type="text"
-          value={form.exchange_name}
-          onChange={handleChange}
-          required
-          isInvalid={!!duplicateNameError}
-        />
+        <FormControl name="exchange_name" type="text" value={form.exchange_name} onChange={handleChange} required isInvalid={!!duplicateNameError} />
         <Feedback type="invalid">{duplicateNameError || 'Please provide exchange name'}</Feedback>
       </FormGroup>
 
@@ -1808,7 +1769,7 @@ export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
     setLoading(true)
     try {
       const form = new FormData()
-      form.append('file', file)                     // Multer expects 'file'
+      form.append('file', file) // Multer expects 'file'
       // CHANGED: no fundId in URL/body; backend reads fund_id from JWT
       // form.append('fund_id', String(currentFundId || ''))
 
