@@ -111,26 +111,12 @@ export default function ProfitLossModal({
       const normalizedRows = rawRows.map((r) => {
         const code =
           (r.gl_code ?? r.glNumber ?? r.glnumber ?? r.glCode ?? r.GLCode ?? '').toString().trim();
-        
-        // Fix sign issues: Both Income and Expenses should be positive for display
-        // If backend sends negative values, flip them to positive
-        const mtdAmount = Number(r.mtd_amount || 0);
-        const qtdAmount = Number(r.qtd_amount || 0);
-        const ytdAmount = Number(r.ytd_amount || 0);
-        
-        // Special handling for UPNL (GL 42000) - should always be positive like Tychi 1
-        // Ensure all amounts are positive (expenses will be subtracted in net calculation)
-        // Flip negative values to positive for all accounts including UPNL
-        const processedRow = {
+        return {
           ...r,
           gl_code: code,
           glNumber: code,
-          mtd_amount: mtdAmount < 0 ? Math.abs(mtdAmount) : mtdAmount,
-          qtd_amount: qtdAmount < 0 ? Math.abs(qtdAmount) : qtdAmount,
-          ytd_amount: ytdAmount < 0 ? Math.abs(ytdAmount) : ytdAmount,
+          // keep existing category untouched
         };
-        
-        return processedRow;
       });
 
       setRows(normalizedRows);
