@@ -31,8 +31,16 @@ export const getAllTrades = async () => {
 
 export const deleteTrade = async (trade_id) => {
   if (!trade_id) throw new Error('trade_id is required')
+  
+  // Get dashboard token from cookies
+  const token = Cookies.get('dashboardToken')
+  
   const res = await api.delete(`/api/v1/trade/${trade_id}`, {
     withCredentials: true, // keep if your backend checks cookies/JWT
+    headers: {
+      'dashboard': `Bearer ${token}`, // manually attach token in headers
+      'Content-Type': 'application/json',
+    },
   })
   if (!res?.data?.success) {
     throw new Error(res?.data?.message || 'Failed to delete trade')

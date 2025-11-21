@@ -1,6 +1,7 @@
 'use client';
 import axios from 'axios';
 import { useState } from 'react';
+import Cookies from 'js-cookie';
 
 const DeleteTradeButton = (props) => {
   const [loading, setLoading] = useState(false);
@@ -12,8 +13,16 @@ const DeleteTradeButton = (props) => {
 
     try {
       setLoading(true);
+      
+      // Get dashboard token from cookies
+      const token = Cookies.get('dashboardToken');
+      
       await axios.delete(`/api/v1/trade/${props.data.trade_id}`, {
         withCredentials: true, // if you use auth cookies
+        headers: {
+          'dashboard': `Bearer ${token}`, // manually attach token in headers
+          'Content-Type': 'application/json',
+        },
       });
 
       // Remove from grid without reload
