@@ -419,7 +419,7 @@ export function GLEntryModal({
   )
 }
 
-export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload Trade File', onSave, onClose }) {
+export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload Trade File', onSave, onClose, onSuccess }) {
   const { isTrue, toggle } = useToggle()
   const [showErrorModal, setShowErrorModal] = useState(false)
   const [errorFileUrl, setErrorFileUrl] = useState('')
@@ -427,6 +427,11 @@ export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload 
   const handleModalClose = () => {
     if (onClose) onClose()
     toggle()
+  }
+
+  const handleSuccess = () => {
+    if (onSuccess) onSuccess() // Call onSuccess callback to refresh trades
+    handleModalClose() // Close modal after success
   }
 
   const handleError = (s3Url) => {
@@ -457,8 +462,8 @@ export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload 
           </h5>
         </Modal.Header>
         <Modal.Body>
-          {/* Passing the onClose handler to your form (UploadTradeForm) */}
-          <UploadTrade onClose={handleModalClose} />
+          {/* Passing the onClose and onSuccess handlers to your form (UploadTradeForm) */}
+          <UploadTrade onClose={handleModalClose} onSuccess={handleSuccess} />
         </Modal.Body>
         {/* Modal Footer for Close and Save actions */}
       </Modal>

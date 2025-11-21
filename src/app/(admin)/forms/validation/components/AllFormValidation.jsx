@@ -715,7 +715,7 @@ export const AddTrade = ({ onClose, onCreated }) => {
   )
 }
 
-export const UploadTrade = ({ onClose }) => {
+export const UploadTrade = ({ onClose, onSuccess }) => {
   const [validated, setValidated] = useState(false)
   const [fileError, setFileError] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
@@ -757,6 +757,10 @@ export const UploadTrade = ({ onClose }) => {
       const response = await uploadTradeFile(selectedFile) //Call API
       if (response.data.success) {
         alert('File uploaded successfully!')
+        // Call onSuccess callback to refresh trades list
+        if (onSuccess) {
+          onSuccess()
+        }
         onClose?.() // Close modal if provided
       } else {
         // Backend returned validation errors with errorFileUrl (S3 link)
