@@ -40,6 +40,22 @@ export const deleteTrade = async (trade_id) => {
   return res.data // { success, message, details }
 }
 
+// Bulk delete trades - single API call for multiple trades
+export const deleteBulkTrades = async (tradeIds) => {
+  if (!Array.isArray(tradeIds) || tradeIds.length === 0) {
+    throw new Error('tradeIds array is required and must not be empty')
+  }
+  const res = await api.post(
+    '/api/v1/trade/bulk/delete',
+    { trade_ids: tradeIds },
+    {
+      withCredentials: true,
+    }
+  )
+  // Backend should return: { success, message, data: { successful: [], failed: [] } }
+  return res.data
+}
+
 // NEW: Add trade (POST /api/v1/trade)
 export async function addTrade(payload) {
   // Ensure org_id exists (backend requires it)
