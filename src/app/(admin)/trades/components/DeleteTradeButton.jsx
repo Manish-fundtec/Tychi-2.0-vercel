@@ -12,29 +12,23 @@ const DeleteTradeButton = (props) => {
 
     try {
       setLoading(true);
-      const response = await axios.delete(`/api/v1/trade/${props.data.trade_id}`, {
+      await axios.delete(`/api/v1/trade/${props.data.trade_id}`, {
         withCredentials: true, // if you use auth cookies
       });
-
-      // Check if response indicates success
-      if (response?.data?.success === false) {
-        throw new Error(response?.data?.message || 'Failed to delete trade')
-      }
 
       // Remove from grid without reload
       if (props.api) props.api.applyTransaction({ remove: [props.data] });
 
-      // Show success message
-      const successMessage = response?.data?.message || 'Trade deleted successfully.'
-      window.alert(successMessage)
+      window.alert('Symbol deleted successfully.')
     } catch (err) {
-      console.error('Delete trade failed:', err)
+      console.error('Delete symbol failed:', err)
       const message =
         err?.response?.data?.message ||
         err?.response?.data?.error ||
         err?.message ||
-        'Failed to delete trade.'
+        'Failed to delete symbol.'
       window.alert(message)
+    
     } finally {
       setLoading(false);
     }
