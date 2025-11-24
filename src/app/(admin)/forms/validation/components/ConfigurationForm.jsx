@@ -1576,8 +1576,9 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
       setForm({
         symbol_id: symbol.symbol_id || '',
         symbol_name: symbol.symbol_name || '',
-        isin: symbol.isin || '',
-        cusip: symbol.cusip || '',
+        // Set ISIN and CUSIP to empty string for edit (will be sent as null if empty)
+        isin: '',
+        cusip: '',
         contract_size: symbol.contract_size || '',
         exchange_id: symbol.exchange_id || '',
         asset_type_id: symbol.asset_type_id || symbol.assettype_id || '',
@@ -1618,9 +1619,13 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
       const token = Cookies.get('dashboardToken')
       const decoded = jwtDecode(token)
 
+      // Prepare payload - set CUSIP and ISIN to null if empty (ignore them)
       const payload = {
         ...form,
         fund_id: decoded.fund_id,
+        // Set CUSIP and ISIN to null if empty - ignore them, don't validate
+        cusip: form.cusip?.trim() || null,
+        isin: form.isin?.trim() || null,
       }
 
       try {
@@ -1640,6 +1645,8 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
           alert(duplicateMessage)
         } else {
           console.error('❌ Failed to submit symbol form:', err)
+          const errorMsg = err?.response?.data?.error || err?.message || 'Failed to save symbol'
+          alert(errorMsg)
         }
       }
     }
