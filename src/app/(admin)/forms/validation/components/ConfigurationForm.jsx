@@ -569,6 +569,11 @@ export const BasicForm = () => {
           </FormGroup>
 
           <FormGroup className="position-relative col-md-4 mt-3">
+            <FormLabel>Onboarding Mode</FormLabel>
+            <FormControl type="text" placeholder="Onboarding Mode" value={formData.onboarding_mode || 'N/A'} readOnly />
+          </FormGroup>
+
+          <FormGroup className="position-relative col-md-4 mt-3">
             <FormLabel>Fund Description</FormLabel>
             <FormControl
               type="text"
