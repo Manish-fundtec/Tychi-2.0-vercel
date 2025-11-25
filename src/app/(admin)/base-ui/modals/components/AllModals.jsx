@@ -1799,7 +1799,7 @@ export function AddFundModal({ onFundCreated, buttonLabel = 'Add Fund', modalTit
       </Button>
 
       {/* The Modal itself */}
-      <Modal size="lg" show={isTrue} onHide={toggle} className="fade" centered>
+      <Modal size="xl" show={isTrue} onHide={toggle} className="fade" centered>
         <Modal.Header>
           <h5 className="modal-title" id="exampleModalCenterTitle">
             {modalTitle}

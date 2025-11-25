@@ -1465,6 +1465,7 @@ export const AddFund = ({ onClose, onSuccess }) => {
     reporting_itd: false,
     enable_report_email: false,
     date_format: 'MM/DD/YYYY',
+    onboardingmode: '',
   })
 
   const useeTokenData = useUserToken()
@@ -1492,40 +1493,43 @@ export const AddFund = ({ onClose, onSuccess }) => {
   return (
     <Form onSubmit={handleSubmit}>
       <Row className="mb-3">
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={2}>
           <FormLabel>Fund Status</FormLabel>
           <FormControl type="text" name="fund_status" value={formData.fund_status} readOnly />
         </FormGroup>
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={2}>
+          <FormLabel>Onboarding Mode</FormLabel>
+          <FormControl as="select" name="onboardingmode" value={formData.onboardingmode} onChange={handleChange} required>
+            <option value="">Select</option>
+            <option value="new">New Fund</option>
+            <option value="existing">Existing Fund</option>
+          </FormControl>
+        </FormGroup>
+        <FormGroup as={Col} md={2}>
           <FormLabel>Fund Name</FormLabel>
           <FormControl type="text" name="fund_name" value={formData.fund_name} onChange={handleChange} required />
         </FormGroup>
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={2}>
           <FormLabel>Fund Description</FormLabel>
           <FormControl type="text" name="fund_description" value={formData.fund_description} onChange={handleChange} required />
         </FormGroup>
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={4}>
           <FormLabel>Address</FormLabel>
           <FormControl type="text" name="fund_address" value={formData.fund_address} onChange={handleChange} required />
         </FormGroup>
       </Row>
 
       <Row className="mb-3">
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={2}>
           <FormLabel>Incorporation Date</FormLabel>
           <FormControl type="date" name="incorp_date" value={formData.incorp_date} onChange={handleChange} required />
         </FormGroup>
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={2}>
           <FormLabel>Reporting Start Date</FormLabel>
           <FormControl type="date" name="reporting_start_date" value={formData.reporting_start_date} onChange={handleChange} required />
         </FormGroup>
-        {/* <FormGroup as={Col} md={3}>
-          <FormLabel>FY Starts On</FormLabel>
-          <FormControl type="date" name="fy_starts_on" value={formData.fy_starts_on} onChange={handleChange} required />
-        </FormGroup> */}
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={2}>
           <FormLabel>Financial Year Ends On</FormLabel>
-          {/* <FormControl type="date" name="fy_ends_on" value={formData.fy_ends_on} onChange={handleChange} required /> */}
           <FormControl as="select" name="fy_ends_on" value={formData.fy_ends_on} onChange={handleChange} required>
             <option value="">Select</option>
             <option value="January">January</option>
@@ -1542,7 +1546,7 @@ export const AddFund = ({ onClose, onSuccess }) => {
             <option value="December">December</option>
           </FormControl>
         </FormGroup>
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={2}>
           <FormLabel>Reporting Frequency</FormLabel>
           <FormControl as="select" name="reporting_frequency" value={formData.reporting_frequency} onChange={handleChange} required>
             <option value="">Select</option>
@@ -1552,10 +1556,7 @@ export const AddFund = ({ onClose, onSuccess }) => {
             <option value="Annually">Annually</option>
           </FormControl>
         </FormGroup>
-      </Row>
-
-      <Row className="mb-3">
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={4}>
           <FormLabel>Reporting Currency</FormLabel>
           <FormControl as="select" name="reporting_currency" value={formData.reporting_currency} onChange={handleChange} required>
             <option value="">Select</option>
@@ -1569,7 +1570,10 @@ export const AddFund = ({ onClose, onSuccess }) => {
               ))}
           </FormControl>
         </FormGroup>
-        <FormGroup as={Col} md={3}>
+      </Row>
+
+      <Row className="mb-3">
+        <FormGroup as={Col} md={2}>
           <FormLabel>Decimal Precision</FormLabel>
           <FormControl as="select" name="decimal_precision" value={formData.decimal_precision} onChange={handleChange}>
             <option value="1">1</option>
@@ -1578,9 +1582,8 @@ export const AddFund = ({ onClose, onSuccess }) => {
             <option value="4">4</option>
           </FormControl>
         </FormGroup>
-        <FormGroup as={Col} md={4}>
+        <FormGroup as={Col} md={2}>
           <FormLabel>Commission Accounting method</FormLabel>
-          {/* <FormControl type="date" name="fy_ends_on" value={formData.fy_ends_on} onChange={handleChange} required /> */}
           <FormControl as="select" name="commission_accounting_method" value={formData.commission_accounting_method} onChange={handleChange} required>
             <option value="">Select</option>
             <option value="Capital">Capitalize</option>
@@ -1591,17 +1594,14 @@ export const AddFund = ({ onClose, onSuccess }) => {
           <FormLabel>Email Notification</FormLabel>
           <FormCheck type="checkbox" label="Enable" name="enable_report_email" checked={formData.enable_report_email} onChange={handleChange} />
         </FormGroup>
-      </Row>
-
-      <Row className="mb-3">
-        <FormGroup as={Col} md={3}>
+        <FormGroup as={Col} md={2}>
           <FormLabel>Date Format</FormLabel>
           <FormControl as="select" name="date_format" value={formData.date_format} onChange={handleChange} required>
             <option value="MM/DD/YYYY">MM/DD/YYYY</option>
             <option value="DD/MM/YYYY">DD/MM/YYYY</option>
           </FormControl>
         </FormGroup>
-        <FormGroup as={Col} md={6}>
+        <FormGroup as={Col} md={4}>
           <FormLabel>Reporting Components</FormLabel>
           <div>
             <FormCheck inline label="MTD" type="checkbox" name="reporting_mtd" checked={formData.reporting_mtd} onChange={handleChange} />
