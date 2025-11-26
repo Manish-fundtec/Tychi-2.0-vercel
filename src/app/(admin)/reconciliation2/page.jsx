@@ -276,7 +276,8 @@ export default function Reconciliation2Page() {
   };
 
   const handleReconcile = async () => {
-    if (diff !== 0) return;
+    // Allow reconcile when diff is 0 or -0 (handle both positive and negative zero)
+    if (Math.abs(diff) > 0.0001) return;
     
     // Validate required fields
     if (!fund || !date || !selectedAccount?.gl_code) {
@@ -629,7 +630,7 @@ export default function Reconciliation2Page() {
       </Modal.Body>
       <Modal.Footer>
         <Button variant="secondary" onClick={() => setShowReview(false)}>Close</Button>
-        <Button variant="success" onClick={handleReconcile} disabled={diff !== 0}>Reconcile</Button>
+        <Button variant="success" onClick={handleReconcile} disabled={Math.abs(diff) > 0.0001}>Reconcile</Button>
       </Modal.Footer>
     </Modal>
     </>
