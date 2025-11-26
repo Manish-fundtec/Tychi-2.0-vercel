@@ -1621,6 +1621,94 @@ export const AddFund = ({ onClose, onSuccess }) => {
   )
 }
 
+export const UploadMigration = ({ onClose, onSuccess }) => {
+  const [validated, setValidated] = useState(false)
+  const [fileError, setFileError] = useState('')
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const tokenData = useDashboardToken()
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0]
+    setSelectedFile(file)
+    setFileError('')
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+
+    // File not selected
+    if (!selectedFile) {
+      setFileError('Please select a file.')
+      event.stopPropagation()
+      setValidated(false)
+      return
+    }
+
+    // Check file extension
+    const fileName = selectedFile.name.toLowerCase()
+    if (!fileName.endsWith('.csv') && !fileName.endsWith('.xlsx')) {
+      setFileError('Only .csv or .xlsx files are allowed.')
+      event.stopPropagation()
+      setValidated(false)
+      return
+    }
+
+    setValidated(true)
+    setIsUploading(true)
+
+    try {
+      // TODO: Add API call here
+      console.log('Upload file:', selectedFile.name)
+      alert('File upload functionality will be added here')
+      
+      if (onSuccess) {
+        onSuccess()
+      }
+      onClose?.()
+    } catch (error) {
+      console.error('❌ Upload failed:', error.message)
+      alert('File upload failed: ' + error.message)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  return (
+    <Form className="row g-5 needs-validation" noValidate validated={validated} onSubmit={handleSubmit}>
+      {/* Download Template Button */}
+      <Col xs={12} className="d-flex justify-content-end">
+        {tokenData?.fund_id && (
+          <a
+            href={`${process.env.NEXT_PUBLIC_API_URL}/api/v1/migration-template/${tokenData.fund_id}/download`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-end text-primary"
+            style={{ fontSize: '16px', textDecoration: 'underline' }}>
+            Download Template
+          </a>
+        )}
+      </Col>
+
+      {/* File Upload Section */}
+      <FormGroup className="position-relative col-md-12 mt-3">
+        <FormLabel>Choose File</FormLabel>
+        <FormControl type="file" required className="border-bottom" onChange={handleFileChange} isInvalid={!!fileError} />
+        <Feedback type="invalid" tooltip>
+          {fileError || 'Please choose a valid file to upload.'}
+        </Feedback>
+      </FormGroup>
+
+      {/* Upload Button */}
+      <Col xs={12} className="d-flex justify-content-end mt-4">
+        <Button variant="primary" type="submit" disabled={isUploading}>
+          {isUploading ? 'Uploading...' : 'Upload'}
+        </Button>
+      </Col>
+    </Form>
+  )
+}
+
 export const AddStatementBalance = () => {
   const [validated, setValidated] = useState(false)
 

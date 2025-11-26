@@ -6,7 +6,7 @@ import useModal from '@/hooks/useModal'
 import useToggle from '@/hooks/useToggle'
 import { AgGridReact } from 'ag-grid-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols } from '@/app/(admin)/forms/validation/components/AllFormValidation'
+import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols, UploadMigration } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { AddManualJournal } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { Button, Modal, Dropdown, } from 'react-bootstrap'
 import Cookies from 'js-cookie'
@@ -484,6 +484,41 @@ export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload 
             <Button variant="primary">Download Error File</Button>
           </a>
         </Modal.Footer>
+      </Modal>
+    </>
+  )
+}
+
+export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upload Migration File', onSave, onClose, onSuccess }) {
+  const { isTrue, toggle } = useToggle()
+
+  const handleModalClose = () => {
+    if (onClose) onClose()
+    toggle()
+  }
+
+  const handleSuccess = () => {
+    if (onSuccess) onSuccess()
+    handleModalClose()
+  }
+
+  return (
+    <>
+      {/* Button to open the modal */}
+      <Button variant="primary" onClick={toggle}>
+        {buttonLabel}
+      </Button>
+
+      {/* The Modal itself */}
+      <Modal size="md" show={isTrue} onHide={handleModalClose} className="fade" centered>
+        <Modal.Header closeButton>
+          <h5 className="modal-title" id="exampleModalCenterTitle">
+            {modalTitle}
+          </h5>
+        </Modal.Header>
+        <Modal.Body>
+          <UploadMigration onClose={handleModalClose} onSuccess={handleSuccess} />
+        </Modal.Body>
       </Modal>
     </>
   )

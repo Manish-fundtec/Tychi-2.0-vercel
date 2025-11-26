@@ -2,14 +2,48 @@
 'use client';
 
 import LogoBox from '@/components/LogoBox';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import HoverMenuToggle from './components/HoverMenuToggle';
 import SimplebarReactClient from '@/components/wrappers/SimplebarReactClient';
 import AppMenu from './components/AppMenu';
 import { getMenuItems } from '@/helpers/Manu';
+import { getFundDetails } from '@/lib/api/fund';
 
 const VerticalNavigationBar = ({ tokenData }) => {
-  const menuItems = getMenuItems(tokenData); // <-- pass it if needed
+  const [menuItems, setMenuItems] = useState(() => getMenuItems(tokenData));
+  const [fundData, setFundData] = useState(null);
+
+  // Fetch fund details if onboarding mode is not in token
+  useEffect(() => {
+    const onboardingMode = 
+      tokenData?.fund?.onboardingmode || 
+      tokenData?.fund?.onboarding_mode ||
+      tokenData?.onboardingmode ||
+      tokenData?.onboarding_mode;
+
+    // If onboarding mode is not in token, fetch fund details
+    if (!onboardingMode && tokenData?.fund_id) {
+      getFundDetails(tokenData.fund_id)
+        .then((data) => {
+          setFundData(data);
+          // Merge fund data into tokenData structure
+          const enhancedTokenData = {
+            ...tokenData,
+            fund: {
+              ...tokenData.fund,
+              onboardingmode: data.onboardingmode || data.onboarding_mode,
+            },
+          };
+          setMenuItems(getMenuItems(enhancedTokenData));
+        })
+        .catch((err) => {
+          console.error('Failed to fetch fund details for menu:', err);
+        });
+    } else {
+      // Update menu items when tokenData changes
+      setMenuItems(getMenuItems(tokenData));
+    }
+  }, [tokenData]);
 
   return (
     <div className="main-nav" id="leftside-menu-container">

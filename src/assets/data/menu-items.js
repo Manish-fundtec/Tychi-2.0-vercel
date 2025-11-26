@@ -11,6 +11,7 @@ const ICON_MAP = {
   'Manual Journal': 'ri:edit-box-line',
   Reconciliation: 'ri:exchange-dollar-line',
   Bookclosure: 'ri:book-open-line',
+  Migration: 'ri:upload-cloud-2-line',
 }
 
 

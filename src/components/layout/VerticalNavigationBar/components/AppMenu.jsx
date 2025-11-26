@@ -31,9 +31,9 @@ const MenuItemWithChildren = ({
   }, [activeMenuItems]);
   return <li className={className}>
       <div onClick={toggleMenuItem} aria-expanded={open} role="button" className={clsx(linkClassName)}>
-        {item.icon && <span className="nav-icon">
+        {item.icon && <span className="nav-icon" style={{ marginRight: '8px' }}>
             {' '}
-            <IconifyIcon icon={item.icon} />{' '}
+            <IconifyIcon icon={item.icon} />
           </span>}
         <span className="nav-text">{item.label}</span>
         {!item.badge ? <IconifyIcon icon="bx:chevron-down" className="menu-arrow ms-auto" /> : <span className={`badge badge-pill text-end bg-${item.badge.variant}`}>{item.badge.text}</span>}
@@ -67,7 +67,7 @@ const MenuItemLink = ({
   return <Link href={item.url ?? ''} target={item.target} className={clsx(className, {
     disabled: item.isDisabled
   })}>
-      {item.icon && <span className="nav-icon">
+      {item.icon && <span className="nav-icon" style={{ marginRight: '8px' }}>
           <IconifyIcon icon={item.icon} />
         </span>}
       <span className="nav-text">{item.label}</span>
