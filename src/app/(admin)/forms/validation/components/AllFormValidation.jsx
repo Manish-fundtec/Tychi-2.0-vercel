@@ -1680,7 +1680,7 @@ export const UploadMigration = ({ onClose, onSuccess }) => {
       <Col xs={12} className="d-flex justify-content-end">
         {tokenData?.fund_id && (
           <a
-            href={`${process.env.NEXT_PUBLIC_API_URL}/api/v1/migration-template/${tokenData.fund_id}/download`}
+            href={`${process.env.NEXT_PUBLIC_API_URL}/api/v1/migration/trialbalance/${tokenData.fund_id}/download`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-end text-primary"
