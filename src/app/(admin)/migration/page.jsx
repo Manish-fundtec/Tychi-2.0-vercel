@@ -21,10 +21,10 @@ const MigrationPage = () => {
       { field: 'date', headerName: 'Date', filter: 'agDateColumnFilter', flex: 1 },
       { field: 'account_code', headerName: 'Account Code', flex: 1 },
       { field: 'account_name', headerName: 'Account Name', flex: 1 },
+      { field: 'balance type', headerName: 'Balance Type', flex: 1 },
       { field: 'debit', headerName: 'Debit', flex: 1 },
       { field: 'credit', headerName: 'Credit', flex: 1 },
-      { field: 'balance', headerName: 'Balance', flex: 1 },
-
+      { field: 'Closing balance', headerName: 'Balance', flex: 1 },
     ],
     [],
   )
