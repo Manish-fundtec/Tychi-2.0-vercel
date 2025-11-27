@@ -139,7 +139,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
     fetchUploadedData()
   }, [show, fundId])
 
-  // Create merged comparison data
+  // Create merged comparison data with difference calculation
   const comparisonData = useMemo(() => {
     const merged = new Map()
 
@@ -169,8 +169,25 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
       }
     })
 
-    return Array.from(merged.values()).sort((a, b) => a.glNumber.localeCompare(b.glNumber))
+    // Calculate difference for each row (Trial Balance closing - Uploaded closing)
+    const data = Array.from(merged.values()).map((item) => {
+      const trialClosing = item.trialBalance?.closing ?? 0
+      const uploadedClosing = item.uploaded?.closing ?? 0
+      const difference = trialClosing - uploadedClosing
+      return {
+        ...item,
+        difference,
+      }
+    })
+
+    return data.sort((a, b) => a.glNumber.localeCompare(b.glNumber))
   }, [trialBalanceData, uploadedData])
+
+  // Check if all differences are 0 (allow small floating point errors)
+  const canReconcile = useMemo(() => {
+    if (comparisonData.length === 0) return false
+    return comparisonData.every((item) => Math.abs(item.difference) < 0.01)
+  }, [comparisonData])
 
   return (
     <Modal show={show} onHide={onClose} size="xl" centered scrollable>
@@ -196,96 +213,81 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
             <span>Loading comparison data...</span>
           </div>
         ) : (
-          <Row>
-            {/* Left Side - Trial Balance MTD */}
-            <Col md={6}>
-              <div className="mb-3">
-                <h5 className="text-primary">Trial Balance MTD (Last Pricing)</h5>
-                <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                  <Table striped bordered hover size="sm">
-                    <thead className="table-light sticky-top">
-                      <tr>
-                        <th>GL Code</th>
-                        <th>GL Name</th>
-                        <th className="text-end">Opening</th>
-                        <th className="text-end">Debit</th>
-                        <th className="text-end">Credit</th>
-                        <th className="text-end">Closing</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {trialBalanceData.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="text-center text-muted">
-                            No trial balance data available
-                          </td>
-                        </tr>
-                      ) : (
-                        trialBalanceData.map((row, idx) => (
-                          <tr key={idx}>
-                            <td>{row.glNumber}</td>
-                            <td>{row.glName}</td>
-                            <td className="text-end">{fmt(row.opening)}</td>
-                            <td className="text-end">{fmt(row.debit)}</td>
-                            <td className="text-end">{fmt(row.credit)}</td>
-                            <td className="text-end">{fmt(row.closing)}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </Table>
-                </div>
-              </div>
-            </Col>
+          <div className="table-responsive" style={{ maxHeight: '600px', overflowY: 'auto' }}>
+            <Table striped bordered hover size="sm">
+              <thead className="table-light sticky-top">
+                <tr>
+                  <th rowSpan={2}>GL Code</th>
+                  <th rowSpan={2}>GL Name</th>
+                  <th colSpan={4} className="text-center bg-primary text-white">
+                    Trial Balance MTD (Last Pricing)
+                  </th>
+                  <th colSpan={4} className="text-center bg-success text-white">
+                    Uploaded Migration Data
+                  </th>
+                  <th rowSpan={2} className="text-center bg-warning">
+                    Difference
+                  </th>
+                </tr>
+                <tr>
+                  {/* Trial Balance columns */}
+                  <th className="text-end bg-primary text-white">Opening</th>
+                  <th className="text-end bg-primary text-white">Debit</th>
+                  <th className="text-end bg-primary text-white">Credit</th>
+                  <th className="text-end bg-primary text-white">Closing</th>
+                  {/* Uploaded Data columns */}
+                  <th className="text-end bg-success text-white">Opening</th>
+                  <th className="text-end bg-success text-white">Debit</th>
+                  <th className="text-end bg-success text-white">Credit</th>
+                  <th className="text-end bg-success text-white">Closing</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonData.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="text-center text-muted">
+                      No comparison data available
+                    </td>
+                  </tr>
+                ) : (
+                  comparisonData.map((row, idx) => {
+                    const trialBal = row.trialBalance
+                    const uploaded = row.uploaded
+                    const diff = row.difference
+                    const diffClass = Math.abs(diff) < 0.01 ? 'text-success' : 'text-danger'
 
-            {/* Right Side - Uploaded Data */}
-            <Col md={6}>
-              <div className="mb-3">
-                <h5 className="text-success">Uploaded Migration Data</h5>
-                <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                  <Table striped bordered hover size="sm">
-                    <thead className="table-light sticky-top">
-                      <tr>
-                        <th>GL Code</th>
-                        <th>GL Name</th>
-                        <th className="text-end">Opening</th>
-                        <th className="text-end">Debit</th>
-                        <th className="text-end">Credit</th>
-                        <th className="text-end">Closing</th>
+                    return (
+                      <tr key={idx}>
+                        <td>{row.glNumber}</td>
+                        <td>{row.glName}</td>
+                        {/* Trial Balance columns */}
+                        <td className="text-end">{trialBal ? fmt(trialBal.opening) : '—'}</td>
+                        <td className="text-end">{trialBal ? fmt(trialBal.debit) : '—'}</td>
+                        <td className="text-end">{trialBal ? fmt(trialBal.credit) : '—'}</td>
+                        <td className="text-end">{trialBal ? fmt(trialBal.closing) : '—'}</td>
+                        {/* Uploaded Data columns */}
+                        <td className="text-end">{uploaded ? fmt(uploaded.opening) : '—'}</td>
+                        <td className="text-end">{uploaded ? fmt(uploaded.debit) : '—'}</td>
+                        <td className="text-end">{uploaded ? fmt(uploaded.credit) : '—'}</td>
+                        <td className="text-end">{uploaded ? fmt(uploaded.closing) : '—'}</td>
+                        {/* Difference column */}
+                        <td className={`text-end fw-bold ${diffClass}`}>
+                          {fmt(diff)}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {uploadedData.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="text-center text-muted">
-                            No uploaded data available
-                          </td>
-                        </tr>
-                      ) : (
-                        uploadedData.map((row, idx) => (
-                          <tr key={idx}>
-                            <td>{row.glNumber}</td>
-                            <td>{row.glName}</td>
-                            <td className="text-end">{fmt(row.opening)}</td>
-                            <td className="text-end">{fmt(row.debit)}</td>
-                            <td className="text-end">{fmt(row.credit)}</td>
-                            <td className="text-end">{fmt(row.closing)}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </Table>
-                </div>
-              </div>
-            </Col>
-          </Row>
+                    )
+                  })
+                )}
+              </tbody>
+            </Table>
+          </div>
         )}
       </Modal.Body>
       <Modal.Footer>
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>
-        <Button variant="primary" onClick={() => {}}>
+        <Button variant="primary" onClick={() => {}} disabled={!canReconcile || loading}>
           Reconcile
         </Button>
       </Modal.Footer>
