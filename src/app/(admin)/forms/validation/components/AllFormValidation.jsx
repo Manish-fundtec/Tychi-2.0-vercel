@@ -1622,7 +1622,7 @@ export const AddFund = ({ onClose, onSuccess }) => {
   )
 }
 
-export const UploadMigration = ({ onClose, onSuccess }) => {
+export const UploadMigration = ({ onClose, onSuccess, onUploadSuccess }) => {
   const [validated, setValidated] = useState(false)
   const [fileError, setFileError] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
@@ -1663,10 +1663,15 @@ export const UploadMigration = ({ onClose, onSuccess }) => {
       const response = await uploadMigrationFile(selectedFile)
       
       if (response.data.success) {
-        alert('File uploaded successfully!')
+        // Call onUploadSuccess to open comparison modal (don't close upload modal yet)
+        if (onUploadSuccess) {
+          onUploadSuccess()
+        }
+        // Also call onSuccess for any other handlers
         if (onSuccess) {
           onSuccess()
         }
+        // Close upload modal
         onClose?.()
       } else {
         alert('Upload failed: ' + (response.data.message || 'Unknown error'))

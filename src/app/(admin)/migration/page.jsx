@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Alert } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
 import { UploadMigrationModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
+import MigrationComparisonModal from './components/MigrationComparisonModal'
+import { useDashboardToken } from '@/hooks/useDashboardToken'
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
 
@@ -13,7 +15,10 @@ const MigrationPage = () => {
   const [columnDefs, setColumnDefs] = useState([])
   const [loading, setLoading] = useState(false)
   const [errMsg, setErrMsg] = useState('')
+  const [showComparisonModal, setShowComparisonModal] = useState(false)
   const gridApiRef = useRef(null)
+  const tokenData = useDashboardToken()
+  const fundId = tokenData?.fund_id
 
   const defaultColumnDefs = useMemo(
     () => [
@@ -46,10 +51,9 @@ const MigrationPage = () => {
     gridApiRef.current = params.api
   }, [])
 
-  // Handle success after upload
+  // Handle success after upload - open comparison modal
   const handleUploadSuccess = () => {
-    // TODO: Refresh data after successful upload
-    console.log('Upload successful, refresh data here')
+    setShowComparisonModal(true)
   }
 
   return (
@@ -64,6 +68,7 @@ const MigrationPage = () => {
                 buttonLabel="Upload" 
                 modalTitle="Upload Migration File"
                 onSuccess={handleUploadSuccess}
+                onUploadSuccess={handleUploadSuccess}
               />
             </CardHeader>
             <CardBody className="p-2">
@@ -95,6 +100,13 @@ const MigrationPage = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* Comparison Modal */}
+      <MigrationComparisonModal
+        show={showComparisonModal}
+        onClose={() => setShowComparisonModal(false)}
+        fundId={fundId}
+      />
     </>
   )
 }
