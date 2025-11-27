@@ -219,27 +219,27 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
                 <tr>
                   <th rowSpan={2}>GL Code</th>
                   <th rowSpan={2}>GL Name</th>
-                  <th colSpan={4} className="text-center bg-primary text-white">
+                  <th colSpan={4} className="text-center">
                     Trial Balance MTD (Last Pricing)
                   </th>
-                  <th colSpan={4} className="text-center bg-success text-white">
+                  <th colSpan={4} className="text-center">
                     Uploaded Migration Data
                   </th>
-                  <th rowSpan={2} className="text-center bg-warning">
+                  <th rowSpan={2} className="text-center">
                     Difference
                   </th>
                 </tr>
                 <tr>
                   {/* Trial Balance columns */}
-                  <th className="text-end bg-primary text-white">Opening</th>
-                  <th className="text-end bg-primary text-white">Debit</th>
-                  <th className="text-end bg-primary text-white">Credit</th>
-                  <th className="text-end bg-primary text-white">Closing</th>
+                  <th className="text-end">Opening</th>
+                  <th className="text-end">Debit</th>
+                  <th className="text-end">Credit</th>
+                  <th className="text-end">Closing</th>
                   {/* Uploaded Data columns */}
-                  <th className="text-end bg-success text-white">Opening</th>
-                  <th className="text-end bg-success text-white">Debit</th>
-                  <th className="text-end bg-success text-white">Credit</th>
-                  <th className="text-end bg-success text-white">Closing</th>
+                  <th className="text-end">Opening</th>
+                  <th className="text-end">Debit</th>
+                  <th className="text-end">Credit</th>
+                  <th className="text-end">Closing</th>
                 </tr>
               </thead>
               <tbody>
@@ -271,7 +271,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
                         <td className="text-end">{uploaded ? fmt(uploaded.credit) : '—'}</td>
                         <td className="text-end">{uploaded ? fmt(uploaded.closing) : '—'}</td>
                         {/* Difference column */}
-                        <td className={`text-end fw-bold ${diffClass}`}>
+                        <td className="text-end fw-bold">
                           {fmt(diff)}
                         </td>
                       </tr>
