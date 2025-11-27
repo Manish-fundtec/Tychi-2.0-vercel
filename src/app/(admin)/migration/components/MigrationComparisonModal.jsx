@@ -97,7 +97,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
     const fetchUploadedData = async () => {
       try {
         setLoading(true)
-        const url = `${apiBase}/api/v1/migration/fund/${encodeURIComponent(fundId)}`
+        const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}`
         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' })
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const json = await resp.json()
@@ -272,6 +272,9 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
       <Modal.Footer>
         <Button variant="secondary" onClick={onClose}>
           Close
+        </Button>
+        <Button variant="primary" onClick={() => {}}>
+          Reconcile
         </Button>
       </Modal.Footer>
     </Modal>

@@ -20,7 +20,7 @@ const VerticalNavigationBar = ({ tokenData }) => {
       tokenData?.fund?.onboarding_mode ||
       tokenData?.onboardingmode ||
       tokenData?.onboarding_mode;
-
+      
     // If onboarding mode is not in token, fetch fund details
     if (!onboardingMode && tokenData?.fund_id) {
       getFundDetails(tokenData.fund_id)
@@ -39,7 +39,7 @@ const VerticalNavigationBar = ({ tokenData }) => {
         .catch((err) => {
           console.error('Failed to fetch fund details for menu:', err);
         });
-    } else {
+      } else {
       // Update menu items when tokenData changes
       setMenuItems(getMenuItems(tokenData));
     }

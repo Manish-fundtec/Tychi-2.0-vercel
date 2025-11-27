@@ -1663,7 +1663,8 @@ export const UploadMigration = ({ onClose, onSuccess, onUploadSuccess }) => {
       const response = await uploadMigrationFile(selectedFile)
       
       if (response.data.success) {
-        // Call onUploadSuccess to open comparison modal (don't close upload modal yet)
+        alert('File uploaded successfully!')
+        // Call onUploadSuccess to open comparison modal
         if (onUploadSuccess) {
           onUploadSuccess()
         }
