@@ -254,6 +254,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
                     const trialBal = row.trialBalance
                     const uploaded = row.uploaded
                     const diff = row.difference
+                    // Green if difference is 0, red if not 0
                     const diffClass = Math.abs(diff) < 0.01 ? 'text-success' : 'text-danger'
 
                     return (
@@ -270,8 +271,8 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
                         <td className="text-end">{uploaded ? fmt(uploaded.debit) : '—'}</td>
                         <td className="text-end">{uploaded ? fmt(uploaded.credit) : '—'}</td>
                         <td className="text-end">{uploaded ? fmt(uploaded.closing) : '—'}</td>
-                        {/* Difference column */}
-                        <td className="text-end fw-bold">
+                        {/* Difference column - green if 0, red if not 0 */}
+                        <td className={`text-end fw-bold ${diffClass}`}>
                           {fmt(diff)}
                         </td>
                       </tr>
