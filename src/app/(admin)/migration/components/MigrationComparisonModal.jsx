@@ -29,6 +29,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
   const [uploadedData, setUploadedData] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showReconcileModal, setShowReconcileModal] = useState(false)
 
   // Fetch last pricing date
   useEffect(() => {
@@ -288,8 +289,184 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>
-        <Button variant="primary" onClick={() => {}} disabled={!canReconcile || loading}>
+        <Button variant="primary" onClick={() => setShowReconcileModal(true)} disabled={!canReconcile || loading}>
           Reconcile
+        </Button>
+      </Modal.Footer>
+
+      {/* Reconcile Modal */}
+      <ReconcileModal
+        show={showReconcileModal}
+        onClose={() => setShowReconcileModal(false)}
+        onPublish={() => {
+          // TODO: Implement publish logic
+          alert('Publish functionality will be implemented')
+          setShowReconcileModal(false)
+        }}
+        trialBalanceData={trialBalanceData}
+        uploadedData={uploadedData}
+        fundId={fundId}
+        lastPricingDate={lastPricingDate}
+      />
+    </Modal>
+  )
+}
+
+// Reconcile Modal Component
+function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedData, fundId, lastPricingDate }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // Calculate closing balances and differences
+  const reconcileData = useMemo(() => {
+    const merged = new Map()
+
+    // Add trial balance data (from report)
+    trialBalanceData.forEach((item) => {
+      merged.set(item.glNumber, {
+        glNumber: item.glNumber,
+        glName: item.glName,
+        reportClosing: item.closing,
+        uploadedClosing: null,
+        difference: null,
+      })
+    })
+
+    // Add uploaded data and calculate differences
+    uploadedData.forEach((item) => {
+      const key = item.glNumber
+      if (merged.has(key)) {
+        const existing = merged.get(key)
+        existing.uploadedClosing = item.closing
+        existing.difference = existing.reportClosing - item.closing
+      } else {
+        merged.set(key, {
+          glNumber: key,
+          glName: item.glName,
+          reportClosing: null,
+          uploadedClosing: item.closing,
+          difference: null,
+        })
+      }
+    })
+
+    return Array.from(merged.values())
+      .filter((item) => item.reportClosing !== null && item.uploadedClosing !== null)
+      .sort((a, b) => a.glNumber.localeCompare(b.glNumber))
+  }, [trialBalanceData, uploadedData])
+
+  // Calculate totals
+  const totals = useMemo(() => {
+    const reportTotal = reconcileData.reduce((sum, item) => sum + (item.reportClosing || 0), 0)
+    const uploadedTotal = reconcileData.reduce((sum, item) => sum + (item.uploadedClosing || 0), 0)
+    const differenceTotal = reportTotal - uploadedTotal
+
+    return {
+      reportTotal,
+      uploadedTotal,
+      differenceTotal,
+    }
+  }, [reconcileData])
+
+  const handlePublish = async () => {
+    if (!canPublish) {
+      alert('Cannot publish: There are differences in closing balances. Please reconcile first.')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    try {
+      // TODO: Call API to publish/reconcile migration data
+      // const url = `${apiBase}/api/v1/migration/reconcile`
+      // const resp = await fetch(url, { ... })
+      
+      // For now, just call onPublish callback
+      onPublish()
+    } catch (e) {
+      console.error('[ReconcileModal] Publish failed:', e)
+      setError('Failed to publish migration data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const canPublish = useMemo(() => {
+    return reconcileData.every((item) => Math.abs(item.difference || 0) < 0.01)
+  }, [reconcileData])
+
+  return (
+    <Modal show={show} onHide={onClose} size="lg" centered scrollable>
+      <Modal.Header closeButton>
+        <Modal.Title>Reconcile Migration Data</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {error && (
+          <Alert variant="danger" className="mb-3" dismissible onClose={() => setError('')}>
+            {error}
+          </Alert>
+        )}
+
+        {lastPricingDate && (
+          <div className="mb-3">
+            <strong>Last Pricing Date:</strong> {lastPricingDate}
+          </div>
+        )}
+
+        <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+          <Table striped bordered hover size="sm">
+            <thead className="table-light sticky-top">
+              <tr>
+                <th>GL Code</th>
+                <th>GL Name</th>
+                <th className="text-end">Report Closing Balance</th>
+                <th className="text-end">Uploaded Closing Balance</th>
+                <th className="text-end">Difference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reconcileData.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center text-muted">
+                    No data to reconcile
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  {reconcileData.map((row, idx) => {
+                    const diff = row.difference || 0
+                    const diffClass = Math.abs(diff) < 0.01 ? 'text-success' : 'text-danger'
+                    return (
+                      <tr key={idx}>
+                        <td>{row.glNumber}</td>
+                        <td>{row.glName}</td>
+                        <td className="text-end">{fmt(row.reportClosing || 0)}</td>
+                        <td className="text-end">{fmt(row.uploadedClosing || 0)}</td>
+                        <td className={`text-end fw-bold ${diffClass}`}>{fmt(diff)}</td>
+                      </tr>
+                    )
+                  })}
+                  {/* Totals row */}
+                  <tr className="table-primary fw-bold">
+                    <td colSpan={2}>TOTAL</td>
+                    <td className="text-end">{fmt(totals.reportTotal)}</td>
+                    <td className="text-end">{fmt(totals.uploadedTotal)}</td>
+                    <td className={`text-end ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
+                      {fmt(totals.differenceTotal)}
+                    </td>
+                  </tr>
+                </>
+              )}
+            </tbody>
+          </Table>
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onClose} disabled={loading}>
+          Close
+        </Button>
+        <Button variant="primary" onClick={handlePublish} disabled={!canPublish || loading}>
+          {loading ? 'Publishing...' : 'Publish'}
         </Button>
       </Modal.Footer>
     </Modal>
