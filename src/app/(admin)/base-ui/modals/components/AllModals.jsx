@@ -489,7 +489,7 @@ export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload 
   )
 }
 
-export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upload Migration File', onSave, onClose, onSuccess }) {
+export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upload Migration File', onSave, onClose, onSuccess, onUploadSuccess }) {
   const { isTrue, toggle } = useToggle()
 
   const handleModalClose = () => {
@@ -500,6 +500,14 @@ export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upl
   const handleSuccess = () => {
     if (onSuccess) onSuccess()
     handleModalClose()
+  }
+
+  const handleUploadSuccess = () => {
+    // Open comparison modal after successful upload
+    if (onUploadSuccess) {
+      onUploadSuccess()
+    }
+    handleSuccess()
   }
 
   return (
@@ -517,7 +525,7 @@ export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upl
           </h5>
         </Modal.Header>
         <Modal.Body>
-          <UploadMigration onClose={handleModalClose} onSuccess={handleSuccess} />
+          <UploadMigration onClose={handleModalClose} onSuccess={handleSuccess} onUploadSuccess={handleUploadSuccess} />
         </Modal.Body>
       </Modal>
     </>
