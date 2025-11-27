@@ -16,6 +16,13 @@ function getAuthHeaders() {
 const fmt = (v) =>
   Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+// Helper function to check if GL code is in allowed ranges (13000-13999 or 21000-21999)
+const isAllowedGlCode = (glCode) => {
+  const code = Number(glCode)
+  if (!Number.isFinite(code)) return false
+  return (code >= 13000 && code <= 13999) || (code >= 21000 && code <= 21999)
+}
+
 export default function MigrationComparisonModal({ show, onClose, fundId }) {
   const [lastPricingDate, setLastPricingDate] = useState(null)
   const [trialBalanceData, setTrialBalanceData] = useState([])
@@ -75,7 +82,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
             credit: Number(r.credit_amount ?? r.credit ?? 0),
             closing: Number(r.closing_balance ?? r.closingbalance ?? 0),
           }))
-          .filter((item) => item.glNumber) // Filter out empty GL codes
+          .filter((item) => item.glNumber && isAllowedGlCode(item.glNumber)) // Filter by allowed GL code ranges
 
         setTrialBalanceData(data)
       } catch (e) {
@@ -117,7 +124,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
             credit: Number(r.credit ?? r.credit_amount ?? 0),
             closing: Number(r['Closing balance'] ?? r.closing_balance ?? r.closing ?? 0),
           }))
-          .filter((item) => item.glNumber) // Filter out empty GL codes
+          .filter((item) => item.glNumber && isAllowedGlCode(item.glNumber)) // Filter by allowed GL code ranges
 
         setUploadedData(data)
       } catch (e) {
