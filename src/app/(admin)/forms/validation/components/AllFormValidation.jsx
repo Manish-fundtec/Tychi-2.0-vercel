@@ -16,6 +16,7 @@ import Cookies from 'js-cookie'
 import jwt from 'jsonwebtoken'
 import api from '../../../../../lib/api/axios'
 import { uploadTradeFile, createTrade } from '@/lib/api/uploadTrade'
+import { uploadMigrationFile } from '@/lib/api/migration'
 import { addTrade } from '@/lib/api/trades'
 import { getExchangesByFundId } from '@/lib/api/exchange'
 import currencies from 'currency-formatter/currencies'
@@ -1658,17 +1659,21 @@ export const UploadMigration = ({ onClose, onSuccess }) => {
     setIsUploading(true)
 
     try {
-      // TODO: Add API call here
-      console.log('Upload file:', selectedFile.name)
-      alert('File upload functionality will be added here')
+      // Call API to upload file
+      const response = await uploadMigrationFile(selectedFile)
       
-      if (onSuccess) {
-        onSuccess()
+      if (response.data.success) {
+        alert('File uploaded successfully!')
+        if (onSuccess) {
+          onSuccess()
+        }
+        onClose?.()
+      } else {
+        alert('Upload failed: ' + (response.data.message || 'Unknown error'))
       }
-      onClose?.()
     } catch (error) {
-      console.error('❌ Upload failed:', error.message)
-      alert('File upload failed: ' + error.message)
+      console.error('❌ Upload failed:', error)
+      alert('File upload failed: ' + (error?.response?.data?.message || error?.message || 'Unknown error'))
     } finally {
       setIsUploading(false)
     }
