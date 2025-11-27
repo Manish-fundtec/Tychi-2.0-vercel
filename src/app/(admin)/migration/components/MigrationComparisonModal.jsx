@@ -97,8 +97,13 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
     const fetchUploadedData = async () => {
       try {
         setLoading(true)
+        const token = Cookies.get('dashboardToken')
+        const headers = {
+          ...getAuthHeaders(),
+          'dashboard': `Bearer ${token}`, // Add dashboard token like uploadTrade
+        }
         const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}`
-        const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' })
+        const resp = await fetch(url, { headers, credentials: 'include' })
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const json = await resp.json()
 
