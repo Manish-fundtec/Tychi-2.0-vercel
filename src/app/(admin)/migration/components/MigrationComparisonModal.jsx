@@ -26,7 +26,9 @@ const isAllowedGlCode = (glCode) => {
 export default function MigrationComparisonModal({ show, onClose, fundId }) {
   const [lastPricingDate, setLastPricingDate] = useState(null)
   const [trialBalanceData, setTrialBalanceData] = useState([])
+  const [allTrialBalanceData, setAllTrialBalanceData] = useState([]) // All GL codes for reconcile modal
   const [uploadedData, setUploadedData] = useState([])
+  const [allUploadedData, setAllUploadedData] = useState([]) // All GL codes for reconcile modal
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showReconcileModal, setShowReconcileModal] = useState(false)
@@ -73,8 +75,8 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const json = await resp.json()
 
-        // Normalize trial balance data
-        const data = (json?.data || json?.rows || [])
+        // Normalize trial balance data - NO FILTER for comparison modal (all GL codes)
+        const allData = (json?.data || json?.rows || [])
           .map((r) => ({
             glNumber: String(r.glNumber ?? r.glnumber ?? r.gl_code ?? '').trim(),
             glName: String(r.glName ?? r.gl_name ?? '').trim(),
@@ -83,9 +85,14 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
             credit: Number(r.credit_amount ?? r.credit ?? 0),
             closing: Number(r.closing_balance ?? r.closingbalance ?? 0),
           }))
-          .filter((item) => item.glNumber && isAllowedGlCode(item.glNumber)) // Filter by allowed GL code ranges
+          .filter((item) => item.glNumber) // Only filter empty GL codes
 
-        setTrialBalanceData(data)
+        // For comparison modal display, filter by allowed ranges
+        const filteredData = allData.filter((item) => isAllowedGlCode(item.glNumber))
+        setTrialBalanceData(filteredData)
+        
+        // Store all data for reconcile modal (no filter)
+        setAllTrialBalanceData(allData)
       } catch (e) {
         console.error('[MigrationComparison] Failed to fetch trial balance:', e)
         setError('Failed to load trial balance data')
@@ -115,8 +122,8 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const json = await resp.json()
 
-        // Normalize uploaded migration data
-        const data = (json?.data || json?.rows || [])
+        // Normalize uploaded migration data - NO FILTER for reconcile modal (all GL codes)
+        const allData = (json?.data || json?.rows || [])
           .map((r) => ({
             glNumber: String(r.account_code ?? r.gl_code ?? r.glNumber ?? '').trim(),
             glName: String(r.account_name ?? r.gl_name ?? r.accountName ?? '').trim(),
@@ -125,9 +132,14 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
             credit: Number(r.credit ?? r.credit_amount ?? 0),
             closing: Number(r['Closing balance'] ?? r.closing_balance ?? r.closing ?? 0),
           }))
-          .filter((item) => item.glNumber && isAllowedGlCode(item.glNumber)) // Filter by allowed GL code ranges
+          .filter((item) => item.glNumber) // Only filter empty GL codes
 
-        setUploadedData(data)
+        // For comparison modal display, filter by allowed ranges
+        const filteredData = allData.filter((item) => isAllowedGlCode(item.glNumber))
+        setUploadedData(filteredData)
+        
+        // Store all data for reconcile modal (no filter)
+        setAllUploadedData(allData)
       } catch (e) {
         console.error('[MigrationComparison] Failed to fetch uploaded data:', e)
         setError('Failed to load uploaded migration data')
@@ -303,8 +315,8 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
           alert('Publish functionality will be implemented')
           setShowReconcileModal(false)
         }}
-        trialBalanceData={trialBalanceData}
-        uploadedData={uploadedData}
+        trialBalanceData={allTrialBalanceData}
+        uploadedData={allUploadedData}
         fundId={fundId}
         lastPricingDate={lastPricingDate}
       />
@@ -317,11 +329,11 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Calculate closing balances and differences
+  // Calculate closing balances and differences - ALL GL CODES (no filter)
   const reconcileData = useMemo(() => {
     const merged = new Map()
 
-    // Add trial balance data (from report)
+    // Add trial balance data (from report) - ALL GL codes
     trialBalanceData.forEach((item) => {
       merged.set(item.glNumber, {
         glNumber: item.glNumber,
@@ -332,7 +344,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
       })
     })
 
-    // Add uploaded data and calculate differences
+    // Add uploaded data and calculate differences - ALL GL codes
     uploadedData.forEach((item) => {
       const key = item.glNumber
       if (merged.has(key)) {
@@ -355,8 +367,9 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
       .sort((a, b) => a.glNumber.localeCompare(b.glNumber))
   }, [trialBalanceData, uploadedData])
 
-  // Calculate totals
+  // Calculate totals (calculated closing balance)
   const totals = useMemo(() => {
+    // Calculate total closing balance from all accounts
     const reportTotal = reconcileData.reduce((sum, item) => sum + (item.reportClosing || 0), 0)
     const uploadedTotal = reconcileData.reduce((sum, item) => sum + (item.uploadedClosing || 0), 0)
     const differenceTotal = reportTotal - uploadedTotal
@@ -446,9 +459,9 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                       </tr>
                     )
                   })}
-                  {/* Totals row */}
+                  {/* Calculated Closing Balance Totals row */}
                   <tr className="table-primary fw-bold">
-                    <td colSpan={2}>TOTAL</td>
+                    <td colSpan={2}>Calculated Closing Balance</td>
                     <td className="text-end">{fmt(totals.reportTotal)}</td>
                     <td className="text-end">{fmt(totals.uploadedTotal)}</td>
                     <td className={`text-end ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
