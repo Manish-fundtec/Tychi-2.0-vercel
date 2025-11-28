@@ -319,23 +319,31 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
         uploadedData={allUploadedData}
         fundId={fundId}
         lastPricingDate={lastPricingDate}
+        onRefreshTrialBalance={(refreshedData) => {
+          // Update the allTrialBalanceData with refreshed data
+          setAllTrialBalanceData(refreshedData)
+        }}
       />
     </Modal>
   )
 }
 
 // Reconcile Modal Component
-function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedData, fundId, lastPricingDate }) {
+function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedData, fundId, lastPricingDate, onRefreshTrialBalance }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
+  const [refreshedTrialBalanceData, setRefreshedTrialBalanceData] = useState(trialBalanceData)
 
   // Calculate closing balances and differences - ALL GL CODES (no filter)
+  // Use refreshed data if available, otherwise use original trialBalanceData
+  const currentTrialBalanceData = refreshedTrialBalanceData.length > 0 ? refreshedTrialBalanceData : trialBalanceData
+  
   const reconcileData = useMemo(() => {
     const merged = new Map()
 
-    // Add trial balance data (from report) - ALL GL codes
-    trialBalanceData.forEach((item) => {
+    // Add trial balance data (from report) - ALL GL codes - use refreshed data
+    currentTrialBalanceData.forEach((item) => {
       merged.set(item.glNumber, {
         glNumber: item.glNumber,
         glName: item.glName,
@@ -366,7 +374,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
     return Array.from(merged.values())
       .filter((item) => item.reportClosing !== null && item.uploadedClosing !== null)
       .sort((a, b) => a.glNumber.localeCompare(b.glNumber))
-  }, [trialBalanceData, uploadedData])
+  }, [currentTrialBalanceData, uploadedData])
 
   // Calculate totals (calculated closing balance)
   const totals = useMemo(() => {
@@ -458,7 +466,43 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         const createdCount = result?.data?.created_count || result?.created_count || journalEntries.length
         alert(`Journals Created: ${createdCount} journal entries created successfully!`)
         
-        // Open review modal after journals are created
+        // Refresh trial balance data after journal entries are created
+        if (onRefreshTrialBalance && lastPricingDate) {
+          try {
+            setLoading(true)
+            const params = new URLSearchParams()
+            params.set('date', lastPricingDate)
+            params.set('scope', 'MTD')
+            const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl-trial?${params.toString()}`
+            const refreshResp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' })
+            if (refreshResp.ok) {
+              const refreshJson = await refreshResp.json()
+              const refreshedData = (refreshJson?.data || refreshJson?.rows || [])
+                .map((r) => ({
+                  glNumber: String(r.glNumber ?? r.glnumber ?? r.gl_code ?? '').trim(),
+                  glName: String(r.glName ?? r.gl_name ?? '').trim(),
+                  opening: Number(r.opening_balance ?? r.openingbalance ?? 0),
+                  debit: Number(r.debit_amount ?? r.debit ?? 0),
+                  credit: Number(r.credit_amount ?? r.credit ?? 0),
+                  closing: Number(r.closing_balance ?? r.closingbalance ?? 0),
+                }))
+                .filter((item) => item.glNumber)
+              
+              setRefreshedTrialBalanceData(refreshedData)
+              // Also update parent component's data
+              if (onRefreshTrialBalance) {
+                onRefreshTrialBalance(refreshedData)
+              }
+            }
+          } catch (refreshError) {
+            console.error('[ReconcileModal] Failed to refresh trial balance:', refreshError)
+            // Continue to open modal even if refresh fails
+          } finally {
+            setLoading(false)
+          }
+        }
+        
+        // Open review modal after journals are created and data is refreshed
         setShowPublishReviewModal(true)
       } catch (e) {
         console.error('[ReconcileModal] Journal creation failed:', e)
