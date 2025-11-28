@@ -84,20 +84,15 @@ const MigrationPage = () => {
 
     try {
       // Call API to get migration upload history
+      // Updated: Response is now a direct array [{ file_id, file_name, status, uploaded_at, user_id }, ...]
       const res = await api.get(`/api/v1/migration/upload/history/${fundId}`)
       
-      // Get data from response (handle different response formats)
-      const payload = res?.data ?? []
+      // Response is direct array, not wrapped in object
       let rows = []
-      
-      if (Array.isArray(payload)) {
-        rows = payload
-      } else if (Array.isArray(payload?.rows)) {
-        rows = payload.rows
-      } else if (Array.isArray(payload?.data)) {
-        rows = payload.data
-      } else if (Array.isArray(payload?.data?.rows)) {
-        rows = payload.data.rows
+      if (Array.isArray(res?.data)) {
+        rows = res.data
+      } else if (Array.isArray(res)) {
+        rows = res
       } else {
         rows = []
       }
@@ -140,6 +135,34 @@ const MigrationPage = () => {
         valueGetter: (params) => (params.data?.uploaded_at ? new Date(params.data.uploaded_at).toLocaleString() : ''),
       },
       { headerName: 'Uploaded By', field: 'user_id', sortable: true, filter: true, flex: 1 },
+      {
+        headerName: 'Pending Actions',
+        field: 'actions',
+        sortable: false,
+        filter: false,
+        width: 150,
+        cellRenderer: (params) => {
+          const { data } = params
+          const fileId = data?.file_id
+          const status = String(data?.status || '').toLowerCase()
+          
+          // Only show button if status is "pending"
+          if (status === 'pending' && fileId) {
+            return (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setCurrentFileId(fileId)
+                  setShowComparisonModal(true)
+                }}>
+                View
+              </Button>
+            )
+          }
+          return '—'
+        },
+      },
     ],
     [],
   )
@@ -257,9 +280,18 @@ const MigrationPage = () => {
       {/* Comparison Modal */}
       <MigrationComparisonModal
         show={showComparisonModal}
-        onClose={() => setShowComparisonModal(false)}
+        onClose={() => {
+          setShowComparisonModal(false)
+          setCurrentFileId(null) // Reset fileId when modal closes
+        }}
         fundId={fundId}
         fileId={currentFileId}
+        onRefreshHistory={() => {
+          // Simple function to refresh history
+          if (activeTab === 'history') {
+            fetchHistory()
+          }
+        }}
       />
     </>
   )

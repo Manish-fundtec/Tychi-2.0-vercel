@@ -24,7 +24,7 @@ const isAllowedGlCode = (glCode) => {
   return (code >= 13000 && code <= 13999) || (code >= 21000 && code <= 21999)
 }
 
-export default function MigrationComparisonModal({ show, onClose, fundId, fileId }) {
+export default function MigrationComparisonModal({ show, onClose, fundId, fileId, onRefreshHistory }) {
   const [lastPricingDate, setLastPricingDate] = useState(null)
   const [trialBalanceData, setTrialBalanceData] = useState([])
   const [allTrialBalanceData, setAllTrialBalanceData] = useState([]) // All GL codes for reconcile modal
@@ -118,20 +118,28 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
           ...getAuthHeaders(),
           'dashboard': `Bearer ${token}`, // Add dashboard token like uploadTrade
         }
-        const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}`
+        // If fileId is provided, fetch data for that specific file, otherwise fetch latest
+        let url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}`
+        if (fileId) {
+          url += `?file_id=${encodeURIComponent(fileId)}`
+        }
         const resp = await fetch(url, { headers, credentials: 'include' })
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const json = await resp.json()
 
-        // Normalize uploaded migration data - NO FILTER for reconcile modal (all GL codes)
-        const allData = (json?.data || json?.rows || [])
+        // Updated response format: { data: [...] }
+        const responseData = json?.data || []
+
+        // Normalize uploaded migration data - Map fields as per new API format
+        // Fields: account_code, account_name, opening_balance (null), debit, credit, "Closing balance"
+        const allData = responseData
           .map((r) => ({
             glNumber: String(r.account_code ?? r.gl_code ?? r.glNumber ?? '').trim(),
             glName: String(r.account_name ?? r.gl_name ?? r.accountName ?? '').trim(),
-            opening: Number(r.opening_balance ?? r.opening ?? 0),
+            opening: Number(r.opening_balance ?? r.opening ?? 0), // Can be null, default to 0
             debit: Number(r.debit ?? r.debit_amount ?? 0),
             credit: Number(r.credit ?? r.credit_amount ?? 0),
-            closing: Number(r['Closing balance'] ?? r.closing_balance ?? r.closing ?? 0),
+            closing: Number(r['Closing balance'] ?? r.closing_balance ?? r.closing ?? 0), // Note: "Closing balance" with space and capital C
           }))
           .filter((item) => item.glNumber) // Only filter empty GL codes
 
@@ -151,7 +159,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
     }
 
     fetchUploadedData()
-  }, [show, fundId])
+  }, [show, fundId, fileId])
 
   // Create merged comparison data with difference calculation
   const comparisonData = useMemo(() => {
@@ -206,11 +214,30 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   // Simple function to mark migration as PENDING when user closes modal
   const handleClose = async () => {
     // Call API to change status from uploaded to pending
-    if (fundId && fileId) {
+    if (fundId) {
       try {
-        await markMigrationAsPending(fundId, fileId)
+        const response = await markMigrationAsPending(fundId, fileId)
+        // Updated response format: { success: true, message: "..." }
+        if (response.data.success) {
+          // Refresh history after marking as pending
+          if (onRefreshHistory) {
+            onRefreshHistory()
+          }
+        } else {
+          // Handle error response: { success: false, message: "..." }
+          const errorMsg = response.data.message || 'Failed to mark as pending'
+          console.error('Failed to mark migration as PENDING:', errorMsg)
+          if (onRefreshHistory) {
+            onRefreshHistory()
+          }
+        }
       } catch (error) {
         console.error('Failed to mark migration as PENDING:', error)
+        const errorMsg = error?.response?.data?.message || error?.message || 'Failed to mark as pending'
+        // Still refresh history even if API fails
+        if (onRefreshHistory) {
+          onRefreshHistory()
+        }
       }
     }
     // Close the modal

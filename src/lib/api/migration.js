@@ -27,8 +27,18 @@ export const getMigrationData = (fundId) => {
 
 // Mark migration file status as PENDING (simple API call)
 export const markMigrationAsPending = (fundId, fileId) => {
-  return api.post(`/api/v1/migration/trialbalance/${fundId}/pending`, {
-    file_id: fileId,
+  const token = Cookies.get('dashboardToken')
+  const payload = {}
+  
+  // Only include file_id if provided, otherwise backend uses latest file
+  if (fileId) {
+    payload.file_id = fileId
+  }
+  
+  return api.post(`/api/v1/migration/trialbalance/${fundId}/pending`, payload, {
+    headers: {
+      'dashboard': `Bearer ${token}`,
+    },
   })
 }
 
