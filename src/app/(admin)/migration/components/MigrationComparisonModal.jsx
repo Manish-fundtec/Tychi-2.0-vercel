@@ -32,6 +32,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showReconcileModal, setShowReconcileModal] = useState(false)
+  const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
 
   // Fetch last pricing date
   useEffect(() => {
@@ -319,16 +320,68 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
         uploadedData={allUploadedData}
         fundId={fundId}
         lastPricingDate={lastPricingDate}
+        onOpenPublishReview={() => setShowReconcileModal(false)}
+      />
+
+      {/* Publish Review Modal - moved outside ReconcileModal */}
+      <PublishReviewModal
+        show={showPublishReviewModal}
+        onClose={() => setShowPublishReviewModal(false)}
+        onReview={() => {
+          setShowPublishReviewModal(false)
+          // Reopen reconcile modal for review
+          setTimeout(() => {
+            setShowReconcileModal(true)
+          }, 300)
+        }}
+        onConfirmPublish={async () => {
+          try {
+            // TODO: Call API to publish/reconcile migration data
+            // const url = `${apiBase}/api/v1/migration/reconcile`
+            // const resp = await fetch(url, { ... })
+            
+            // For now, just show success
+            alert('Migration data published successfully!')
+            setShowPublishReviewModal(false)
+            onClose() // Close main comparison modal
+          } catch (e) {
+            console.error('[MigrationComparison] Publish failed:', e)
+            alert('Failed to publish migration data: ' + (e?.message || 'Unknown error'))
+          }
+        }}
+        totals={(() => {
+          // Calculate totals from all data for publish review
+          const merged = new Map()
+          allTrialBalanceData.forEach((item) => {
+            merged.set(item.glNumber, { reportClosing: item.closing, uploadedClosing: null })
+          })
+          allUploadedData.forEach((item) => {
+            const key = item.glNumber
+            if (merged.has(key)) {
+              merged.get(key).uploadedClosing = item.closing
+            }
+          })
+          const reconcileData = Array.from(merged.values()).filter(
+            (item) => item.reportClosing !== null && item.uploadedClosing !== null
+          )
+          const reportTotal = reconcileData.reduce((sum, item) => sum + (item.reportClosing || 0), 0)
+          const uploadedTotal = reconcileData.reduce((sum, item) => sum + (item.uploadedClosing || 0), 0)
+          return {
+            reportTotal,
+            uploadedTotal,
+            differenceTotal: reportTotal - uploadedTotal,
+          }
+        })()}
+        lastPricingDate={lastPricingDate}
       />
     </Modal>
   )
 }
 
 // Reconcile Modal Component
-function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedData, fundId, lastPricingDate }) {
+function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedData, fundId, lastPricingDate, onOpenPublishReview }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
 
   // Calculate closing balances and differences - ALL GL CODES (no filter)
   const reconcileData = useMemo(() => {
@@ -388,8 +441,11 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
       return
     }
 
-    // Open publish review modal instead of directly publishing
-    setShowPublishReviewModal(true)
+    // Close reconcile modal and trigger publish review modal in parent
+    if (onOpenPublishReview) {
+      onOpenPublishReview()
+    }
+    onClose() // Close the reconcile modal
   }
 
   const canPublish = useMemo(() => {
@@ -470,37 +526,6 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
           {loading ? 'Publishing...' : 'Publish'}
         </Button>
       </Modal.Footer>
-
-      {/* Publish Review Modal */}
-      <PublishReviewModal
-        show={showPublishReviewModal}
-        onClose={() => setShowPublishReviewModal(false)}
-        onReview={() => {
-          setShowPublishReviewModal(false)
-          // Stay on reconcile modal for review
-        }}
-        onConfirmPublish={async () => {
-          setLoading(true)
-          setError('')
-          try {
-            // TODO: Call API to publish/reconcile migration data
-            // const url = `${apiBase}/api/v1/migration/reconcile`
-            // const resp = await fetch(url, { ... })
-            
-            // For now, just call onPublish callback
-            onPublish()
-            setShowPublishReviewModal(false)
-            onClose() // Close reconcile modal after publish
-          } catch (e) {
-            console.error('[ReconcileModal] Publish failed:', e)
-            setError('Failed to publish migration data')
-          } finally {
-            setLoading(false)
-          }
-        }}
-        totals={totals}
-        lastPricingDate={lastPricingDate}
-      />
     </Modal>
   )
 }
