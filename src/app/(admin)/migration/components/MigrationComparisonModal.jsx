@@ -328,6 +328,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
 function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedData, fundId, lastPricingDate }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
 
   // Calculate closing balances and differences - ALL GL CODES (no filter)
   const reconcileData = useMemo(() => {
@@ -387,21 +388,8 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
       return
     }
 
-    setLoading(true)
-    setError('')
-    try {
-      // TODO: Call API to publish/reconcile migration data
-      // const url = `${apiBase}/api/v1/migration/reconcile`
-      // const resp = await fetch(url, { ... })
-      
-      // For now, just call onPublish callback
-      onPublish()
-    } catch (e) {
-      console.error('[ReconcileModal] Publish failed:', e)
-      setError('Failed to publish migration data')
-    } finally {
-      setLoading(false)
-    }
+    // Open publish review modal instead of directly publishing
+    setShowPublishReviewModal(true)
   }
 
   const canPublish = useMemo(() => {
@@ -480,6 +468,99 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         </Button>
         <Button variant="primary" onClick={handlePublish} disabled={!canPublish || loading}>
           {loading ? 'Publishing...' : 'Publish'}
+        </Button>
+      </Modal.Footer>
+
+      {/* Publish Review Modal */}
+      <PublishReviewModal
+        show={showPublishReviewModal}
+        onClose={() => setShowPublishReviewModal(false)}
+        onReview={() => {
+          setShowPublishReviewModal(false)
+          // Stay on reconcile modal for review
+        }}
+        onConfirmPublish={async () => {
+          setLoading(true)
+          setError('')
+          try {
+            // TODO: Call API to publish/reconcile migration data
+            // const url = `${apiBase}/api/v1/migration/reconcile`
+            // const resp = await fetch(url, { ... })
+            
+            // For now, just call onPublish callback
+            onPublish()
+            setShowPublishReviewModal(false)
+            onClose() // Close reconcile modal after publish
+          } catch (e) {
+            console.error('[ReconcileModal] Publish failed:', e)
+            setError('Failed to publish migration data')
+          } finally {
+            setLoading(false)
+          }
+        }}
+        totals={totals}
+        lastPricingDate={lastPricingDate}
+      />
+    </Modal>
+  )
+}
+
+// Publish Review Modal Component
+function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals, lastPricingDate }) {
+  return (
+    <Modal show={show} onHide={onClose} size="md" centered>
+      <Modal.Header closeButton>
+        <Modal.Title>Publish Review</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {lastPricingDate && (
+          <div className="mb-3">
+            <strong>Last Pricing Date:</strong> {lastPricingDate}
+          </div>
+        )}
+
+        <div className="table-responsive">
+          <Table striped bordered hover size="sm">
+            <thead className="table-light">
+              <tr>
+                <th>Description</th>
+                <th className="text-end">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Trial Balance Closing Balance</strong></td>
+                <td className="text-end fw-bold">{fmt(totals.reportTotal)}</td>
+              </tr>
+              <tr>
+                <td><strong>Uploaded Data Closing Balance</strong></td>
+                <td className="text-end fw-bold">{fmt(totals.uploadedTotal)}</td>
+              </tr>
+              <tr className={Math.abs(totals.differenceTotal) < 0.01 ? 'table-success' : 'table-danger'}>
+                <td><strong>Difference</strong></td>
+                <td className={`text-end fw-bold ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
+                  {fmt(totals.differenceTotal)}
+                </td>
+              </tr>
+            </tbody>
+          </Table>
+        </div>
+
+        {Math.abs(totals.differenceTotal) >= 0.01 && (
+          <Alert variant="warning" className="mt-3">
+            <strong>Warning:</strong> There is a difference between Trial Balance and Uploaded Data closing balances.
+          </Alert>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+        <Button variant="info" onClick={onReview}>
+          Review
+        </Button>
+        <Button variant="primary" onClick={onConfirmPublish} disabled={Math.abs(totals.differenceTotal) >= 0.01}>
+          Confirm Publish
         </Button>
       </Modal.Footer>
     </Modal>
