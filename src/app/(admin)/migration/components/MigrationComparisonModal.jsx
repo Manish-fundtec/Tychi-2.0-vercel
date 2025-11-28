@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { Modal, Button, Row, Col, Table, Spinner, Alert } from 'react-bootstrap'
 import Cookies from 'js-cookie'
 import { markMigrationAsPending } from '@/lib/api/migration'
+import { useDashboardToken } from '@/hooks/useDashboardToken'
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -33,6 +34,42 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showReconcileModal, setShowReconcileModal] = useState(false)
+  const tokenData = useDashboardToken()
+  
+  // Helper function to get last day of month from a date
+  const getLastDayOfMonth = (dateString) => {
+    if (!dateString) return null
+    try {
+      const date = new Date(dateString + 'T00:00:00Z')
+      if (isNaN(date.getTime())) return null
+      // Get last day of the month
+      const year = date.getUTCFullYear()
+      const month = date.getUTCMonth()
+      const lastDay = new Date(Date.UTC(year, month + 1, 0))
+      return lastDay.toISOString().slice(0, 10) // Return YYYY-MM-DD
+    } catch (e) {
+      return null
+    }
+  }
+  
+  // Calculate date to use for trial balance (last pricing date or last day of reporting start date month)
+  const dateToUse = useMemo(() => {
+    if (lastPricingDate) {
+      return lastPricingDate
+    }
+    // If no last pricing date, use last day of reporting start date month
+    const reportingStartDate = 
+      tokenData?.fund?.reporting_start_date || 
+      tokenData?.reporting_start_date ||
+      tokenData?.fund?.reportingStartDate ||
+      tokenData?.reportingStartDate ||
+      null
+    
+    if (reportingStartDate) {
+      return getLastDayOfMonth(reportingStartDate)
+    }
+    return null
+  }, [lastPricingDate, tokenData])
 
   // Fetch last pricing date
   useEffect(() => {
@@ -60,16 +97,16 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
     fetchLastPricingDate()
   }, [show, fundId])
 
-  // Fetch Trial Balance MTD for last pricing date
+  // Fetch Trial Balance MTD for last pricing date or reporting start date month end
   useEffect(() => {
-    if (!show || !fundId || !lastPricingDate) return
+    if (!show || !fundId || !dateToUse) return
 
     const fetchTrialBalance = async () => {
       try {
         setLoading(true)
         setError('')
         const params = new URLSearchParams()
-        params.set('date', lastPricingDate)
+        params.set('date', dateToUse)
         params.set('scope', 'MTD')
         const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl-trial?${params.toString()}`
         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' })
@@ -104,7 +141,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
     }
 
     fetchTrialBalance()
-  }, [show, fundId, lastPricingDate])
+  }, [show, fundId, dateToUse])
 
   // Fetch uploaded migration data
   useEffect(() => {
@@ -256,9 +293,11 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
           </Alert>
         )}
 
-        {lastPricingDate && (
+        {dateToUse && (
           <div className="mb-3">
-            <strong>Last Pricing Date:</strong> {lastPricingDate}
+            <strong>
+              {lastPricingDate ? 'Last Pricing Date:' : 'Reporting Period End Date:'}
+            </strong> {dateToUse}
           </div>
         )}
 
@@ -360,7 +399,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
         trialBalanceData={allTrialBalanceData}
         uploadedData={allUploadedData}
         fundId={fundId}
-        lastPricingDate={lastPricingDate}
+        lastPricingDate={dateToUse}
       />
     </Modal>
   )
