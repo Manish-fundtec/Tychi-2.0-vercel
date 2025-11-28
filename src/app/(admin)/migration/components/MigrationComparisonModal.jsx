@@ -474,9 +474,8 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
     }
   }
 
-  const canPublish = useMemo(() => {
-    return reconcileData.every((item) => Math.abs(item.difference || 0) < 0.01)
-  }, [reconcileData])
+  // Removed canPublish check - publish button should always be enabled
+  // Journal entries will be created for differences, so button should work even with differences
 
   return (
     <Modal show={show} onHide={onClose} size="lg" centered scrollable>
@@ -548,7 +547,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         <Button variant="secondary" onClick={onClose} disabled={loading}>
           Close
         </Button>
-        <Button variant="primary" onClick={handlePublish} disabled={!canPublish || loading}>
+        <Button variant="primary" onClick={handlePublish} disabled={loading}>
           {loading ? 'Publishing...' : 'Publish'}
         </Button>
       </Modal.Footer>
@@ -641,7 +640,7 @@ function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals,
         <Button variant="info" onClick={onReview}>
           Review
         </Button>
-        <Button variant="primary" onClick={onConfirmPublish} disabled={Math.abs(totals.differenceTotal) >= 0.01}>
+        <Button variant="primary" onClick={onConfirmPublish}>
           Confirm Publish
         </Button>
       </Modal.Footer>
