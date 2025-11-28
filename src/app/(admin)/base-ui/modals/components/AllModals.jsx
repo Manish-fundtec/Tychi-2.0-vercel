@@ -502,10 +502,10 @@ export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upl
     handleModalClose()
   }
 
-  const handleUploadSuccess = () => {
+  const handleUploadSuccess = (fileId) => {
     // Open comparison modal after successful upload
     if (onUploadSuccess) {
-      onUploadSuccess()
+      onUploadSuccess(fileId)
     }
     handleSuccess()
   }

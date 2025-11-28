@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Modal, Button, Row, Col, Table, Spinner, Alert } from 'react-bootstrap'
 import Cookies from 'js-cookie'
+import { markMigrationAsPending } from '@/lib/api/migration'
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -23,7 +24,7 @@ const isAllowedGlCode = (glCode) => {
   return (code >= 13000 && code <= 13999) || (code >= 21000 && code <= 21999)
 }
 
-export default function MigrationComparisonModal({ show, onClose, fundId }) {
+export default function MigrationComparisonModal({ show, onClose, fundId, fileId }) {
   const [lastPricingDate, setLastPricingDate] = useState(null)
   const [trialBalanceData, setTrialBalanceData] = useState([])
   const [allTrialBalanceData, setAllTrialBalanceData] = useState([]) // All GL codes for reconcile modal
@@ -202,8 +203,22 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
     return comparisonData.every((item) => Math.abs(item.difference) < 0.01)
   }, [comparisonData])
 
+  // Simple function to mark migration as PENDING when user closes modal
+  const handleClose = async () => {
+    // Call API to change status from uploaded to pending
+    if (fundId && fileId) {
+      try {
+        await markMigrationAsPending(fundId, fileId)
+      } catch (error) {
+        console.error('Failed to mark migration as PENDING:', error)
+      }
+    }
+    // Close the modal
+    onClose()
+  }
+
   return (
-    <Modal show={show} onHide={onClose} size="xl" centered scrollable>
+    <Modal show={show} onHide={handleClose} size="xl" centered scrollable>
       <Modal.Header closeButton>
         <Modal.Title>Migration Data Comparison</Modal.Title>
       </Modal.Header>
@@ -298,7 +313,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
         )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={handleClose}>
           Close
         </Button>
         <Button variant="primary" onClick={() => setShowReconcileModal(true)} disabled={!canReconcile || loading}>

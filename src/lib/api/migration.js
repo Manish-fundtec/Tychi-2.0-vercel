@@ -25,4 +25,11 @@ export const getMigrationData = (fundId) => {
   return api.get(`/api/v1/migration/fund/${fundId}`)
 }
 
+// Mark migration file status as PENDING (simple API call)
+export const markMigrationAsPending = (fundId, fileId) => {
+  return api.post(`/api/v1/migration/trialbalance/${fundId}/pending`, {
+    file_id: fileId,
+  })
+}
+
 

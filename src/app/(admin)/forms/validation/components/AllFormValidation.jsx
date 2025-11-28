@@ -1664,9 +1664,11 @@ export const UploadMigration = ({ onClose, onSuccess, onUploadSuccess }) => {
       
       if (response.data.success) {
         alert('File uploaded successfully!')
-        // Call onUploadSuccess to open comparison modal
+        // Get file_id from response
+        const fileId = response.data?.file_id || response.data?.data?.file_id || response.data?.fileId || null
+        // Call onUploadSuccess to open comparison modal with file_id
         if (onUploadSuccess) {
-          onUploadSuccess()
+          onUploadSuccess(fileId)
         }
         // Also call onSuccess for any other handlers
         if (onSuccess) {
