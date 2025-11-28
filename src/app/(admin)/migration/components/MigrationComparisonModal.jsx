@@ -383,13 +383,95 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
   }, [reconcileData])
 
   const handlePublish = async () => {
-    if (!canPublish) {
-      alert('Cannot publish: There are differences in closing balances. Please reconcile first.')
-      return
-    }
+    // Check if there are differences - if yes, create journal entries
+    const glCodesWithDifference = reconcileData.filter(
+      (item) => Math.abs(item.difference || 0) >= 0.01
+    )
 
-    // Open publish review modal instead of directly publishing
-    setShowPublishReviewModal(true)
+    if (glCodesWithDifference.length > 0) {
+      // Create journal entries for GL codes with differences
+      setLoading(true)
+      setError('')
+      try {
+        const token = Cookies.get('dashboardToken')
+        let orgId = null
+        try {
+          const decoded = JSON.parse(atob(token.split('.')[1] || ''))
+          orgId = decoded.org_id || decoded.orgId || null
+        } catch (e) {
+          console.warn('Failed to decode token for org_id:', e)
+        }
+
+        const headers = {
+          ...getAuthHeaders(),
+          'dashboard': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+
+        // Prepare journal entries data for migration API
+        const journalEntries = glCodesWithDifference.map((item) => {
+          const difference = item.difference || 0
+          const absDifference = Math.abs(difference)
+          const isPositive = difference > 0
+
+          return {
+            gl_code: item.glNumber,
+            gl_name: item.glName,
+            difference: difference,
+            amount: absDifference,
+            is_debit: isPositive, // Positive difference needs debit, negative needs credit
+            description: `Migration reconciliation adjustment for GL ${item.glNumber} - ${item.glName}`,
+          }
+        })
+
+        // Call migration journals API to create all journal entries at once
+        const migrationData = {
+          fund_id: fundId,
+          org_id: orgId,
+          journal_date: lastPricingDate || new Date().toISOString().slice(0, 10),
+          entries: journalEntries,
+        }
+
+        const url = `${apiBase}/api/v1/migration/journals`
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(migrationData),
+        })
+
+        if (!resp.ok) {
+          const errorText = await resp.text().catch(() => '')
+          let errorMsg = `HTTP ${resp.status}`
+          try {
+            const errorJson = JSON.parse(errorText)
+            errorMsg = errorJson?.message || errorJson?.error || errorMsg
+          } catch (_) {
+            errorMsg = errorText || errorMsg
+          }
+          throw new Error(`Failed to create migration journal entries: ${errorMsg}`)
+        }
+
+        const result = await resp.json()
+
+        // Show success message
+        const createdCount = result?.data?.created_count || result?.created_count || journalEntries.length
+        alert(`Journals Created: ${createdCount} journal entries created successfully!`)
+        
+        // Open review modal after journals are created
+        setShowPublishReviewModal(true)
+      } catch (e) {
+        console.error('[ReconcileModal] Journal creation failed:', e)
+        const errorMsg = e?.message || 'Unknown error'
+        setError('Failed to create journal entries: ' + errorMsg)
+        alert('Failed to create journal entries: ' + errorMsg)
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      // No differences, directly open review modal
+      setShowPublishReviewModal(true)
+    }
   }
 
   const canPublish = useMemo(() => {
