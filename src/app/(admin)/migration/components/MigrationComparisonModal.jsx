@@ -25,6 +25,38 @@ const isAllowedGlCode = (glCode) => {
   return (code >= 13000 && code <= 13999) || (code >= 21000 && code <= 21999)
 }
 
+// Helper function to determine GL code nature (debit or credit)
+const getGlNature = (glCode) => {
+  const code = Number(glCode)
+  if (!Number.isFinite(code)) return 'debit' // default
+  if (code >= 10000 && code < 20000) return 'debit' // Assets
+  if (code >= 20000 && code < 30000) return 'credit' // Liabilities
+  if (code >= 30000 && code < 40000) return 'credit' // Equity
+  if (code >= 40000 && code < 50000) return 'credit' // Income
+  if (code >= 50000 && code <= 60000) return 'debit' // Expenses
+  return 'debit' // default
+}
+
+// Convert closing balance to debit/credit based on GL nature
+const convertToDebitCredit = (closingBalance, glCode) => {
+  const nature = getGlNature(glCode)
+  const balance = Number(closingBalance || 0)
+  
+  if (nature === 'debit') {
+    // Debit nature: positive = debit, negative = credit
+    return {
+      debit: balance >= 0 ? balance : 0,
+      credit: balance < 0 ? Math.abs(balance) : 0,
+    }
+  } else {
+    // Credit nature: positive = credit, negative = debit
+    return {
+      debit: balance < 0 ? Math.abs(balance) : 0,
+      credit: balance >= 0 ? balance : 0,
+    }
+  }
+}
+
 export default function MigrationComparisonModal({ show, onClose, fundId, fileId, onRefreshHistory }) {
   const [lastPricingDate, setLastPricingDate] = useState(null)
   const [trialBalanceData, setTrialBalanceData] = useState([])
@@ -313,33 +345,32 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
                       <tr>
                   <th rowSpan={2}>GL Code</th>
                   <th rowSpan={2}>GL Name</th>
-                  <th colSpan={4} className="text-center">
+                  <th colSpan={2} className="text-center">
                     Trial Balance MTD (Last Pricing)
                   </th>
-                  <th colSpan={4} className="text-center">
+                  <th colSpan={2} className="text-center">
                     Uploaded Migration Data
                   </th>
-                  <th rowSpan={2} className="text-center">
+                  <th colSpan={2} className="text-center">
                     Difference
                   </th>
                 </tr>
                 <tr>
-                  {/* Trial Balance columns */}
-                  <th className="text-end">Opening</th>
+                  {/* Trial Balance columns - Closing Balance as Debit/Credit */}
                   <th className="text-end">Debit</th>
                   <th className="text-end">Credit</th>
-                  <th className="text-end">Closing</th>
-                  {/* Uploaded Data columns */}
-                        <th className="text-end">Opening</th>
-                        <th className="text-end">Debit</th>
-                        <th className="text-end">Credit</th>
-                        <th className="text-end">Closing</th>
+                  {/* Uploaded Data columns - Closing Balance as Debit/Credit */}
+                  <th className="text-end">Debit</th>
+                  <th className="text-end">Credit</th>
+                  {/* Difference columns */}
+                  <th className="text-end">Debit</th>
+                  <th className="text-end">Credit</th>
                       </tr>
                     </thead>
                     <tbody>
                 {comparisonData.length === 0 ? (
                         <tr>
-                    <td colSpan={11} className="text-center text-muted">
+                    <td colSpan={7} className="text-center text-muted">
                       No comparison data available
                           </td>
                         </tr>
@@ -348,6 +379,12 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
                     const trialBal = row.trialBalance
                     const uploaded = row.uploaded
                     const diff = row.difference
+                    
+                    // Convert closing balances to debit/credit (same as reconcile modal)
+                    const trialClosing = convertToDebitCredit(trialBal?.closing || 0, row.glNumber)
+                    const uploadedClosing = convertToDebitCredit(uploaded?.closing || 0, row.glNumber)
+                    const diffDrCr = convertToDebitCredit(diff, row.glNumber)
+                    
                     // Green if difference is 0, red if not 0
                     const diffClass = Math.abs(diff) < 0.01 ? 'text-success' : 'text-danger'
 
@@ -355,19 +392,18 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
                           <tr key={idx}>
                             <td>{row.glNumber}</td>
                             <td>{row.glName}</td>
-                        {/* Trial Balance columns */}
-                        <td className="text-end">{trialBal ? fmt(trialBal.opening) : '—'}</td>
-                        <td className="text-end">{trialBal ? fmt(trialBal.debit) : '—'}</td>
-                        <td className="text-end">{trialBal ? fmt(trialBal.credit) : '—'}</td>
-                        <td className="text-end">{trialBal ? fmt(trialBal.closing) : '—'}</td>
-                        {/* Uploaded Data columns */}
-                        <td className="text-end">{uploaded ? fmt(uploaded.opening) : '—'}</td>
-                        <td className="text-end">{uploaded ? fmt(uploaded.debit) : '—'}</td>
-                        <td className="text-end">{uploaded ? fmt(uploaded.credit) : '—'}</td>
-                        <td className="text-end">{uploaded ? fmt(uploaded.closing) : '—'}</td>
-                        {/* Difference column - green if 0, red if not 0 */}
+                        {/* Trial Balance columns - show closing balance as debit/credit */}
+                        <td className="text-end">{fmt(trialClosing.debit)}</td>
+                        <td className="text-end">{fmt(trialClosing.credit)}</td>
+                        {/* Uploaded Data columns - show closing balance as debit/credit */}
+                        <td className="text-end">{fmt(uploadedClosing.debit)}</td>
+                        <td className="text-end">{fmt(uploadedClosing.credit)}</td>
+                        {/* Difference columns - green if 0, red if not 0 */}
                         <td className={`text-end fw-bold ${diffClass}`}>
-                          {fmt(diff)}
+                          {diffDrCr.debit > 0 ? fmt(diffDrCr.debit) : '—'}
+                        </td>
+                        <td className={`text-end fw-bold ${diffClass}`}>
+                          {diffDrCr.credit > 0 ? fmt(diffDrCr.credit) : '—'}
                         </td>
                           </tr>
                     )
@@ -501,15 +537,25 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                       <tr>
                         <th>GL Code</th>
                         <th>GL Name</th>
-                <th className="text-end">Report Closing Balance</th>
-                <th className="text-end">Uploaded Closing Balance</th>
-                <th className="text-end">Difference</th>
+                <th colSpan={2} className="text-center">Report Closing Balance</th>
+                <th colSpan={2} className="text-center">Uploaded Closing Balance</th>
+                <th colSpan={2} className="text-center">Difference</th>
+                      </tr>
+                      <tr>
+                        <th></th>
+                        <th></th>
+                        <th className="text-end">Debit</th>
+                        <th className="text-end">Credit</th>
+                        <th className="text-end">Debit</th>
+                        <th className="text-end">Credit</th>
+                        <th className="text-end">Debit</th>
+                        <th className="text-end">Credit</th>
                       </tr>
                     </thead>
                     <tbody>
               {reconcileData.length === 0 ? (
                         <tr>
-                  <td colSpan={5} className="text-center text-muted">
+                  <td colSpan={8} className="text-center text-muted">
                     No data to reconcile
                           </td>
                         </tr>
@@ -518,23 +564,67 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                   {reconcileData.map((row, idx) => {
                     const diff = row.difference || 0
                     const diffClass = Math.abs(diff) < 0.01 ? 'text-success' : 'text-danger'
+                    
+                    // Convert closing balances to debit/credit
+                    const reportDrCr = convertToDebitCredit(row.reportClosing || 0, row.glNumber)
+                    const uploadedDrCr = convertToDebitCredit(row.uploadedClosing || 0, row.glNumber)
+                    const diffDrCr = convertToDebitCredit(diff, row.glNumber)
+                    
                     return (
                           <tr key={idx}>
                             <td>{row.glNumber}</td>
                             <td>{row.glName}</td>
-                        <td className="text-end">{fmt(row.reportClosing || 0)}</td>
-                        <td className="text-end">{fmt(row.uploadedClosing || 0)}</td>
-                        <td className={`text-end fw-bold ${diffClass}`}>{fmt(diff)}</td>
+                        <td className="text-end">{fmt(reportDrCr.debit)}</td>
+                        <td className="text-end">{fmt(reportDrCr.credit)}</td>
+                        <td className="text-end">{fmt(uploadedDrCr.debit)}</td>
+                        <td className="text-end">{fmt(uploadedDrCr.credit)}</td>
+                        <td className={`text-end fw-bold ${diffClass}`}>
+                          {diffDrCr.debit > 0 ? fmt(diffDrCr.debit) : '—'}
+                        </td>
+                        <td className={`text-end fw-bold ${diffClass}`}>
+                          {diffDrCr.credit > 0 ? fmt(diffDrCr.credit) : '—'}
+                        </td>
                       </tr>
                     )
                   })}
                   {/* Calculated Closing Balance Totals row */}
                   <tr className="table-primary fw-bold">
                     <td colSpan={2}>Calculated Closing Balance</td>
-                    <td className="text-end">{fmt(totals.reportTotal)}</td>
-                    <td className="text-end">{fmt(totals.uploadedTotal)}</td>
+                    <td className="text-end">
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const drCr = convertToDebitCredit(item.reportClosing || 0, item.glNumber)
+                        return sum + drCr.debit
+                      }, 0))}
+                    </td>
+                    <td className="text-end">
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const drCr = convertToDebitCredit(item.reportClosing || 0, item.glNumber)
+                        return sum + drCr.credit
+                      }, 0))}
+                    </td>
+                    <td className="text-end">
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const drCr = convertToDebitCredit(item.uploadedClosing || 0, item.glNumber)
+                        return sum + drCr.debit
+                      }, 0))}
+                    </td>
+                    <td className="text-end">
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const drCr = convertToDebitCredit(item.uploadedClosing || 0, item.glNumber)
+                        return sum + drCr.credit
+                      }, 0))}
+                    </td>
                     <td className={`text-end ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
-                      {fmt(totals.differenceTotal)}
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const diffDrCr = convertToDebitCredit(item.difference || 0, item.glNumber)
+                        return sum + diffDrCr.debit
+                      }, 0))}
+                    </td>
+                    <td className={`text-end ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const diffDrCr = convertToDebitCredit(item.difference || 0, item.glNumber)
+                        return sum + diffDrCr.credit
+                      }, 0))}
                     </td>
                           </tr>
                 </>
@@ -581,15 +671,25 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         }}
         totals={totals}
         lastPricingDate={lastPricingDate}
+        reconcileData={reconcileData}
       />
     </Modal>
   )
 }
 
 // Publish Review Modal Component
-function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals, lastPricingDate }) {
+function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals, lastPricingDate, reconcileData = [] }) {
+  // Check if all differences are 0 (both debit and credit)
+  const canBookclose = useMemo(() => {
+    if (Math.abs(totals.differenceTotal) >= 0.01) return false
+    return reconcileData.every((item) => {
+      const diffDrCr = convertToDebitCredit(item.difference || 0, item.glNumber)
+      return Math.abs(diffDrCr.debit) < 0.01 && Math.abs(diffDrCr.credit) < 0.01
+    })
+  }, [totals, reconcileData])
+
   return (
-    <Modal show={show} onHide={onClose} size="md" centered>
+    <Modal show={show} onHide={onClose} size="xl" centered scrollable>
       <Modal.Header closeButton>
         <Modal.Title>Publish Review</Modal.Title>
       </Modal.Header>
@@ -600,29 +700,104 @@ function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals,
           </div>
         )}
 
-        <div className="table-responsive">
+        <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
           <Table striped bordered hover size="sm">
-            <thead className="table-light">
+            <thead className="table-light sticky-top">
               <tr>
-                <th>Description</th>
-                <th className="text-end">Amount</th>
+                <th>GL Code</th>
+                <th>GL Name</th>
+                <th colSpan={2} className="text-center">Trial Balance</th>
+                <th colSpan={2} className="text-center">Uploaded Data</th>
+                <th colSpan={2} className="text-center">Difference</th>
+              </tr>
+              <tr>
+                <th></th>
+                <th></th>
+                <th className="text-end">Debit</th>
+                <th className="text-end">Credit</th>
+                <th className="text-end">Debit</th>
+                <th className="text-end">Credit</th>
+                <th className="text-end">Debit</th>
+                <th className="text-end">Credit</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td><strong>Trial Balance Closing Balance</strong></td>
-                <td className="text-end fw-bold">{fmt(totals.reportTotal)}</td>
-              </tr>
-              <tr>
-                <td><strong>Uploaded Data Closing Balance</strong></td>
-                <td className="text-end fw-bold">{fmt(totals.uploadedTotal)}</td>
-              </tr>
-              <tr className={Math.abs(totals.differenceTotal) < 0.01 ? 'table-success' : 'table-danger'}>
-                <td><strong>Difference</strong></td>
-                <td className={`text-end fw-bold ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
-                  {fmt(totals.differenceTotal)}
-                </td>
-              </tr>
+              {reconcileData.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center text-muted">
+                    No data available
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  {reconcileData.map((row, idx) => {
+                    const diff = row.difference || 0
+                    const diffClass = Math.abs(diff) < 0.01 ? 'text-success' : 'text-danger'
+                    
+                    // Convert closing balances to debit/credit
+                    const reportDrCr = convertToDebitCredit(row.reportClosing || 0, row.glNumber)
+                    const uploadedDrCr = convertToDebitCredit(row.uploadedClosing || 0, row.glNumber)
+                    const diffDrCr = convertToDebitCredit(diff, row.glNumber)
+                    
+                    return (
+                      <tr key={idx}>
+                        <td>{row.glNumber}</td>
+                        <td>{row.glName}</td>
+                        <td className="text-end">{fmt(reportDrCr.debit)}</td>
+                        <td className="text-end">{fmt(reportDrCr.credit)}</td>
+                        <td className="text-end">{fmt(uploadedDrCr.debit)}</td>
+                        <td className="text-end">{fmt(uploadedDrCr.credit)}</td>
+                        <td className={`text-end fw-bold ${diffClass}`}>
+                          {diffDrCr.debit > 0 ? fmt(diffDrCr.debit) : '—'}
+                        </td>
+                        <td className={`text-end fw-bold ${diffClass}`}>
+                          {diffDrCr.credit > 0 ? fmt(diffDrCr.credit) : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {/* Totals row */}
+                  <tr className="table-primary fw-bold">
+                    <td colSpan={2}>TOTAL</td>
+                    <td className="text-end">
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const drCr = convertToDebitCredit(item.reportClosing || 0, item.glNumber)
+                        return sum + drCr.debit
+                      }, 0))}
+                    </td>
+                    <td className="text-end">
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const drCr = convertToDebitCredit(item.reportClosing || 0, item.glNumber)
+                        return sum + drCr.credit
+                      }, 0))}
+                    </td>
+                    <td className="text-end">
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const drCr = convertToDebitCredit(item.uploadedClosing || 0, item.glNumber)
+                        return sum + drCr.debit
+                      }, 0))}
+                    </td>
+                    <td className="text-end">
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const drCr = convertToDebitCredit(item.uploadedClosing || 0, item.glNumber)
+                        return sum + drCr.credit
+                      }, 0))}
+                    </td>
+                    <td className={`text-end ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const diffDrCr = convertToDebitCredit(item.difference || 0, item.glNumber)
+                        return sum + diffDrCr.debit
+                      }, 0))}
+                    </td>
+                    <td className={`text-end ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
+                      {fmt(reconcileData.reduce((sum, item) => {
+                        const diffDrCr = convertToDebitCredit(item.difference || 0, item.glNumber)
+                        return sum + diffDrCr.credit
+                      }, 0))}
+                    </td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </Table>
               </div>
@@ -640,9 +815,20 @@ function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals,
         <Button variant="info" onClick={onReview}>
           Review
         </Button>
-        <Button variant="primary" onClick={onConfirmPublish} disabled={Math.abs(totals.differenceTotal) >= 0.01}>
-          Confirm Publish
-        </Button>
+        {/* Show Bookclose button only if both debit and credit differences are 0 */}
+        {canBookclose ? (
+          <Button variant="success" onClick={() => {
+            // TODO: Implement bookclose functionality
+            alert('Bookclose functionality will be implemented')
+            onClose()
+          }}>
+            Bookclose
+          </Button>
+        ) : (
+          <Button variant="primary" onClick={onConfirmPublish}>
+            Confirm Publish
+          </Button>
+        )}
       </Modal.Footer>
     </Modal>
   )
