@@ -500,18 +500,9 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
   }, [reconcileData])
 
   const handlePublish = async () => {
-    if (!canPublish) {
-      alert('Cannot publish: There are differences in closing balances. Please reconcile first.')
-      return
-    }
-
-    // Open publish review modal instead of directly publishing
+    // Open publish review modal - journal entries will be created for differences
     setShowPublishReviewModal(true)
   }
-
-  const canPublish = useMemo(() => {
-    return reconcileData.every((item) => Math.abs(item.difference || 0) < 0.01)
-  }, [reconcileData])
 
   return (
     <Modal show={show} onHide={onClose} size="lg" centered scrollable>
@@ -637,7 +628,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         <Button variant="secondary" onClick={onClose} disabled={loading}>
           Close
         </Button>
-        <Button variant="primary" onClick={handlePublish} disabled={!canPublish || loading}>
+        <Button variant="primary" onClick={handlePublish} disabled={loading}>
           {loading ? 'Publishing...' : 'Publish'}
         </Button>
       </Modal.Footer>
