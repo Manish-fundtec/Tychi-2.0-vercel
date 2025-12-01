@@ -3,6 +3,7 @@
 import clsx from 'clsx'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Button, Col, Form, FormCheck, FormControl, FormGroup, FormLabel, FormSelect, InputGroup, Row, Modal, Spinner, Alert } from 'react-bootstrap'
+import { useNotificationContext } from '@/context/useNotificationContext'
 import Feedback from 'react-bootstrap/esm/Feedback'
 import InputGroupText from 'react-bootstrap/esm/InputGroupText'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
@@ -1627,7 +1628,9 @@ export const UploadMigration = ({ onClose, onSuccess, onUploadSuccess }) => {
   const [fileError, setFileError] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [pendingMessage, setPendingMessage] = useState('')
   const tokenData = useDashboardToken()
+  const { showNotification } = useNotificationContext()
 
   const handleFileChange = (e) => {
     const file = e.target.files[0]
@@ -1663,10 +1666,17 @@ export const UploadMigration = ({ onClose, onSuccess, onUploadSuccess }) => {
       const response = await uploadMigrationFile(selectedFile)
       
       if (response.data.success) {
-        alert('File uploaded successfully!')
-        // Call onUploadSuccess to open comparison modal
+        // Show success notification
+        showNotification({
+          title: 'Success',
+          message: 'File uploaded successfully!',
+          variant: 'success',
+        })
+        // Get file_id from response
+        const fileId = response.data?.file_id || response.data?.data?.file_id || response.data?.fileId || null
+        // Call onUploadSuccess to open comparison modal with file_id
         if (onUploadSuccess) {
-          onUploadSuccess()
+          onUploadSuccess(fileId)
         }
         // Also call onSuccess for any other handlers
         if (onSuccess) {
@@ -1675,11 +1685,54 @@ export const UploadMigration = ({ onClose, onSuccess, onUploadSuccess }) => {
         // Close upload modal
         onClose?.()
       } else {
-        alert('Upload failed: ' + (response.data.message || 'Unknown error'))
+        // Show error notification
+        const errorMsg = response.data.message || 'Unknown error'
+        showNotification({
+          title: 'Upload Failed',
+          message: errorMsg,
+          variant: 'danger',
+        })
+        setFileError(errorMsg)
       }
     } catch (error) {
-      console.error('❌ Upload failed:', error)
-      alert('File upload failed: ' + (error?.response?.data?.message || error?.message || 'Unknown error'))
+      // Handle 409 Conflict with PENDING_FILE_EXISTS code
+      if (error?.response?.status === 409 && error?.response?.data?.code === 'PENDING_FILE_EXISTS') {
+        const errorMsg = 'Please complete the pending action first'
+        // Show as warning/info message (not error)
+        showNotification({
+          title: 'Pending Action Required',
+          message: errorMsg,
+          variant: 'warning',
+          delay: 5000, // Show longer for important message
+        })
+        setPendingMessage(errorMsg)
+        setFileError('') // Clear file error, show pending message instead
+        // Close modal automatically after a short delay
+        setTimeout(() => {
+          onClose?.()
+        }, 2000)
+      }
+      // Handle other 400/409 errors
+      else if (error?.response?.status === 400 || error?.response?.status === 409) {
+        const errorMsg = error?.response?.data?.message || 'Upload validation failed'
+        showNotification({
+          title: 'Validation Error',
+          message: errorMsg,
+          variant: 'danger',
+        })
+        setFileError(errorMsg)
+      }
+      // Handle other errors (500, network, etc.) - log to console
+      else {
+        const errorMsg = error?.response?.data?.message || error?.message || 'Upload failed'
+        console.error('❌ Upload failed:', error)
+        showNotification({
+          title: 'Upload Failed',
+          message: errorMsg,
+          variant: 'danger',
+        })
+        setFileError(errorMsg)
+      }
     } finally {
       setIsUploading(false)
     }
@@ -1709,6 +1762,15 @@ export const UploadMigration = ({ onClose, onSuccess, onUploadSuccess }) => {
           {fileError || 'Please choose a valid file to upload.'}
         </Feedback>
       </FormGroup>
+
+      {/* Pending Action Warning Message */}
+      {pendingMessage && (
+        <Col xs={12} className="mt-2">
+          <Alert variant="warning" dismissible onClose={() => setPendingMessage('')}>
+            <strong>Pending Action Required:</strong> {pendingMessage}
+          </Alert>
+        </Col>
+      )}
 
       {/* Upload Button */}
       <Col xs={12} className="d-flex justify-content-end mt-4">

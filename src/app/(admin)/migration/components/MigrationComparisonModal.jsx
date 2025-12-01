@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Modal, Button, Row, Col, Table, Spinner, Alert } from 'react-bootstrap'
 import Cookies from 'js-cookie'
+import { markMigrationAsPending } from '@/lib/api/migration'
+import { useDashboardToken } from '@/hooks/useDashboardToken'
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -64,6 +66,42 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showReconcileModal, setShowReconcileModal] = useState(false)
+  const tokenData = useDashboardToken()
+  
+  // Helper function to get last day of month from a date
+  const getLastDayOfMonth = (dateString) => {
+    if (!dateString) return null
+    try {
+      const date = new Date(dateString + 'T00:00:00Z')
+      if (isNaN(date.getTime())) return null
+      // Get last day of the month
+      const year = date.getUTCFullYear()
+      const month = date.getUTCMonth()
+      const lastDay = new Date(Date.UTC(year, month + 1, 0))
+      return lastDay.toISOString().slice(0, 10) // Return YYYY-MM-DD
+    } catch (e) {
+      return null
+    }
+  }
+  
+  // Calculate date to use for trial balance (last pricing date or last day of reporting start date month)
+  const dateToUse = useMemo(() => {
+    if (lastPricingDate) {
+      return lastPricingDate
+    }
+    // If no last pricing date, use last day of reporting start date month
+    const reportingStartDate = 
+      tokenData?.fund?.reporting_start_date || 
+      tokenData?.reporting_start_date ||
+      tokenData?.fund?.reportingStartDate ||
+      tokenData?.reportingStartDate ||
+      null
+    
+    if (reportingStartDate) {
+      return getLastDayOfMonth(reportingStartDate)
+    }
+    return null
+  }, [lastPricingDate, tokenData])
 
   // Fetch last pricing date
   useEffect(() => {
@@ -91,16 +129,16 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
     fetchLastPricingDate()
   }, [show, fundId])
 
-  // Fetch Trial Balance MTD for last pricing date
+  // Fetch Trial Balance MTD for last pricing date or reporting start date month end
   useEffect(() => {
-    if (!show || !fundId || !lastPricingDate) return
+    if (!show || !fundId || !dateToUse) return
 
     const fetchTrialBalance = async () => {
       try {
         setLoading(true)
         setError('')
         const params = new URLSearchParams()
-        params.set('date', lastPricingDate)
+        params.set('date', dateToUse)
         params.set('scope', 'MTD')
         const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl-trial?${params.toString()}`
         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' })
@@ -135,7 +173,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
     }
 
     fetchTrialBalance()
-  }, [show, fundId, lastPricingDate])
+  }, [show, fundId, dateToUse])
 
   // Fetch uploaded migration data
   useEffect(() => {
@@ -149,20 +187,28 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
           ...getAuthHeaders(),
           'dashboard': `Bearer ${token}`, // Add dashboard token like uploadTrade
         }
-        const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}`
+        // If fileId is provided, fetch data for that specific file, otherwise fetch latest
+        let url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}`
+        if (fileId) {
+          url += `?file_id=${encodeURIComponent(fileId)}`
+        }
         const resp = await fetch(url, { headers, credentials: 'include' })
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const json = await resp.json()
 
-        // Normalize uploaded migration data - NO FILTER for reconcile modal (all GL codes)
-        const allData = (json?.data || json?.rows || [])
+        // Updated response format: { data: [...] }
+        const responseData = json?.data || []
+
+        // Normalize uploaded migration data - Map fields as per new API format
+        // Fields: account_code, account_name, opening_balance (null), debit, credit, "Closing balance"
+        const allData = responseData
           .map((r) => ({
             glNumber: String(r.account_code ?? r.gl_code ?? r.glNumber ?? '').trim(),
             glName: String(r.account_name ?? r.gl_name ?? r.accountName ?? '').trim(),
-            opening: Number(r.opening_balance ?? r.opening ?? 0),
+            opening: Number(r.opening_balance ?? r.opening ?? 0), // Can be null, default to 0
             debit: Number(r.debit ?? r.debit_amount ?? 0),
             credit: Number(r.credit ?? r.credit_amount ?? 0),
-            closing: Number(r['Closing balance'] ?? r.closing_balance ?? r.closing ?? 0),
+            closing: Number(r['Closing balance'] ?? r.closing_balance ?? r.closing ?? 0), // Note: "Closing balance" with space and capital C
           }))
           .filter((item) => item.glNumber) // Only filter empty GL codes
 
@@ -182,7 +228,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
     }
 
     fetchUploadedData()
-  }, [show, fundId])
+  }, [show, fundId, fileId])
 
   // Create merged comparison data with difference calculation
   const comparisonData = useMemo(() => {
@@ -234,8 +280,41 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
     return comparisonData.every((item) => Math.abs(item.difference) < 0.01)
   }, [comparisonData])
 
+  // Simple function to mark migration as PENDING when user closes modal
+  const handleClose = async () => {
+    // Call API to change status from uploaded to pending
+    if (fundId) {
+      try {
+        const response = await markMigrationAsPending(fundId, fileId)
+        // Updated response format: { success: true, message: "..." }
+        if (response.data.success) {
+          // Refresh history after marking as pending
+          if (onRefreshHistory) {
+            onRefreshHistory()
+          }
+        } else {
+          // Handle error response: { success: false, message: "..." }
+          const errorMsg = response.data.message || 'Failed to mark as pending'
+          console.error('Failed to mark migration as PENDING:', errorMsg)
+          if (onRefreshHistory) {
+            onRefreshHistory()
+          }
+        }
+      } catch (error) {
+        console.error('Failed to mark migration as PENDING:', error)
+        const errorMsg = error?.response?.data?.message || error?.message || 'Failed to mark as pending'
+        // Still refresh history even if API fails
+        if (onRefreshHistory) {
+          onRefreshHistory()
+        }
+      }
+    }
+    // Close the modal
+    onClose()
+  }
+
   return (
-    <Modal show={show} onHide={onClose} size="xl" centered scrollable>
+    <Modal show={show} onHide={handleClose} size="xl" centered scrollable>
       <Modal.Header closeButton>
         <Modal.Title>Migration Data Comparison</Modal.Title>
       </Modal.Header>
@@ -246,9 +325,11 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
           </Alert>
         )}
 
-        {lastPricingDate && (
+        {dateToUse && (
           <div className="mb-3">
-            <strong>Last Pricing Date:</strong> {lastPricingDate}
+            <strong>
+              {lastPricingDate ? 'Last Pricing Date:' : 'Reporting Period End Date:'}
+            </strong> {dateToUse}
           </div>
         )}
 
@@ -354,7 +435,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId }) {
         )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={handleClose}>
           Close
         </Button>
         <Button variant="primary" onClick={() => setShowReconcileModal(true)} disabled={!canReconcile || loading}>
