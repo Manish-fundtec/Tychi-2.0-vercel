@@ -446,13 +446,68 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
+  const [refreshedTrialBalanceData, setRefreshedTrialBalanceData] = useState([])
+  
+  // Helper function to fetch trial balance data
+  const fetchTrialBalanceData = async (fundId, date, setData, setLoading, setError, glCodesToCheck = []) => {
+    if (!fundId || !date) return []
+    try {
+      setLoading(true)
+      setError('')
+      const params = new URLSearchParams()
+      params.set('date', date)
+      params.set('scope', 'MTD')
+      const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl-trial?${params.toString()}`
+      const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const json = await resp.json()
+      const allData = (json?.data || json?.rows || [])
+        .map((r) => ({
+          glNumber: String(r.glNumber ?? r.glnumber ?? r.gl_code ?? '').trim(),
+          glName: String(r.glName ?? r.gl_name ?? '').trim(),
+          opening: Number(r.opening_balance ?? r.openingbalance ?? 0),
+          debit: Number(r.debit_amount ?? r.debit ?? 0),
+          credit: Number(r.credit_amount ?? r.credit ?? 0),
+          closing: Number(r.closing_balance ?? r.closingbalance ?? 0),
+        }))
+        .filter((item) => item.glNumber)
+      
+      console.log('[ReconcileModal] Fetched refreshed trial balance:', allData.length, 'GL codes')
+      // Log a sample to verify journal entries are included
+      if (glCodesToCheck && glCodesToCheck.length > 0) {
+        const sampleWithJournal = allData.find(item => 
+          glCodesToCheck.some(diff => diff.glNumber === item.glNumber)
+        )
+        if (sampleWithJournal) {
+          console.log('[ReconcileModal] Sample GL with journal entry (refreshed):', {
+            glNumber: sampleWithJournal.glNumber,
+            glName: sampleWithJournal.glName,
+            closing: sampleWithJournal.closing,
+            debit: sampleWithJournal.debit,
+            credit: sampleWithJournal.credit
+          })
+        }
+      }
+      
+      setData(allData)
+      return allData
+    } catch (e) {
+      console.error('[ReconcileModal] Failed to fetch trial balance:', e)
+      setError('Failed to refresh trial balance data')
+      return []
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Calculate closing balances and differences - ALL GL CODES (no filter)
+  // Use refreshed trial balance data if available (after journal creation), otherwise use original
   const reconcileData = useMemo(() => {
+    const dataToUse = refreshedTrialBalanceData.length > 0 ? refreshedTrialBalanceData : trialBalanceData
     const merged = new Map()
 
     // Add trial balance data (from report) - ALL GL codes
-    trialBalanceData.forEach((item) => {
+    dataToUse.forEach((item) => {
       merged.set(item.glNumber, {
         glNumber: item.glNumber,
         glName: item.glName,
@@ -483,7 +538,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
     return Array.from(merged.values())
       .filter((item) => item.reportClosing !== null && item.uploadedClosing !== null)
       .sort((a, b) => a.glNumber.localeCompare(b.glNumber))
-  }, [trialBalanceData, uploadedData])
+  }, [refreshedTrialBalanceData, trialBalanceData, uploadedData])
 
   // Calculate totals (calculated closing balance)
   const totals = useMemo(() => {
@@ -500,8 +555,111 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
   }, [reconcileData])
 
   const handlePublish = async () => {
-    // Open publish review modal - journal entries will be created for differences
-    setShowPublishReviewModal(true)
+    const glCodesWithDifference = reconcileData.filter(
+      (item) => Math.abs(item.difference || 0) >= 0.01
+    )
+
+    if (glCodesWithDifference.length > 0) {
+      setLoading(true)
+      setError('')
+      try {
+        const token = Cookies.get('dashboardToken')
+        let orgId = null
+        try {
+          const decoded = JSON.parse(atob(token.split('.')[1] || ''))
+          orgId = decoded.org_id || decoded.orgId || null
+        } catch (e) {
+          console.warn('Failed to decode token for org_id:', e)
+        }
+
+        const headers = {
+          ...getAuthHeaders(),
+          'dashboard': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+
+        const journalEntries = glCodesWithDifference.map((item) => {
+          const difference = item.difference || 0
+          const absDifference = Math.abs(difference)
+          const isPositive = difference > 0
+          const offsetAccount = '99999' // Migration adjustment offset account
+
+          return {
+            gl_code: item.glNumber,
+            gl_name: item.glName,
+            difference: difference,
+            amount: absDifference,
+            is_debit: isPositive,
+            description: `Migration reconciliation adjustment for GL ${item.glNumber} - ${item.glName}`,
+            dr_account: isPositive ? item.glNumber : offsetAccount,
+            cr_account: isPositive ? offsetAccount : item.glNumber,
+            journal_type: 'Migration', // Specific type for migration journals
+          }
+        })
+
+        const migrationData = {
+          fund_id: fundId,
+          org_id: orgId,
+          journal_date: lastPricingDate || new Date().toISOString().slice(0, 10),
+          entries: journalEntries,
+        }
+
+        const url = `${apiBase}/api/v1/migration/journals`
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(migrationData),
+        })
+
+        if (!resp.ok) {
+          const errorText = await resp.text().catch(() => '')
+          let errorMsg = `HTTP ${resp.status}`
+          try {
+            const errorJson = JSON.parse(errorText)
+            errorMsg = errorJson?.message || errorJson?.error || errorMsg
+          } catch (_) {
+            errorMsg = errorText || errorMsg
+          }
+          throw new Error(`Failed to create migration journal entries: ${errorMsg}`)
+        }
+
+        const result = await resp.json()
+        const createdCount = result?.data?.created_count || result?.created_count || journalEntries.length
+        alert(`Journals Created: ${createdCount} journal entries created successfully!`)
+
+        // Refresh trial balance data after journals are created
+        // This will update refreshedTrialBalanceData, which will trigger reconcileData recalculation
+        const refreshedData = await fetchTrialBalanceData(
+          fundId, 
+          lastPricingDate, 
+          setRefreshedTrialBalanceData, 
+          setLoading, 
+          setError,
+          glCodesWithDifference // Pass GL codes to check in logs
+        )
+        
+        console.log('[ReconcileModal] Refreshed trial balance data after journal creation:', refreshedData.length, 'items')
+        if (refreshedData.length > 0) {
+          console.log('[ReconcileModal] Sample refreshed data (first 3):', refreshedData.slice(0, 3))
+        }
+        
+        // Wait a bit to ensure state updates are processed
+        await new Promise(resolve => setTimeout(resolve, 200))
+
+        setShowPublishReviewModal(true)
+      } catch (e) {
+        console.error('[ReconcileModal] Journal creation failed:', e)
+        const errorMsg = e?.message || 'Unknown error'
+        setError('Failed to create journal entries: ' + errorMsg)
+        alert('Failed to create journal entries: ' + errorMsg)
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      // No differences, directly open review modal
+      setShowPublishReviewModal(true)
+    }
   }
 
   return (
@@ -645,11 +803,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
           setLoading(true)
           setError('')
           try {
-            // TODO: Call API to publish/reconcile migration data
-            // const url = `${apiBase}/api/v1/migration/reconcile`
-            // const resp = await fetch(url, { ... })
-            
-            // For now, just call onPublish callback
+            // Call onPublish callback to complete the publish process
             onPublish()
             setShowPublishReviewModal(false)
             onClose() // Close reconcile modal after publish
@@ -663,13 +817,14 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         totals={totals}
         lastPricingDate={lastPricingDate}
         reconcileData={reconcileData}
+        refreshedTrialBalanceData={refreshedTrialBalanceData}
       />
     </Modal>
   )
 }
 
 // Publish Review Modal Component
-function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals, lastPricingDate, reconcileData = [] }) {
+function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals, lastPricingDate, reconcileData = [], refreshedTrialBalanceData = [] }) {
   // Check if all differences are 0 (both debit and credit)
   const canBookclose = useMemo(() => {
     if (Math.abs(totals.differenceTotal) >= 0.01) return false
