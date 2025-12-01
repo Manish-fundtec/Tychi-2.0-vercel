@@ -57,7 +57,7 @@ const convertToDebitCredit = (closingBalance, glCode) => {
   }
 }
 
-export default function MigrationComparisonModal({ show, onClose, fundId }) {
+export default function MigrationComparisonModal({ show, onClose, fundId, fileId, onRefreshHistory }) {
   const [lastPricingDate, setLastPricingDate] = useState(null)
   const [trialBalanceData, setTrialBalanceData] = useState([])
   const [allTrialBalanceData, setAllTrialBalanceData] = useState([]) // All GL codes for reconcile modal

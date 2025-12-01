@@ -612,31 +612,55 @@ function parseFlexibleDate(s) {
 const startOfMonthUTC = (d) => asUTC(d.getUTCFullYear(), d.getUTCMonth(), 1)
 const startOfQuarterUTC = (d) => asUTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / 3) * 3, 1)
 const startOfYearUTC = (d) => asUTC(d.getUTCFullYear(), 0, 1)
+const startOfDayUTC = (d) => asUTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
 
 const addMonthsUTC = (d, n) => asUTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1)
 const addQuartersUTC = (d, n) => asUTC(d.getUTCFullYear(), d.getUTCMonth() + n * 3, 1)
 const addYearsUTC = (d, n) => asUTC(d.getUTCFullYear() + n, 0, 1)
+const addDaysUTC = (d, n) => {
+  const result = new Date(d)
+  result.setUTCDate(result.getUTCDate() + n)
+  return asUTC(result.getUTCFullYear(), result.getUTCMonth(), result.getUTCDate())
+}
+
+// End of period functions
+const endOfMonthUTC = (d) => asUTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)
+const endOfQuarterUTC = (d) => {
+  const quarterStart = Math.floor(d.getUTCMonth() / 3) * 3
+  return asUTC(d.getUTCFullYear(), quarterStart + 3, 0)
+}
+const endOfYearUTC = (d) => asUTC(d.getUTCFullYear(), 11, 31)
+const endOfDayUTC = (d) => asUTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
 
 const startOfPeriodUTC = (freq, d) => {
   const f = String(freq || 'monthly').toLowerCase()
+  if (f === 'daily') return startOfDayUTC(d)
   if (f === 'quarterly') return startOfQuarterUTC(d)
-  if (f === 'annual') return startOfYearUTC(d)
+  if (f === 'annual' || f === 'annually') return startOfYearUTC(d)
   return startOfMonthUTC(d)
 }
+
 const addPeriodUTC = (freq, d, n) => {
   const f = String(freq || 'monthly').toLowerCase()
+  if (f === 'daily') return addDaysUTC(d, n)
   if (f === 'quarterly') return addQuartersUTC(d, n)
-  if (f === 'annual') return addYearsUTC(d, n)
+  if (f === 'annual' || f === 'annually') return addYearsUTC(d, n)
   return addMonthsUTC(d, n)
 }
 
+const endOfPeriodUTC = (freq, d) => {
+  const f = String(freq || 'monthly').toLowerCase()
+  if (f === 'daily') return endOfDayUTC(d)
+  if (f === 'quarterly') return endOfQuarterUTC(d)
+  if (f === 'annual' || f === 'annually') return endOfYearUTC(d)
+  return endOfMonthUTC(d)
+}
+
 // Compute next pricing window given frequency, reporting start, and last pricing date
-// Monthly logic only:
-// - NO lastPricingDate  → start = reporting_start_date, end = end of that month
-// - HAS lastPricingDate → start = 1st of next month,   end = end of that month
-// Monthly rules:
-// - First ever: start = reporting_start_date, end = that month-end
-// - After you priced a month: start = 1st of next month, end = that month-end
+// Supports: Daily, Monthly, Quarterly, Annual/Annually
+// Rules:
+// - First period: start = reporting_start_date, end = end of that period
+// - Next period: start = start of next period, end = end of that period
 export function computePricingWindow(reportingFrequency, reportingStartDate, lastPricingDate) {
   const bad = /^(?:|0{4}-0{2}-0{2}|1970-01-01|null|undefined)$/i
 
@@ -645,30 +669,65 @@ export function computePricingWindow(reportingFrequency, reportingStartDate, las
 
   if (!rsd && !lpd) return null
 
-  // If we have a reporting start, we only consider lastPricingDate "real"
-  // once it reaches (or passes) the month-end of the reporting start month.
-  if (rsd) {
-    const rsdMonthEnd = asUTC(rsd.getUTCFullYear(), rsd.getUTCMonth() + 1, 0) // 08/31/2025
-    const hasRealLast = lpd && lpd >= rsdMonthEnd
+  const freq = String(reportingFrequency || 'monthly').toLowerCase()
+  const isDaily = freq === 'daily'
 
-    if (hasRealLast) {
-      // Next month window
-      const start = asUTC(lpd.getUTCFullYear(), lpd.getUTCMonth() + 1, 1) // 09/01/2025
-      const lastDayInclusive = asUTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0) // 09/30/2025
-      return { start, lastDayInclusive }
+  // Helper to check if lastPricingDate has reached/completed the first period
+  const hasCompletedFirstPeriod = (periodEnd) => {
+    if (!lpd) return false
+    // For daily, check if dates are equal or later
+    if (isDaily) {
+      return lpd >= periodEnd
     }
-
-    // First window → reporting_start_date month
-    const start = rsd // 08/01/2025
-    const lastDayInclusive = asUTC(rsd.getUTCFullYear(), rsd.getUTCMonth() + 1, 0) // 08/31/2025
-    return { start, lastDayInclusive }
+    // For other frequencies, check if lastPricingDate >= periodEnd
+    return lpd >= periodEnd
   }
 
-  // No reporting start but we do have a lastPricingDate → next month window
+  // Helper to get next period start and end
+  const getNextPeriod = (fromDate) => {
+    if (isDaily) {
+      // For daily: next day is both start and end
+      const nextDay = addDaysUTC(fromDate, 1)
+      return { start: nextDay, lastDayInclusive: nextDay }
+    }
+    const nextStart = addPeriodUTC(freq, fromDate, 1)
+    const nextEnd = endOfPeriodUTC(freq, nextStart)
+    return { start: nextStart, lastDayInclusive: nextEnd }
+  }
+
+  if (rsd) {
+    if (isDaily) {
+      // For daily: first period is the reporting start date itself
+      const firstDay = rsd
+      if (hasCompletedFirstPeriod(firstDay)) {
+        // Move to next day
+        return getNextPeriod(firstDay)
+      }
+      return { start: firstDay, lastDayInclusive: firstDay }
+    }
+
+    // For other frequencies: Calculate first period based on reporting start date
+    const firstPeriodStart = startOfPeriodUTC(freq, rsd)
+    
+    // For annual frequency, always use the full year (Jan 1 to Dec 31), not from reporting start date
+    // For other frequencies, if reporting start is not at the period start, use reporting start as the actual start
+    const isAnnual = freq === 'annual' || freq === 'annually'
+    const actualStart = (isAnnual || rsd >= firstPeriodStart) ? firstPeriodStart : rsd
+    const firstPeriodEnd = endOfPeriodUTC(freq, firstPeriodStart)
+
+    // Check if we've completed the first period
+    if (hasCompletedFirstPeriod(firstPeriodEnd)) {
+      // Move to next period
+      return getNextPeriod(firstPeriodEnd)
+    }
+
+    // First period window
+    return { start: actualStart, lastDayInclusive: firstPeriodEnd }
+  }
+
+  // No reporting start but we have lastPricingDate → next period window
   if (lpd) {
-    const start = asUTC(lpd.getUTCFullYear(), lpd.getUTCMonth() + 1, 1)
-    const lastDayInclusive = asUTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)
-    return { start, lastDayInclusive }
+    return getNextPeriod(lpd)
   }
 
   return null
