@@ -59,6 +59,7 @@ export const markMigrationAsPending = (fundId, fileId) => {
   return api.post(`/api/v1/migration/trialbalance/${fundId}/pending`, payload, {
     headers: {
       'dashboard': `Bearer ${token}`,
+      'Content-Type': 'application/json', 
     },
   })
 }
