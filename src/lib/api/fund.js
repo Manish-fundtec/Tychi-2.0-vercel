@@ -1,6 +1,7 @@
 // import axios from '@/lib/api/axios';
 import api from './axios'
 
+
 export const fetchFunds = async () => {
   const response = await api.get('/api/v1/fund', {
     params: { t: Date.now() },

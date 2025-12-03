@@ -33,17 +33,45 @@ const useSignIn = () => {
   });
 
   const login = handleSubmit(async (values) => {
+    // 🕐 PERFORMANCE DEBUGGING - Start tracking
+    const performanceLog = {
+      startTime: performance.now(),
+      steps: []
+    };
+
+    const logStep = (stepName, details = '') => {
+      const elapsed = performance.now() - performanceLog.startTime;
+      performanceLog.steps.push({ step: stepName, time: elapsed, details });
+      console.log(`⏱️ [LOGIN DEBUG] ${stepName} - ${elapsed.toFixed(2)}ms ${details ? `(${details})` : ''}`);
+    };
+
+    logStep('🚀 LOGIN STARTED', `Email: ${values.email}`);
     setLoading(true);
+
     try {
+      logStep('✅ Form validation passed');
+      logStep('📡 Preparing API request');
+
       // 🔐 Call backend login API
+      const apiStartTime = performance.now();
+      logStep('🌐 API REQUEST START', 'Sending to /api/v1/user_signin');
+      
       const response = await axios.post('/api/v1/user_signin', {
         email: values.email,
         password: values.password,
       });
 
+      const apiEndTime = performance.now();
+      const apiDuration = apiEndTime - apiStartTime;
+      logStep('✅ API RESPONSE RECEIVED', `${apiDuration.toFixed(2)}ms - Status: ${response.status}`);
+
       const { accessToken } = response.data;
+      logStep('🔓 Token extracted from response', accessToken ? 'Token found' : 'NO TOKEN!');
 
       if (accessToken) {
+        const cookieStartTime = performance.now();
+        logStep('🍪 Setting cookie - START');
+
         // ✅ Store token in cookie for backend to read
         Cookies.set('userToken', accessToken, {
           path: '/',
@@ -51,27 +79,67 @@ const useSignIn = () => {
           secure: process.env.NODE_ENV === 'production',
         });
 
+        const cookieEndTime = performance.now();
+        logStep('✅ Cookie set complete', `${(cookieEndTime - cookieStartTime).toFixed(2)}ms`);
+
+        const notificationStartTime = performance.now();
+        logStep('📢 Showing notification - START');
+
         showNotification({
           message: 'Successfully logged in. Redirecting...',
           variant: 'success',
         });
 
+        const notificationEndTime = performance.now();
+        logStep('✅ Notification shown', `${(notificationEndTime - notificationStartTime).toFixed(2)}ms`);
+
+        const redirectPath = queryParams['redirectTo'] ?? '/fundlist';
+        logStep('🚀 Initiating redirect', `To: ${redirectPath}`);
+        
+        const redirectStartTime = performance.now();
+        
         // 🚀 Redirect after successful login
-        push(queryParams['redirectTo'] ?? '/fundlist');
+        push(redirectPath);
+        
+        const redirectEndTime = performance.now();
+        logStep('✅ Redirect initiated', `${(redirectEndTime - redirectStartTime).toFixed(2)}ms`);
+
+        // Final summary
+        const totalTime = performance.now() - performanceLog.startTime;
+        console.log(`\n🎯 ===== LOGIN PERFORMANCE SUMMARY =====`);
+        console.log(`⏱️  TOTAL TIME: ${totalTime.toFixed(2)}ms (${(totalTime / 1000).toFixed(2)}s)`);
+        console.log(`📊 Time breakdown:`);
+        performanceLog.steps.forEach((step, idx) => {
+          const prevTime = idx > 0 ? performanceLog.steps[idx - 1].time : 0;
+          const stepDuration = step.time - prevTime;
+          console.log(`   ${idx + 1}. ${step.step}: ${stepDuration.toFixed(2)}ms`);
+        });
+        console.log(`=========================================\n`);
+        
       } else {
+        logStep('❌ NO TOKEN IN RESPONSE');
         showNotification({
           message: 'Login failed. No token returned from server.',
           variant: 'danger',
         });
       }
     } catch (error) {
-      console.error('Login error:', error);
+      const errorTime = performance.now() - performanceLog.startTime;
+      logStep('❌ ERROR OCCURRED', `${errorTime.toFixed(2)}ms`);
+      console.error('❌ Login error details:', {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status,
+        timeout: error?.code === 'ECONNABORTED' ? 'Request timeout!' : null
+      });
+      
       showNotification({
         message: error?.response?.data?.message || 'Something went wrong during login',
         variant: 'danger',
       });
     } finally {
       setLoading(false);
+      logStep('🏁 Loading state cleared', 'Final cleanup');
     }
   });
 
