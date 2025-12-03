@@ -8,6 +8,7 @@ import { UploadMigrationModal } from '@/app/(admin)/base-ui/modals/components/Al
 import MigrationComparisonModal from './components/MigrationComparisonModal'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 import api from '@/lib/api/axios'
+import { getMigrationTableData } from '@/lib/api/migration'
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
 
@@ -32,12 +33,43 @@ const MigrationPage = () => {
   const defaultColumnDefs = useMemo(
     () => [
       { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 70, pinned: 'left', flex: 1 },
-      { field: 'account_code', headerName: 'Account Code', flex: 1 },
-      { field: 'account_name', headerName: 'Account Name', flex: 1 },
-      { field: 'balance type', headerName: 'Balance Type', flex: 1 },
-      { field: 'debit', headerName: 'Debit', flex: 1 },
-      { field: 'credit', headerName: 'Credit', flex: 1 },
-      { field: 'Closing balance', headerName: 'Closing Balance', flex: 1 },
+      { field: 'account_code', headerName: 'Account Code', flex: 1, sortable: true, filter: true },
+      { field: 'account_name', headerName: 'Account Name', flex: 1, sortable: true, filter: true },
+      { field: 'opening_balance', headerName: 'Opening Balance', flex: 1, sortable: true, 
+        valueFormatter: (params) => params.value ? Number(params.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' },
+      { field: 'debit', headerName: 'Debit', flex: 1, sortable: true,
+        valueFormatter: (params) => params.value ? Number(params.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' },
+      { field: 'credit', headerName: 'Credit', flex: 1, sortable: true,
+        valueFormatter: (params) => params.value ? Number(params.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' },
+      { field: 'Closing balance', headerName: 'Closing Balance', flex: 1, sortable: true,
+        valueFormatter: (params) => params.value ? Number(params.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' },
+      {
+        headerName: 'Actions',
+        field: 'actions',
+        sortable: false,
+        filter: false,
+        width: 120,
+        pinned: 'right',
+        cellRenderer: (params) => {
+          const { data } = params
+          const fileId = data?.file_id
+          
+          if (fileId) {
+            return (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setCurrentFileId(fileId)
+                  setShowComparisonModal(true)
+                }}>
+                View
+              </Button>
+            )
+          }
+          return '—'
+        },
+      },
     ],
     [],
   )
@@ -66,9 +98,11 @@ const MigrationPage = () => {
       setCurrentFileId(fileId)
     }
     setShowComparisonModal(true)
-    // Refresh history if on history tab
+    // Refresh data based on active tab
     if (activeTab === 'history') {
       fetchHistory()
+    } else if (activeTab === 'list') {
+      fetchMigrationData()
     }
   }
 
@@ -112,6 +146,58 @@ const MigrationPage = () => {
       setHistoryLoading(false)
     }
   }, [fundId])
+
+  // Fetch migration table data
+  const fetchMigrationData = useCallback(async () => {
+    if (!fundId) {
+      setRowData([])
+      return
+    }
+
+    setLoading(true)
+    setErrMsg('')
+
+    try {
+      // Call API to get migration table data
+      const res = await getMigrationTableData(fundId)
+      
+      // Handle response - could be array or object with data property
+      let data = []
+      if (Array.isArray(res?.data)) {
+        data = res.data
+      } else if (res?.data?.data && Array.isArray(res.data.data)) {
+        data = res.data.data
+      } else if (Array.isArray(res)) {
+        data = res
+      }
+
+      // Normalize the data to match column definitions
+      const normalized = data.map((row) => ({
+        account_code: row.account_code || row.gl_code || '',
+        account_name: row.account_name || row.gl_name || '',
+        opening_balance: Number(row.opening_balance || row.opening || 0),
+        debit: Number(row.debit || row.debit_amount || 0),
+        credit: Number(row.credit || row.credit_amount || 0),
+        'Closing balance': Number(row['Closing balance'] || row.closing_balance || row.closing || 0),
+        file_id: row.file_id || null, // Include file_id for action button
+      }))
+      
+      setRowData(normalized)
+    } catch (error) {
+      const message = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Failed to load migration data'
+      setErrMsg(message)
+      setRowData([])
+    } finally {
+      setLoading(false)
+    }
+  }, [fundId])
+
+  // Fetch migration data when "Migration Data" tab is selected
+  useEffect(() => {
+    if (activeTab === 'list') {
+      fetchMigrationData()
+    }
+  }, [activeTab, fetchMigrationData])
 
   // Fetch history when history tab is selected
   useEffect(() => {
@@ -195,16 +281,42 @@ const MigrationPage = () => {
               {/* Tab 1: Migration Data List */}
               <Tab eventKey="list" title="Migration Data">
                 <CardBody className="p-2">
+                  {!fundId && (
+                    <Alert variant="warning" className="mb-3">
+                      Select a fund to view migration data.
+                    </Alert>
+                  )}
+
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <div />
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      onClick={fetchMigrationData}
+                      disabled={!fundId || loading}>
+                      {loading ? 'Refreshing…' : 'Refresh'}
+                    </Button>
+                  </div>
+
                   {errMsg && (
                     <Alert variant="danger" className="mb-2" dismissible onClose={() => setErrMsg('')}>
                       {errMsg}
                     </Alert>
                   )}
-                  {loading ? (
+                  
+                  {loading && (
                     <div className="d-flex align-items-center gap-2 p-3">
                       <Spinner animation="border" size="sm" /> <span>Loading…</span>
                     </div>
-                  ) : (
+                  )}
+
+                  {!loading && !errMsg && rowData.length === 0 && (
+                    <Alert variant="warning" className="mb-2">
+                      No migration data found for this fund.
+                    </Alert>
+                  )}
+
+                  {!loading && (
                     <div className="ag-theme-alpine" style={{ height: 550, width: '100%' }}>
                       {columnDefs.length > 0 && (
                         <AgGridReact

@@ -25,6 +25,23 @@ export const getMigrationData = (fundId) => {
   return api.get(`/api/v1/migration/fund/${fundId}`)
 }
 
+// Get migration table data for a fund (new endpoint)
+export const getMigrationTableData = (fundId, fileId = null) => {
+  const token = Cookies.get('dashboardToken')
+  let url = `/api/v1/migration/trialbalance/${fundId}/migration`
+  
+  // Add file_id as query parameter if provided
+  if (fileId) {
+    url += `?file_id=${encodeURIComponent(fileId)}`
+  }
+  
+  return api.get(url, {
+    headers: {
+      'dashboard': `Bearer ${token}`,
+    },
+  })
+}
+
 // Mark migration file status as PENDING (simple API call)
 export const markMigrationAsPending = (fundId, fileId) => {
   const token = Cookies.get('dashboardToken')
