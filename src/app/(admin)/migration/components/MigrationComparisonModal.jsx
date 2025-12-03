@@ -670,7 +670,8 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
           // ⭐ 4️⃣ CREATE ADJUSTMENT ENTRY
           // ----------------------------
         
-           // (A) Increase Debit (Uploaded > Report) → Debit GL account
+           // (A) Increase Debit (Uploaded > Report) → Add debit to GL
+           // Example: Upload dr=10, Report dr=0, diff=10 → dr_account: GL, cr_account: offset
            if (diffDebit > 0.009) {
              journalEntries.push({
                gl_code: gl,
@@ -678,13 +679,14 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                amount: diffDebit,
                is_debit: true,
                description: `Adjust Debit for GL ${gl}`,
-               dr_account: offset,  // Swapped: offset is debited
-               cr_account: gl,      // Swapped: GL is credited
+               dr_account: gl,      // Debit GL account
+               cr_account: offset,  // Credit offset
                journal_type: "Migration"
              })
            }
          
-           // (B) Decrease Debit (Uploaded < Report) → Credit GL account
+           // (B) Decrease Debit (Uploaded < Report) → Reduce debit from GL
+           // Example: Upload dr=0, Report dr=10, diff=-10 → dr_account: offset, cr_account: GL
            if (diffDebit < -0.009) {
              journalEntries.push({
                gl_code: gl,
@@ -692,13 +694,14 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                amount: Math.abs(diffDebit),
                is_debit: false,
                description: `Reduce Debit for GL ${gl}`,
-               dr_account: gl,      // Swapped: GL is debited
-               cr_account: offset,  // Swapped: offset is credited
+               dr_account: offset,  // Debit offset
+               cr_account: gl,      // Credit GL account
                journal_type: "Migration"
              })
            }
          
-           // (C) Increase Credit (Uploaded > Report) → Credit GL account
+           // (C) Increase Credit (Uploaded > Report) → Add credit to GL
+           // Example: Upload cr=120, Report cr=100, diff=20 → dr_account: offset, cr_account: GL
            if (diffCredit > 0.009) {
              journalEntries.push({
                gl_code: gl,
@@ -706,13 +709,14 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                amount: diffCredit,
                is_debit: false,
                description: `Adjust Credit for GL ${gl}`,
-               dr_account: gl,      // Swapped: GL is debited
-               cr_account: offset, // Swapped: offset is credited
+               dr_account: offset,  // Debit offset
+               cr_account: gl,      // Credit GL account
                journal_type: "Migration"
              })
            }
          
-           // (D) Decrease Credit (Uploaded < Report) → Debit GL account
+           // (D) Decrease Credit (Uploaded < Report) → Reduce credit from GL
+           // Example: Upload cr=100, Report cr=120, diff=-20 → dr_account: GL, cr_account: offset
            if (diffCredit < -0.009) {
              journalEntries.push({
                gl_code: gl,
@@ -720,8 +724,8 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                amount: Math.abs(diffCredit),
                is_debit: true,
                description: `Reduce Credit for GL ${gl}`,
-               dr_account: offset,  // Swapped: offset is debited
-               cr_account: gl,     // Swapped: GL is credited
+               dr_account: gl,      // Debit GL account
+               cr_account: offset,  // Credit offset
                journal_type: "Migration"
              })
            }
