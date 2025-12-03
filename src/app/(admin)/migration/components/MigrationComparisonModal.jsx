@@ -618,10 +618,17 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
 
   const handlePublish = async () => {
     // Filter items with debit or credit differences
+    // Recalculate differences to ensure accuracy
     const glCodesWithDifference = reconcileData.filter((item) => {
-      const diffDebit = item.diffDebit || 0
-      const diffCredit = item.diffCredit || 0
-      return Math.abs(diffDebit) >= 0.01 || Math.abs(diffCredit) >= 0.01
+      // Recalculate differences to ensure accuracy
+      const report = convertToDebitCredit(item.reportClosing || 0, item.glNumber)
+      const reportDebit = report.debit
+      const reportCredit = report.credit
+      const uploadedDebit = item.uploadedDebit || 0
+      const uploadedCredit = item.uploadedCredit || 0
+      const diffDebit = uploadedDebit - reportDebit
+      const diffCredit = uploadedCredit - reportCredit
+      return Math.abs(diffDebit) >= 0.009 || Math.abs(diffCredit) >= 0.009
     })
 
     if (glCodesWithDifference.length > 0) {
@@ -644,8 +651,9 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         }
 
         const journalEntries = []
-        glCodesWithDifference.forEach((item) => {
+        console.log('[Journal Entry] Total GL codes with difference:', glCodesWithDifference.length)
         
+        glCodesWithDifference.forEach((item) => {
           const gl = item.glNumber
           const glName = item.glName
           const offset = "99999"   // Migration offset account
@@ -664,7 +672,16 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
           const diffDebit  = uploadedDebit  - reportDebit
           const diffCredit = uploadedCredit - reportCredit
         
-          console.log("GL:", gl, "DiffDr:", diffDebit, "DiffCr:", diffCredit)
+          console.log(`[Journal Entry] GL ${gl} (${glName}):`, {
+            reportDebit,
+            reportCredit,
+            uploadedDebit,
+            uploadedCredit,
+            diffDebit,
+            diffCredit,
+            willCreateDebitEntry: diffDebit > 0.009 || diffDebit < -0.009,
+            willCreateCreditEntry: diffCredit > 0.009 || diffCredit < -0.009
+          })
         
           // ----------------------------
           // ⭐ 4️⃣ CREATE ADJUSTMENT ENTRY
@@ -673,7 +690,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
            // (A) Increase Debit (Uploaded > Report) → Add debit to GL
            // Example: Upload dr=10, Report dr=0, diff=10 → dr_account: GL, cr_account: offset
            if (diffDebit > 0.009) {
-             journalEntries.push({
+             const entry = {
                gl_code: gl,
                gl_name: glName,
                amount: diffDebit,
@@ -682,13 +699,15 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                dr_account: gl,      // Debit GL account
                cr_account: offset,  // Credit offset
                journal_type: "Migration"
-             })
+             }
+             journalEntries.push(entry)
+             console.log(`  → Created DEBIT entry: dr=${gl}, cr=${offset}, amount=${diffDebit}`)
            }
          
            // (B) Decrease Debit (Uploaded < Report) → Reduce debit from GL
            // Example: Upload dr=0, Report dr=10, diff=-10 → dr_account: offset, cr_account: GL
            if (diffDebit < -0.009) {
-             journalEntries.push({
+             const entry = {
                gl_code: gl,
                gl_name: glName,
                amount: Math.abs(diffDebit),
@@ -697,13 +716,15 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                dr_account: offset,  // Debit offset
                cr_account: gl,      // Credit GL account
                journal_type: "Migration"
-             })
+             }
+             journalEntries.push(entry)
+             console.log(`  → Created CREDIT entry (reduce debit): dr=${offset}, cr=${gl}, amount=${Math.abs(diffDebit)}`)
            }
          
            // (C) Increase Credit (Uploaded > Report) → Add credit to GL
            // Example: Upload cr=120, Report cr=100, diff=20 → dr_account: offset, cr_account: GL
            if (diffCredit > 0.009) {
-             journalEntries.push({
+             const entry = {
                gl_code: gl,
                gl_name: glName,
                amount: diffCredit,
@@ -712,13 +733,15 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                dr_account: offset,  // Debit offset
                cr_account: gl,      // Credit GL account
                journal_type: "Migration"
-             })
+             }
+             journalEntries.push(entry)
+             console.log(`  → Created CREDIT entry: dr=${offset}, cr=${gl}, amount=${diffCredit}`)
            }
          
            // (D) Decrease Credit (Uploaded < Report) → Reduce credit from GL
            // Example: Upload cr=100, Report cr=120, diff=-20 → dr_account: GL, cr_account: offset
            if (diffCredit < -0.009) {
-             journalEntries.push({
+             const entry = {
                gl_code: gl,
                gl_name: glName,
                amount: Math.abs(diffCredit),
@@ -727,13 +750,22 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                dr_account: gl,      // Debit GL account
                cr_account: offset,  // Credit offset
                journal_type: "Migration"
-             })
+             }
+             journalEntries.push(entry)
+             console.log(`  → Created DEBIT entry (reduce credit): dr=${gl}, cr=${offset}, amount=${Math.abs(diffCredit)}`)
            }
-        
+         
         })
         
-        console.log('[Journal Entries Created]:', journalEntries)
+        console.log('[Journal Entries Created]:', JSON.stringify(journalEntries, null, 2))
         console.log(`Total journal entries: ${journalEntries.length}`)
+        
+        // Check for duplicates
+        const entryKeys = journalEntries.map(e => `${e.dr_account}-${e.cr_account}-${e.amount}`)
+        const duplicates = entryKeys.filter((key, index) => entryKeys.indexOf(key) !== index)
+        if (duplicates.length > 0) {
+          console.warn('[Journal Entry] Duplicate entries detected:', duplicates)
+        }
 
         const migrationData = {
           fund_id: fundId,
