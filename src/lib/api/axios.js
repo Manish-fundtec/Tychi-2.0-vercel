@@ -102,15 +102,12 @@ api.interceptors.response.use(
   },
   (error) => {
     const isSignInRequest = error.config?.url?.includes('user_signin') || error.config?.url?.includes('login');
-    const isTradeUploadRequest = error.config?.url?.includes('trade/upload');
-    
-    // Don't log expected 400 errors for trade upload (validation errors are expected)
-    const isExpectedError = isTradeUploadRequest && error.response?.status === 400;
+    const isSymbolRequest = error.config?.url?.includes('symbol');
+    const isManualJournalRequest = error.config?.url?.includes('manualjournal');
     
     if (error.config?.metadata) {
       const duration = performance.now() - error.config.metadata.startTime;
       
-      // Only log errors for sign-in requests or unexpected errors (not 400 for trade upload)
       if (isSignInRequest && typeof window !== 'undefined') {
         console.error(`\n❌ [AXIOS] ===== API REQUEST FAILED =====`);
         console.error(`⏱️  FAILED AFTER: ${duration.toFixed(2)}ms (${(duration / 1000).toFixed(2)}s)`);
@@ -125,15 +122,28 @@ api.interceptors.response.use(
           console.error(`🌐 NETWORK ERROR - Check your internet connection or server status!`);
         }
         console.error(`==========================================\n`);
-      } else if (!isExpectedError && typeof window !== 'undefined') {
-        // Log unexpected errors (not 400 for trade upload)
-        if (error.response?.status >= 500 || error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
-          console.error(`\n❌ [AXIOS] ===== API REQUEST FAILED =====`);
-          console.error(`📊 Status: ${error.response?.status || 'No response'}`);
-          console.error(`🔴 Error: ${error.message}`);
-          console.error(`🌐 URL: ${error.config?.baseURL}${error.config?.url}`);
-          console.error(`==========================================\n`);
-        }
+      }
+    }
+    
+    // Handle exceed limit errors for symbol and manualjournal requests
+    if (typeof window !== 'undefined' && (isSymbolRequest || isManualJournalRequest)) {
+      const status = error.response?.status;
+      const errorMessage = error.response?.data?.error_message || error.response?.data?.error || error.response?.data?.message || error.message || '';
+      // Ensure errorMessage is a string before calling toLowerCase()
+      const errorMessageStr = String(errorMessage || '').toLowerCase();
+      const isExceedLimitError = 
+        status === 413 || 
+        status === 400 && (
+          errorMessageStr.includes('exceed') && errorMessageStr.includes('limit') ||
+          errorMessageStr.includes('row limit') ||
+          errorMessageStr.includes('too many') ||
+          errorMessageStr.includes('maximum')
+        );
+      
+      if (isExceedLimitError) {
+        // Enhance error object with exceed limit flag for easier handling in components
+        error.isExceedLimitError = true;
+        error.requestType = isSymbolRequest ? 'Symbol' : 'Manual Journal';
       }
     }
     

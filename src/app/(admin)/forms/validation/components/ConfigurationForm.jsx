@@ -1806,12 +1806,32 @@ export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
         onUploaded?.() // Trigger refresh in parent component
         onClose?.() // Close modal after successful upload
       } else {
-        // backend may return: { success:false, error_file_url, message }
-        setErr(data.message || 'Upload/validation failed.')
+        // backend may return: { success:false, error_file_url, message, error_message }
+        // Prioritize error_message field for exceed limit errors
+        const errorMessage = data.error_message || data.message || 'Upload/validation failed.'
+        setErr(errorMessage)
         if (data.error_file_url) setErrorFileUrl(data.error_file_url)
       }
     } catch (e) {
-      setErr(e?.response?.data?.message || e?.response?.data?.error || 'Upload failed.')
+      // Handle exceed limit errors from error response (400 bad request)
+      const status = e?.response?.status
+      const errorData = e?.response?.data || {}
+      
+      // For 400 responses, prioritize error_message field - this contains the exceed limit message
+      // Response structure: { success: false, error_message: "...", message: "...", ... }
+      let errorMessage = 'Upload failed.'
+      
+      if (status === 400) {
+        // 400 Bad Request - likely exceed limit error
+        errorMessage = errorData.error_message || errorData.message || errorData.error || 'Row limit exceeded. Please check your file.'
+      } else {
+        // Other errors
+        errorMessage = errorData.error_message || errorData.message || errorData.error || e?.message || 'Upload failed.'
+      }
+      
+      setErr(errorMessage)
+      
+      if (errorData.error_file_url) setErrorFileUrl(errorData.error_file_url)
     } finally {
       setLoading(false)
     }
