@@ -645,96 +645,87 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
 
         const journalEntries = []
         glCodesWithDifference.forEach((item) => {
-          // 1. Convert REPORT closing → Debit/Credit
-          const reportDrCr = convertToDebitCredit(item.reportClosing || 0, item.glNumber)
-          const reportDebit = reportDrCr.debit
-          const reportCredit = reportDrCr.credit
-
-          // 2. Uploaded debit/credit directly used
-          const uploadedDebit = item.uploadedDebit || 0
-          const uploadedCredit = item.uploadedCredit || 0
-
-          // 3. REAL DIFFERENCE FORMULA (FIXED!)
-          // ⭐ Adjustment needed to make REPORT = UPLOADED
-          const diffDebit = uploadedDebit - reportDebit     // + means REPORT needs more debit
-          const diffCredit = uploadedCredit - reportCredit  // + means REPORT needs more credit
-
+        
           const gl = item.glNumber
           const glName = item.glName
-          const offset = '99999'   // Migration adjustment GL
-
-          console.log(`[Journal Entry] GL ${gl} (${glName}):`, {
-            reportDebit,
-            reportCredit,
-            uploadedDebit,
-            uploadedCredit,
-            diffDebit,
-            diffCredit
-          })
-
-          // -------------------------
-          // FIXED DR/CR ADJUSTMENT
-          // -------------------------
-
-          // If uploadedDebit > reportDebit → Increase debit
+          const offset = "99999"   // Migration offset account
+        
+          // 1️⃣ Convert report closing → debit/credit
+          const report = convertToDebitCredit(item.reportClosing || 0, gl)
+          const reportDebit = report.debit
+          const reportCredit = report.credit
+        
+          // 2️⃣ Uploaded debit/credit (direct from file)
+          const uploadedDebit = item.uploadedDebit || 0
+          const uploadedCredit = item.uploadedCredit || 0
+        
+          // 3️⃣ REAL DIFFERENCE (FIXED FORMULA)
+          // What we must ADD to report to make it equal to uploaded
+          const diffDebit  = uploadedDebit  - reportDebit
+          const diffCredit = uploadedCredit - reportCredit
+        
+          console.log("GL:", gl, "DiffDr:", diffDebit, "DiffCr:", diffCredit)
+        
+          // ----------------------------
+          // ⭐ 4️⃣ CREATE ADJUSTMENT ENTRY
+          // ----------------------------
+        
+          // (A) Increase Debit (Uploaded > Report)
           if (diffDebit > 0.009) {
             journalEntries.push({
               gl_code: gl,
               gl_name: glName,
               amount: diffDebit,
-              is_debit: true,              // Debit this GL
-              description: `Migration reconciliation: Adjust debit for GL ${gl} - ${glName}`,
+              is_debit: true,
+              description: `Adjust Debit for GL ${gl}`,
               dr_account: gl,
               cr_account: offset,
-              journal_type: 'Migration',
+              journal_type: "Migration"
             })
-            console.log(`  → Creating DEBIT entry: GL ${gl} = ${diffDebit}`)
           }
-
-          // If uploadedDebit < reportDebit → Reduce debit → Credit GL
-          else if (diffDebit < -0.009) {
+        
+          // (B) Decrease Debit (Uploaded < Report) → credit GL
+          if (diffDebit < -0.009) {
             journalEntries.push({
               gl_code: gl,
               gl_name: glName,
               amount: Math.abs(diffDebit),
-              is_debit: false,             // Credit this GL
-              description: `Migration reconciliation: Adjust debit for GL ${gl} - ${glName}`,
+              is_debit: false,
+              description: `Reduce Debit for GL ${gl}`,
               dr_account: offset,
               cr_account: gl,
-              journal_type: 'Migration',
+              journal_type: "Migration"
             })
-            console.log(`  → Creating CREDIT entry (reduce debit): GL ${gl} = ${Math.abs(diffDebit)}`)
           }
-
-          // If uploadedCredit > reportCredit → Increase credit
+        
+          // (C) Increase Credit (Uploaded > Report)
           if (diffCredit > 0.009) {
             journalEntries.push({
               gl_code: gl,
               gl_name: glName,
               amount: diffCredit,
-              is_debit: false,            // Credit GL
-              description: `Migration reconciliation: Adjust credit for GL ${gl} - ${glName}`,
+              is_debit: false,  // credit
+              description: `Adjust Credit for GL ${gl}`,
               dr_account: offset,
               cr_account: gl,
-              journal_type: 'Migration',
+              journal_type: "Migration"
             })
-            console.log(`  → Creating CREDIT entry: GL ${gl} = ${diffCredit}`)
           }
-
-          // If uploadedCredit < reportCredit → Reduce credit → Debit GL
-          else if (diffCredit < -0.009) {
+        
+          // (D) Decrease Credit (Uploaded < Report) → debit GL
+          if (diffCredit < -0.009) {
             journalEntries.push({
               gl_code: gl,
               gl_name: glName,
               amount: Math.abs(diffCredit),
-              is_debit: true,             // Debit GL
-              description: `Migration reconciliation: Adjust credit for GL ${gl} - ${glName}`,
+              is_debit: true,
+              description: `Reduce Credit for GL ${gl}`,
               dr_account: gl,
               cr_account: offset,
-              journal_type: 'Migration',
+              journal_type: "Migration"
             })
-            console.log(`  → Creating DEBIT entry (reduce credit): GL ${gl} = ${Math.abs(diffCredit)}`)
           }
+        
         })
         
         console.log('[Journal Entries Created]:', journalEntries)
