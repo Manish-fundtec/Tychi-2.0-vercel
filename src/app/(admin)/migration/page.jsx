@@ -12,6 +12,42 @@ import { getMigrationTableData } from '@/lib/api/migration'
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
 
+// Badge cell renderer component for AG Grid
+const BadgeCellRenderer = ({ value }) => {
+  const status = String(value || '').toLowerCase()
+  let badgeClass = 'badge bg-secondary'
+  
+  if (status === 'reconciled' || status === 'bookclosed') {
+    badgeClass = 'badge bg-success'
+  } else if (status === 'pending') {
+    badgeClass = 'badge bg-warning'
+  }
+  
+  return <span className={badgeClass}>{value || '—'}</span>
+}
+
+// Reconcile Status cell renderer
+const ReconcileStatusRenderer = ({ value }) => {
+  const status = String(value || '').toLowerCase()
+  let badgeClass = 'badge bg-secondary'
+  
+  if (status === 'reconciled') {
+    badgeClass = 'badge bg-success'
+  } else if (status === 'pending') {
+    badgeClass = 'badge bg-warning'
+  }
+  
+  return <span className={badgeClass}>{value || '—'}</span>
+}
+
+// Bookclose Status cell renderer
+const BookcloseStatusRenderer = ({ value }) => {
+  const status = String(value || '').toLowerCase()
+  const badgeClass = status === 'bookclosed' ? 'badge bg-success' : 'badge bg-secondary'
+  
+  return <span className={badgeClass}>{value || '—'}</span>
+}
+
 const MigrationPage = () => {
   const [rowData, setRowData] = useState([])
   const [columnDefs, setColumnDefs] = useState([])
@@ -34,23 +70,27 @@ const MigrationPage = () => {
     () => [
       { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 70, pinned: 'left', flex: 1 },
       { field: 'file_id', headerName: 'File ID', flex: 1, sortable: true, filter: true },
-      { field: 'file_name', headerName: 'File Name', flex: 1, sortable: true, filter: true },
+      // { field: 'file_name', headerName: 'File Name', flex: 1, sortable: true, filter: true },
       { field: 'reporting_period', headerName: 'Reporting Period', flex: 1, sortable: true, filter: true,
         valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString('en-IN') : '—' },
-      { field: 'reconcile_status', headerName: 'Reconcile Status', flex: 1, sortable: true, filter: true,
-        cellRenderer: (params) => {
-          const status = String(params.value || '').toLowerCase()
-          const badgeClass = status === 'reconciled' ? 'badge bg-success' : status === 'pending' ? 'badge bg-warning' : 'badge bg-secondary'
-          return `<span class="${badgeClass}">${params.value || '—'}</span>`
-        } },
-      { field: 'bookclose_status', headerName: 'Bookclose Status', flex: 1, sortable: true, filter: true,
-        cellRenderer: (params) => {
-          const status = String(params.value || '').toLowerCase()
-          const badgeClass = status === 'bookclosed' ? 'badge bg-success' : 'badge bg-secondary'
-          return `<span class="${badgeClass}">${params.value || '—'}</span>`
-        } },
-      { field: 'uploaded_at', headerName: 'Uploaded At', flex: 1, sortable: true, filter: true,
-        valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString('en-IN') : '—' },
+      { 
+        field: 'reconcile_status', 
+        headerName: 'Reconcile Status', 
+        flex: 1, 
+        sortable: true, 
+        filter: true,
+        cellRenderer: ReconcileStatusRenderer
+      },
+      { 
+        field: 'bookclose_status', 
+        headerName: 'Bookclose Status', 
+        flex: 1, 
+        sortable: true, 
+        filter: true,
+        cellRenderer: BookcloseStatusRenderer
+      },
+      // { field: 'uploaded_at', headerName: 'Uploaded At', flex: 1, sortable: true, filter: true,
+      //   valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString('en-IN') : '—' },
       {
         headerName: 'Actions',
         field: 'actions',
@@ -288,7 +328,7 @@ const MigrationPage = () => {
             >
               {/* Tab 1: Migration Data List */}
               <Tab eventKey="list" title="Migration Data">
-                <CardBody className="p-2">
+            <CardBody className="p-2">
                   {!fundId && (
                     <Alert variant="warning" className="mb-3">
                       Select a fund to view migration data.
@@ -306,16 +346,16 @@ const MigrationPage = () => {
                     </Button>
                   </div>
 
-                  {errMsg && (
-                    <Alert variant="danger" className="mb-2" dismissible onClose={() => setErrMsg('')}>
-                      {errMsg}
-                    </Alert>
-                  )}
+              {errMsg && (
+                <Alert variant="danger" className="mb-2" dismissible onClose={() => setErrMsg('')}>
+                  {errMsg}
+                </Alert>
+              )}
                   
                   {loading && (
-                    <div className="d-flex align-items-center gap-2 p-3">
-                      <Spinner animation="border" size="sm" /> <span>Loading…</span>
-                    </div>
+                <div className="d-flex align-items-center gap-2 p-3">
+                  <Spinner animation="border" size="sm" /> <span>Loading…</span>
+                </div>
                   )}
 
                   {!loading && !errMsg && rowData.length === 0 && (
@@ -325,21 +365,21 @@ const MigrationPage = () => {
                   )}
 
                   {!loading && (
-                    <div className="ag-theme-alpine" style={{ height: 550, width: '100%' }}>
-                      {columnDefs.length > 0 && (
-                        <AgGridReact
-                          onGridReady={onGridReady}
-                          rowData={rowData}
-                          columnDefs={columnDefs}
-                          pagination
-                          paginationPageSize={10}
-                          paginationPageSizeSelector={[10, 25, 50, 100]}
-                          defaultColDef={{ sortable: true, filter: true, resizable: true }}
-                        />
-                      )}
-                    </div>
+                <div className="ag-theme-alpine" style={{ height: 550, width: '100%' }}>
+                  {columnDefs.length > 0 && (
+                    <AgGridReact
+                      onGridReady={onGridReady}
+                      rowData={rowData}
+                      columnDefs={columnDefs}
+                      pagination
+                      paginationPageSize={10}
+                      paginationPageSizeSelector={[10, 25, 50, 100]}
+                      defaultColDef={{ sortable: true, filter: true, resizable: true }}
+                    />
                   )}
-                </CardBody>
+                </div>
+              )}
+            </CardBody>
               </Tab>
 
               {/* Tab 2: Loader History */}
