@@ -42,4 +42,25 @@ export const markMigrationAsPending = (fundId, fileId) => {
   })
 }
 
+// Bookclose migration - Update reporting_period, reconcile_status, and bookclose_status
+export const bookcloseMigration = (fundId, fileId, reportingPeriod) => {
+  const token = Cookies.get('dashboardToken')
+  const payload = {
+    reporting_period: reportingPeriod,
+    reconcile_status: 'reconciled',
+    bookclose_status: 'bookclosed'
+  }
+  
+  // Only include file_id if provided, otherwise backend uses latest file
+  if (fileId) {
+    payload.file_id = fileId
+  }
+  
+  return api.post(`/api/v1/migration/trialbalance/${fundId}/bookclose`, payload, {
+    headers: {
+      'dashboard': `Bearer ${token}`,
+    },
+  })
+}
+
 

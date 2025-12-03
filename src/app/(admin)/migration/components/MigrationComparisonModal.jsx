@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Modal, Button, Row, Col, Table, Spinner, Alert } from 'react-bootstrap'
 import Cookies from 'js-cookie'
-import { markMigrationAsPending } from '@/lib/api/migration'
+import { markMigrationAsPending, bookcloseMigration } from '@/lib/api/migration'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
@@ -476,14 +476,16 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
         trialBalanceData={allTrialBalanceData}
         uploadedData={allUploadedData}
         fundId={fundId}
+        fileId={fileId}
         lastPricingDate={dateToUse}
+        onRefreshHistory={onRefreshHistory}
       />
     </Modal>
   )
 }
 
 // Reconcile Modal Component
-function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedData, fundId, lastPricingDate }) {
+function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedData, fundId, fileId, lastPricingDate, onRefreshHistory }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
@@ -953,13 +955,19 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         lastPricingDate={lastPricingDate}
         reconcileData={reconcileData}
         refreshedTrialBalanceData={refreshedTrialBalanceData}
+        fundId={fundId}
+        fileId={fileId}
+        onRefreshHistory={onRefreshHistory}
       />
     </Modal>
   )
 }
 
 // Publish Review Modal Component
-function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals, lastPricingDate, reconcileData = [], refreshedTrialBalanceData = [] }) {
+function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals, lastPricingDate, reconcileData = [], refreshedTrialBalanceData = [], fundId, fileId, onRefreshHistory }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  
   // Check if all differences are 0 (both debit and credit)
   const canBookclose = useMemo(() => {
     if (Math.abs(totals.differenceTotal) >= 0.01) return false
@@ -969,12 +977,56 @@ function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals,
     })
   }, [totals, reconcileData])
 
+  // Handle bookclose
+  const handleBookclose = async () => {
+    if (!fundId || !lastPricingDate) {
+      setError('Fund ID and reporting period are required')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    
+    try {
+      // Use lastPricingDate as reporting_period
+      const reportingPeriod = lastPricingDate
+      
+      const response = await bookcloseMigration(fundId, fileId, reportingPeriod)
+      
+      if (response.data?.success) {
+        alert('Migration bookclosed successfully!')
+        // Refresh history if callback provided
+        if (onRefreshHistory) {
+          onRefreshHistory()
+        }
+        onClose()
+      } else {
+        const errorMsg = response.data?.message || 'Failed to bookclose migration'
+        setError(errorMsg)
+        alert('Failed to bookclose: ' + errorMsg)
+      }
+    } catch (e) {
+      console.error('[PublishReviewModal] Bookclose failed:', e)
+      const errorMsg = e?.response?.data?.message || e?.message || 'Failed to bookclose migration'
+      setError(errorMsg)
+      alert('Failed to bookclose: ' + errorMsg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <Modal show={show} onHide={onClose} size="xl" centered scrollable>
       <Modal.Header closeButton>
         <Modal.Title>Publish Review</Modal.Title>
       </Modal.Header>
       <Modal.Body>
+        {error && (
+          <Alert variant="danger" className="mb-3" dismissible onClose={() => setError('')}>
+            {error}
+          </Alert>
+        )}
+        
         {lastPricingDate && (
           <div className="mb-3">
             <strong>Last Pricing Date:</strong> {lastPricingDate}
@@ -1096,15 +1148,11 @@ function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals,
         </Button>
         {/* Show Bookclose button only if both debit and credit differences are 0 */}
         {canBookclose ? (
-          <Button variant="success" onClick={() => {
-            // TODO: Implement bookclose functionality
-            alert('Bookclose functionality will be implemented')
-            onClose()
-          }}>
-            Bookclose
+          <Button variant="success" onClick={handleBookclose} disabled={loading}>
+            {loading ? 'Bookclosing...' : 'Bookclose'}
           </Button>
         ) : (
-          <Button variant="primary" onClick={onConfirmPublish}>
+          <Button variant="primary" onClick={onConfirmPublish} disabled={loading}>
             Confirm Publish
           </Button>
         )}
