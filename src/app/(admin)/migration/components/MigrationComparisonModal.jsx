@@ -578,9 +578,10 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         existing.uploadedCredit = item.credit || 0
         
         // Calculate debit/credit differences for journal entry creation
+        // We need to make report equal to uploaded, so: diff = uploaded - report
         const reportDrCr = convertToDebitCredit(existing.reportClosing || 0, key)
-        existing.diffDebit = reportDrCr.debit - (item.debit || 0)  // Report debit - Uploaded debit
-        existing.diffCredit = reportDrCr.credit - (item.credit || 0)  // Report credit - Uploaded credit
+        existing.diffDebit = (item.debit || 0) - reportDrCr.debit  // Uploaded debit - Report debit
+        existing.diffCredit = (item.credit || 0) - reportDrCr.credit  // Uploaded credit - Report credit
         
         existing.difference = existing.reportClosing - uploadedClosing
       } else {
@@ -643,18 +644,19 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         }
 
         // Create journal entries based on debit/credit differences
+        // diffDebit = uploadedDebit - reportDebit (positive means add debit, negative means reduce debit)
+        // diffCredit = uploadedCredit - reportCredit (positive means add credit, negative means reduce credit)
         const journalEntries = []
         glCodesWithDifference.forEach((item) => {
-          const diffDebit = item.diffDebit || 0  // Report debit - Uploaded debit
-          const diffCredit = item.diffCredit || 0  // Report credit - Uploaded credit
+          const diffDebit = item.diffDebit || 0  // Uploaded debit - Report debit
+          const diffCredit = item.diffCredit || 0  // Uploaded credit - Report credit
           const offsetAccount = '99999' // Migration adjustment offset account
 
-          // If uploaded has more debit than report, we need to debit the GL account
-          // diffDebit = reportDebit - uploadedDebit
-          // If diffDebit is negative, uploaded has more debit, so we need to debit GL account
+          // Debit difference: Make report debit equal to uploaded debit
           if (Math.abs(diffDebit) >= 0.01) {
-            if (diffDebit < 0) {
+            if (diffDebit > 0) {
               // Uploaded debit > Report debit: Need to add debit to GL account
+              // Example: Uploaded=10, Report=0, diff=10, so debit GL=10
               journalEntries.push({
                 gl_code: item.glNumber,
                 gl_name: item.glName,
@@ -667,6 +669,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
               })
             } else {
               // Uploaded debit < Report debit: Need to reduce debit (credit GL account)
+              // Example: Uploaded=0, Report=10, diff=-10, so credit GL=10
               journalEntries.push({
                 gl_code: item.glNumber,
                 gl_name: item.glName,
@@ -680,12 +683,11 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
             }
           }
 
-          // If uploaded has more credit than report, we need to credit the GL account
-          // diffCredit = reportCredit - uploadedCredit
-          // If diffCredit is negative, uploaded has more credit, so we need to credit GL account
+          // Credit difference: Make report credit equal to uploaded credit
           if (Math.abs(diffCredit) >= 0.01) {
-            if (diffCredit < 0) {
+            if (diffCredit > 0) {
               // Uploaded credit > Report credit: Need to add credit to GL account
+              // Example: Uploaded=120, Report=110, diff=10, so credit GL=10
               journalEntries.push({
                 gl_code: item.glNumber,
                 gl_name: item.glName,
@@ -698,6 +700,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
               })
             } else {
               // Uploaded credit < Report credit: Need to reduce credit (debit GL account)
+              // Example: Uploaded=110, Report=120, diff=-10, so debit GL=10
               journalEntries.push({
                 gl_code: item.glNumber,
                 gl_name: item.glName,
