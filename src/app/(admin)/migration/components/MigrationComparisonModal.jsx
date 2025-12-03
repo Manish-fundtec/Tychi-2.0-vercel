@@ -670,61 +670,61 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
           // ⭐ 4️⃣ CREATE ADJUSTMENT ENTRY
           // ----------------------------
         
-          // (A) Increase Debit (Uploaded > Report)
-          if (diffDebit > 0.009) {
-            journalEntries.push({
-              gl_code: gl,
-              gl_name: glName,
-              amount: diffDebit,
-              is_debit: true,
-              description: `Adjust Debit for GL ${gl}`,
-              dr_account: gl,
-              cr_account: offset,
-              journal_type: "Migration"
-            })
-          }
-        
-          // (B) Decrease Debit (Uploaded < Report) → credit GL
-          if (diffDebit < -0.009) {
-            journalEntries.push({
-              gl_code: gl,
-              gl_name: glName,
-              amount: Math.abs(diffDebit),
-              is_debit: false,
-              description: `Reduce Debit for GL ${gl}`,
-              dr_account: offset,
-              cr_account: gl,
-              journal_type: "Migration"
-            })
-          }
-        
-          // (C) Increase Credit (Uploaded > Report)
-          if (diffCredit > 0.009) {
-            journalEntries.push({
-              gl_code: gl,
-              gl_name: glName,
-              amount: diffCredit,
-              is_debit: false,  // credit
-              description: `Adjust Credit for GL ${gl}`,
-              dr_account: offset,
-              cr_account: gl,
-              journal_type: "Migration"
-            })
-          }
-        
-          // (D) Decrease Credit (Uploaded < Report) → debit GL
-          if (diffCredit < -0.009) {
-            journalEntries.push({
-              gl_code: gl,
-              gl_name: glName,
-              amount: Math.abs(diffCredit),
-              is_debit: true,
-              description: `Reduce Credit for GL ${gl}`,
-              dr_account: gl,
-              cr_account: offset,
-              journal_type: "Migration"
-            })
-          }
+           // (A) Increase Debit (Uploaded > Report) → Debit GL account
+           if (diffDebit > 0.009) {
+             journalEntries.push({
+               gl_code: gl,
+               gl_name: glName,
+               amount: diffDebit,
+               is_debit: true,
+               description: `Adjust Debit for GL ${gl}`,
+               dr_account: offset,  // Swapped: offset is debited
+               cr_account: gl,      // Swapped: GL is credited
+               journal_type: "Migration"
+             })
+           }
+         
+           // (B) Decrease Debit (Uploaded < Report) → Credit GL account
+           if (diffDebit < -0.009) {
+             journalEntries.push({
+               gl_code: gl,
+               gl_name: glName,
+               amount: Math.abs(diffDebit),
+               is_debit: false,
+               description: `Reduce Debit for GL ${gl}`,
+               dr_account: gl,      // Swapped: GL is debited
+               cr_account: offset,  // Swapped: offset is credited
+               journal_type: "Migration"
+             })
+           }
+         
+           // (C) Increase Credit (Uploaded > Report) → Credit GL account
+           if (diffCredit > 0.009) {
+             journalEntries.push({
+               gl_code: gl,
+               gl_name: glName,
+               amount: diffCredit,
+               is_debit: false,
+               description: `Adjust Credit for GL ${gl}`,
+               dr_account: gl,      // Swapped: GL is debited
+               cr_account: offset, // Swapped: offset is credited
+               journal_type: "Migration"
+             })
+           }
+         
+           // (D) Decrease Credit (Uploaded < Report) → Debit GL account
+           if (diffCredit < -0.009) {
+             journalEntries.push({
+               gl_code: gl,
+               gl_name: glName,
+               amount: Math.abs(diffCredit),
+               is_debit: true,
+               description: `Reduce Credit for GL ${gl}`,
+               dr_account: offset,  // Swapped: offset is debited
+               cr_account: gl,     // Swapped: GL is credited
+               journal_type: "Migration"
+             })
+           }
         
         })
         
