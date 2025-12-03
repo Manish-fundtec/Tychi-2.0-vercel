@@ -697,16 +697,17 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         
           // 🔴 3. Increase Credit → DR Offset / CR GL
           if (diffCredit > 0.009) {
-            journalEntries.push({
+            const entry = {
               gl_code: gl,
               gl_name: glName,
               amount: diffCredit,
               is_debit: false,
-              dr_account: offset,
-              cr_account: gl,
-              description: `Increase Credit for GL ${gl}`,
+              description: `Adjust Credit for GL ${gl}`,
+              dr_account: offset,   // Debit offset
+              cr_account: gl,       // Credit GL   <-- FIXED
               journal_type: "Migration"
-            });
+            };
+            journalEntries.push(entry);
           }
         
           // 🟡 4. Reduce Credit → DR GL / CR Offset
