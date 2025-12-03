@@ -20,20 +20,24 @@ export const uploadMigrationFile = (file) => {
   })
 }
 
-// Get migration data for a fund
+// Get migration data for a fundimage.png
 export const getMigrationData = (fundId) => {
   return api.get(`/api/v1/migration/fund/${fundId}`)
 }
 
 // Get migration table data for a fund (migration records/metadata)
+// Endpoint: GET /api/v1/migration/trialbalance/:fund_id/migration
 export const getMigrationTableData = (fundId, fileId = null) => {
   const token = Cookies.get('dashboardToken')
-  let url = `/api/v1/migration/trialbalance/${fundId}/migration`
   
-  // Add file_id as query parameter if provided
+  // Build URL with query parameters
+  const params = new URLSearchParams()
   if (fileId) {
-    url += `?file_id=${encodeURIComponent(fileId)}`
+    params.append('file_id', fileId)
   }
+  
+  const queryString = params.toString()
+  const url = `/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/migration${queryString ? `?${queryString}` : ''}`
   
   return api.get(url, {
     headers: {
