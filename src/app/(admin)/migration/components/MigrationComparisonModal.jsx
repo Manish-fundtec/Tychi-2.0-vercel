@@ -646,14 +646,31 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         // Simple logic: Make report equal to uploaded
         // diffDebit = uploadedDebit - reportDebit
         // diffCredit = uploadedCredit - reportCredit
-        // If positive: add to report, if negative: reduce from report
         const journalEntries = []
         glCodesWithDifference.forEach((item) => {
-          const diffDebit = item.diffDebit || 0  // Uploaded debit - Report debit
-          const diffCredit = item.diffCredit || 0  // Uploaded credit - Report credit
+          // Get report debit/credit from closing balance
+          const reportDrCr = convertToDebitCredit(item.reportClosing || 0, item.glNumber)
+          const reportDebit = reportDrCr.debit
+          const reportCredit = reportDrCr.credit
+          const uploadedDebit = item.uploadedDebit || 0
+          const uploadedCredit = item.uploadedCredit || 0
+          
+          // Calculate differences: uploaded - report (to make report = uploaded)
+          const diffDebit = uploadedDebit - reportDebit
+          const diffCredit = uploadedCredit - reportCredit
+          
           const offsetAccount = '99999'
 
-          // If uploaded has more debit, debit GL account
+          console.log(`[Journal Entry] GL ${item.glNumber}:`, {
+            reportDebit,
+            reportCredit,
+            uploadedDebit,
+            uploadedCredit,
+            diffDebit,
+            diffCredit
+          })
+
+          // If uploaded has more debit than report, debit GL account
           if (diffDebit > 0.01) {
             journalEntries.push({
               gl_code: item.glNumber,
@@ -666,7 +683,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
               journal_type: 'Migration',
             })
           }
-          // If uploaded has less debit, credit GL account (reduce debit)
+          // If uploaded has less debit than report, credit GL account (reduce debit)
           else if (diffDebit < -0.01) {
             journalEntries.push({
               gl_code: item.glNumber,
@@ -680,7 +697,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
             })
           }
 
-          // If uploaded has more credit, credit GL account
+          // If uploaded has more credit than report, credit GL account
           if (diffCredit > 0.01) {
             journalEntries.push({
               gl_code: item.glNumber,
@@ -693,7 +710,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
               journal_type: 'Migration',
             })
           }
-          // If uploaded has less credit, debit GL account (reduce credit)
+          // If uploaded has less credit than report, debit GL account (reduce credit)
           else if (diffCredit < -0.01) {
             journalEntries.push({
               gl_code: item.glNumber,
@@ -707,6 +724,8 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
             })
           }
         })
+        
+        console.log('[Journal Entries Created]:', journalEntries)
 
         const migrationData = {
           fund_id: fundId,
