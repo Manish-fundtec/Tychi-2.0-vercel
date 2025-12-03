@@ -643,75 +643,68 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
           'Content-Type': 'application/json',
         }
 
-        // Create journal entries based on debit/credit differences
-        // diffDebit = uploadedDebit - reportDebit (positive means add debit, negative means reduce debit)
-        // diffCredit = uploadedCredit - reportCredit (positive means add credit, negative means reduce credit)
+        // Simple logic: Make report equal to uploaded
+        // diffDebit = uploadedDebit - reportDebit
+        // diffCredit = uploadedCredit - reportCredit
+        // If positive: add to report, if negative: reduce from report
         const journalEntries = []
         glCodesWithDifference.forEach((item) => {
           const diffDebit = item.diffDebit || 0  // Uploaded debit - Report debit
           const diffCredit = item.diffCredit || 0  // Uploaded credit - Report credit
-          const offsetAccount = '99999' // Migration adjustment offset account
+          const offsetAccount = '99999'
 
-          // Debit difference: Make report debit equal to uploaded debit
-          if (Math.abs(diffDebit) >= 0.01) {
-            if (diffDebit > 0) {
-              // Uploaded debit > Report debit: Need to add debit to GL account
-              // Example: Uploaded=10, Report=0, diff=10, so debit GL=10
-              journalEntries.push({
-                gl_code: item.glNumber,
-                gl_name: item.glName,
-                amount: Math.abs(diffDebit),
-                is_debit: true,
-                description: `Migration reconciliation: Adjust debit for GL ${item.glNumber} - ${item.glName}`,
-                dr_account: item.glNumber,  // Debit GL account
-                cr_account: offsetAccount,  // Credit offset
-                journal_type: 'Migration',
-              })
-            } else {
-              // Uploaded debit < Report debit: Need to reduce debit (credit GL account)
-              // Example: Uploaded=0, Report=10, diff=-10, so credit GL=10
-              journalEntries.push({
-                gl_code: item.glNumber,
-                gl_name: item.glName,
-                amount: Math.abs(diffDebit),
-                is_debit: false,
-                description: `Migration reconciliation: Adjust debit for GL ${item.glNumber} - ${item.glName}`,
-                dr_account: offsetAccount,  // Debit offset
-                cr_account: item.glNumber,  // Credit GL account
-                journal_type: 'Migration',
-              })
-            }
+          // If uploaded has more debit, debit GL account
+          if (diffDebit > 0.01) {
+            journalEntries.push({
+              gl_code: item.glNumber,
+              gl_name: item.glName,
+              amount: diffDebit,
+              is_debit: true,
+              description: `Migration reconciliation: Adjust debit for GL ${item.glNumber} - ${item.glName}`,
+              dr_account: item.glNumber,
+              cr_account: offsetAccount,
+              journal_type: 'Migration',
+            })
+          }
+          // If uploaded has less debit, credit GL account (reduce debit)
+          else if (diffDebit < -0.01) {
+            journalEntries.push({
+              gl_code: item.glNumber,
+              gl_name: item.glName,
+              amount: Math.abs(diffDebit),
+              is_debit: false,
+              description: `Migration reconciliation: Adjust debit for GL ${item.glNumber} - ${item.glName}`,
+              dr_account: offsetAccount,
+              cr_account: item.glNumber,
+              journal_type: 'Migration',
+            })
           }
 
-          // Credit difference: Make report credit equal to uploaded credit
-          if (Math.abs(diffCredit) >= 0.01) {
-            if (diffCredit > 0) {
-              // Uploaded credit > Report credit: Need to add credit to GL account
-              // Example: Uploaded=120, Report=110, diff=10, so credit GL=10
-              journalEntries.push({
-                gl_code: item.glNumber,
-                gl_name: item.glName,
-                amount: Math.abs(diffCredit),
-                is_debit: false,
-                description: `Migration reconciliation: Adjust credit for GL ${item.glNumber} - ${item.glName}`,
-                dr_account: offsetAccount,  // Debit offset
-                cr_account: item.glNumber,  // Credit GL account
-                journal_type: 'Migration',
-              })
-            } else {
-              // Uploaded credit < Report credit: Need to reduce credit (debit GL account)
-              // Example: Uploaded=110, Report=120, diff=-10, so debit GL=10
-              journalEntries.push({
-                gl_code: item.glNumber,
-                gl_name: item.glName,
-                amount: Math.abs(diffCredit),
-                is_debit: true,
-                description: `Migration reconciliation: Adjust credit for GL ${item.glNumber} - ${item.glName}`,
-                dr_account: item.glNumber,  // Debit GL account
-                cr_account: offsetAccount,  // Credit offset
-                journal_type: 'Migration',
-              })
-            }
+          // If uploaded has more credit, credit GL account
+          if (diffCredit > 0.01) {
+            journalEntries.push({
+              gl_code: item.glNumber,
+              gl_name: item.glName,
+              amount: diffCredit,
+              is_debit: false,
+              description: `Migration reconciliation: Adjust credit for GL ${item.glNumber} - ${item.glName}`,
+              dr_account: offsetAccount,
+              cr_account: item.glNumber,
+              journal_type: 'Migration',
+            })
+          }
+          // If uploaded has less credit, debit GL account (reduce credit)
+          else if (diffCredit < -0.01) {
+            journalEntries.push({
+              gl_code: item.glNumber,
+              gl_name: item.glName,
+              amount: Math.abs(diffCredit),
+              is_debit: true,
+              description: `Migration reconciliation: Adjust credit for GL ${item.glNumber} - ${item.glName}`,
+              dr_account: item.glNumber,
+              cr_account: offsetAccount,
+              journal_type: 'Migration',
+            })
           }
         })
 
