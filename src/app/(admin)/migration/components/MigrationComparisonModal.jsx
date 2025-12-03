@@ -200,16 +200,34 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
         const responseData = json?.data || []
 
         // Normalize uploaded migration data - Map fields as per new API format
-        // Fields: account_code, account_name, opening_balance (null), debit, credit, "Closing balance"
+        // Fields: account_code, account_name, debit, credit (NO closing balance - just use debit/credit directly)
         const allData = responseData
-          .map((r) => ({
-            glNumber: String(r.account_code ?? r.gl_code ?? r.glNumber ?? '').trim(),
-            glName: String(r.account_name ?? r.gl_name ?? r.accountName ?? '').trim(),
-            opening: Number(r.opening_balance ?? r.opening ?? 0), // Can be null, default to 0
-            debit: Number(r.debit ?? r.debit_amount ?? 0),
-            credit: Number(r.credit ?? r.credit_amount ?? 0),
-            closing: Number(r['Closing balance'] ?? r.closing_balance ?? r.closing ?? 0), // Note: "Closing balance" with space and capital C
-          }))
+          .map((r) => {
+            const glNumber = String(r.account_code ?? r.gl_code ?? r.glNumber ?? '').trim()
+            const glName = String(r.account_name ?? r.gl_name ?? r.accountName ?? '').trim()
+            const debit = Number(r.debit ?? r.debit_amount ?? 0)
+            const credit = Number(r.credit ?? r.credit_amount ?? 0)
+            
+            // Calculate closing balance from debit/credit based on GL nature (for comparison purposes)
+            // Debit nature: closing = debit - credit (positive = debit, negative = credit)
+            // Credit nature: closing = credit - debit (positive = credit, negative = debit)
+            const nature = getGlNature(glNumber)
+            let closing = 0
+            if (nature === 'debit') {
+              closing = debit - credit // Positive = debit balance, negative = credit balance
+            } else {
+              closing = credit - debit // Positive = credit balance, negative = debit balance
+            }
+            
+            return {
+              glNumber,
+              glName,
+              opening: 0, // Not provided in new format
+              debit,
+              credit,
+              closing, // Calculated from debit/credit (for comparison with trial balance)
+            }
+          })
           .filter((item) => item.glNumber) // Only filter empty GL codes
 
         // For comparison modal display, filter by allowed ranges
@@ -260,14 +278,27 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
       }
     })
 
-    // Calculate difference for each row (Trial Balance closing - Uploaded closing)
+    // Calculate difference for each row
+    // For comparison: convert trial balance closing to debit/credit, then compare with uploaded debit/credit
     const data = Array.from(merged.values()).map((item) => {
       const trialClosing = item.trialBalance?.closing ?? 0
+      const trialDrCr = convertToDebitCredit(trialClosing, item.glNumber)
+      const uploadedDebit = item.uploaded?.debit ?? 0
+      const uploadedCredit = item.uploaded?.credit ?? 0
+      
+      // Calculate difference in debit and credit separately
+      const diffDebit = trialDrCr.debit - uploadedDebit
+      const diffCredit = trialDrCr.credit - uploadedCredit
+      
+      // Overall difference (for reconcile button logic - use closing balance difference)
       const uploadedClosing = item.uploaded?.closing ?? 0
       const difference = trialClosing - uploadedClosing
+      
       return {
         ...item,
-        difference,
+        difference, // Keep for reconcile button logic
+        diffDebit,
+        diffCredit,
       }
     })
 
@@ -275,9 +306,14 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   }, [trialBalanceData, uploadedData])
 
   // Check if all differences are 0 (allow small floating point errors)
+  // Check both debit and credit differences
   const canReconcile = useMemo(() => {
     if (comparisonData.length === 0) return false
-    return comparisonData.every((item) => Math.abs(item.difference) < 0.01)
+    return comparisonData.every((item) => {
+      const diffDebit = item.diffDebit ?? 0
+      const diffCredit = item.diffCredit ?? 0
+      return Math.abs(diffDebit) < 0.01 && Math.abs(diffCredit) < 0.01
+    })
   }, [comparisonData])
 
   // Simple function to mark migration as PENDING when user closes modal
@@ -378,15 +414,20 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
                   comparisonData.map((row, idx) => {
                     const trialBal = row.trialBalance
                     const uploaded = row.uploaded
-                    const diff = row.difference
                     
-                    // Convert closing balances to debit/credit (same as reconcile modal)
+                    // Convert trial balance closing to debit/credit
                     const trialClosing = convertToDebitCredit(trialBal?.closing || 0, row.glNumber)
-                    const uploadedClosing = convertToDebitCredit(uploaded?.closing || 0, row.glNumber)
-                    const diffDrCr = convertToDebitCredit(diff, row.glNumber)
                     
-                    // Green if difference is 0, red if not 0
-                    const diffClass = Math.abs(diff) < 0.01 ? 'text-success' : 'text-danger'
+                    // Uploaded data: directly use debit/credit from uploaded file (no conversion needed)
+                    const uploadedDebit = uploaded?.debit || 0
+                    const uploadedCredit = uploaded?.credit || 0
+                    
+                    // Calculate difference: Trial Balance Dr/Cr - Uploaded Dr/Cr
+                    const diffDebit = trialClosing.debit - uploadedDebit
+                    const diffCredit = trialClosing.credit - uploadedCredit
+                    
+                    // Green if both differences are 0, red if not
+                    const diffClass = (Math.abs(diffDebit) < 0.01 && Math.abs(diffCredit) < 0.01) ? 'text-success' : 'text-danger'
 
                     return (
                           <tr key={idx}>
@@ -395,15 +436,15 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
                         {/* Trial Balance columns - show closing balance as debit/credit */}
                         <td className="text-end">{fmt(trialClosing.debit)}</td>
                         <td className="text-end">{fmt(trialClosing.credit)}</td>
-                        {/* Uploaded Data columns - show closing balance as debit/credit */}
-                        <td className="text-end">{fmt(uploadedClosing.debit)}</td>
-                        <td className="text-end">{fmt(uploadedClosing.credit)}</td>
+                        {/* Uploaded Data columns - show direct debit/credit from uploaded file */}
+                        <td className="text-end">{fmt(uploadedDebit)}</td>
+                        <td className="text-end">{fmt(uploadedCredit)}</td>
                         {/* Difference columns - green if 0, red if not 0 */}
                         <td className={`text-end fw-bold ${diffClass}`}>
-                          {diffDrCr.debit > 0 ? fmt(diffDrCr.debit) : '—'}
+                          {Math.abs(diffDebit) >= 0.01 ? fmt(diffDebit) : '—'}
                         </td>
                         <td className={`text-end fw-bold ${diffClass}`}>
-                          {diffDrCr.credit > 0 ? fmt(diffDrCr.credit) : '—'}
+                          {Math.abs(diffCredit) >= 0.01 ? fmt(diffCredit) : '—'}
                         </td>
                           </tr>
                     )
@@ -518,18 +559,32 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
     })
 
     // Add uploaded data and calculate differences - ALL GL codes
+    // Uploaded data now only has debit/credit, so calculate closing from that
     uploadedData.forEach((item) => {
       const key = item.glNumber
+      // Calculate closing balance from uploaded debit/credit based on GL nature
+      const nature = getGlNature(key)
+      let uploadedClosing = 0
+      if (nature === 'debit') {
+        uploadedClosing = (item.debit || 0) - (item.credit || 0)
+      } else {
+        uploadedClosing = (item.credit || 0) - (item.debit || 0)
+      }
+      
       if (merged.has(key)) {
         const existing = merged.get(key)
-        existing.uploadedClosing = item.closing
-        existing.difference = existing.reportClosing - item.closing
+        existing.uploadedClosing = uploadedClosing
+        existing.uploadedDebit = item.debit || 0
+        existing.uploadedCredit = item.credit || 0
+        existing.difference = existing.reportClosing - uploadedClosing
       } else {
         merged.set(key, {
           glNumber: key,
           glName: item.glName,
           reportClosing: null,
-          uploadedClosing: item.closing,
+          uploadedClosing: uploadedClosing,
+          uploadedDebit: item.debit || 0,
+          uploadedCredit: item.credit || 0,
           difference: null,
         })
       }
@@ -714,10 +769,14 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                     const diff = row.difference || 0
                     const diffClass = Math.abs(diff) < 0.01 ? 'text-success' : 'text-danger'
                     
-                    // Convert closing balances to debit/credit
+                    // Convert report closing balance to debit/credit
                     const reportDrCr = convertToDebitCredit(row.reportClosing || 0, row.glNumber)
-                    const uploadedDrCr = convertToDebitCredit(row.uploadedClosing || 0, row.glNumber)
-                    const diffDrCr = convertToDebitCredit(diff, row.glNumber)
+                    // Uploaded data: directly use debit/credit from uploaded file
+                    const uploadedDebit = row.uploadedDebit || 0
+                    const uploadedCredit = row.uploadedCredit || 0
+                    // Calculate difference in debit and credit
+                    const diffDebit = reportDrCr.debit - uploadedDebit
+                    const diffCredit = reportDrCr.credit - uploadedCredit
                     
                     return (
                           <tr key={idx}>
@@ -725,13 +784,13 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                             <td>{row.glName}</td>
                         <td className="text-end">{fmt(reportDrCr.debit)}</td>
                         <td className="text-end">{fmt(reportDrCr.credit)}</td>
-                        <td className="text-end">{fmt(uploadedDrCr.debit)}</td>
-                        <td className="text-end">{fmt(uploadedDrCr.credit)}</td>
+                        <td className="text-end">{fmt(uploadedDebit)}</td>
+                        <td className="text-end">{fmt(uploadedCredit)}</td>
                         <td className={`text-end fw-bold ${diffClass}`}>
-                          {diffDrCr.debit > 0 ? fmt(diffDrCr.debit) : '—'}
+                          {Math.abs(diffDebit) >= 0.01 ? fmt(diffDebit) : '—'}
                         </td>
                         <td className={`text-end fw-bold ${diffClass}`}>
-                          {diffDrCr.credit > 0 ? fmt(diffDrCr.credit) : '—'}
+                          {Math.abs(diffCredit) >= 0.01 ? fmt(diffCredit) : '—'}
                         </td>
                       </tr>
                     )
@@ -752,16 +811,10 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
                       }, 0))}
                     </td>
                     <td className="text-end">
-                      {fmt(reconcileData.reduce((sum, item) => {
-                        const drCr = convertToDebitCredit(item.uploadedClosing || 0, item.glNumber)
-                        return sum + drCr.debit
-                      }, 0))}
+                      {fmt(reconcileData.reduce((sum, item) => sum + (item.uploadedDebit || 0), 0))}
                     </td>
                     <td className="text-end">
-                      {fmt(reconcileData.reduce((sum, item) => {
-                        const drCr = convertToDebitCredit(item.uploadedClosing || 0, item.glNumber)
-                        return sum + drCr.credit
-                      }, 0))}
+                      {fmt(reconcileData.reduce((sum, item) => sum + (item.uploadedCredit || 0), 0))}
                     </td>
                     <td className={`text-end ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
                       {fmt(reconcileData.reduce((sum, item) => {
@@ -880,10 +933,14 @@ function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals,
                     const diff = row.difference || 0
                     const diffClass = Math.abs(diff) < 0.01 ? 'text-success' : 'text-danger'
                     
-                    // Convert closing balances to debit/credit
+                    // Convert report closing balance to debit/credit
                     const reportDrCr = convertToDebitCredit(row.reportClosing || 0, row.glNumber)
-                    const uploadedDrCr = convertToDebitCredit(row.uploadedClosing || 0, row.glNumber)
-                    const diffDrCr = convertToDebitCredit(diff, row.glNumber)
+                    // Uploaded data: directly use debit/credit from uploaded file
+                    const uploadedDebit = row.uploadedDebit || 0
+                    const uploadedCredit = row.uploadedCredit || 0
+                    // Calculate difference in debit and credit
+                    const diffDebit = reportDrCr.debit - uploadedDebit
+                    const diffCredit = reportDrCr.credit - uploadedCredit
                     
                     return (
                       <tr key={idx}>
@@ -891,13 +948,13 @@ function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals,
                         <td>{row.glName}</td>
                         <td className="text-end">{fmt(reportDrCr.debit)}</td>
                         <td className="text-end">{fmt(reportDrCr.credit)}</td>
-                        <td className="text-end">{fmt(uploadedDrCr.debit)}</td>
-                        <td className="text-end">{fmt(uploadedDrCr.credit)}</td>
+                        <td className="text-end">{fmt(uploadedDebit)}</td>
+                        <td className="text-end">{fmt(uploadedCredit)}</td>
                         <td className={`text-end fw-bold ${diffClass}`}>
-                          {diffDrCr.debit > 0 ? fmt(diffDrCr.debit) : '—'}
+                          {Math.abs(diffDebit) >= 0.01 ? fmt(diffDebit) : '—'}
                         </td>
                         <td className={`text-end fw-bold ${diffClass}`}>
-                          {diffDrCr.credit > 0 ? fmt(diffDrCr.credit) : '—'}
+                          {Math.abs(diffCredit) >= 0.01 ? fmt(diffCredit) : '—'}
                         </td>
                       </tr>
                     )
@@ -918,16 +975,10 @@ function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals,
                       }, 0))}
                     </td>
                     <td className="text-end">
-                      {fmt(reconcileData.reduce((sum, item) => {
-                        const drCr = convertToDebitCredit(item.uploadedClosing || 0, item.glNumber)
-                        return sum + drCr.debit
-                      }, 0))}
+                      {fmt(reconcileData.reduce((sum, item) => sum + (item.uploadedDebit || 0), 0))}
                     </td>
                     <td className="text-end">
-                      {fmt(reconcileData.reduce((sum, item) => {
-                        const drCr = convertToDebitCredit(item.uploadedClosing || 0, item.glNumber)
-                        return sum + drCr.credit
-                      }, 0))}
+                      {fmt(reconcileData.reduce((sum, item) => sum + (item.uploadedCredit || 0), 0))}
                     </td>
                     <td className={`text-end ${Math.abs(totals.differenceTotal) < 0.01 ? 'text-success' : 'text-danger'}`}>
                       {fmt(reconcileData.reduce((sum, item) => {
