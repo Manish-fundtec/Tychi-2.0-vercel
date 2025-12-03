@@ -25,7 +25,7 @@ export const getMigrationData = (fundId) => {
   return api.get(`/api/v1/migration/fund/${fundId}`)
 }
 
-// Get migration table data for a fund (new endpoint)
+// Get migration table data for a fund (migration records/metadata)
 export const getMigrationTableData = (fundId, fileId = null) => {
   const token = Cookies.get('dashboardToken')
   let url = `/api/v1/migration/trialbalance/${fundId}/migration`

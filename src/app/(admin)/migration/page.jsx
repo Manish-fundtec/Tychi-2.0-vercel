@@ -33,16 +33,24 @@ const MigrationPage = () => {
   const defaultColumnDefs = useMemo(
     () => [
       { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 70, pinned: 'left', flex: 1 },
-      { field: 'account_code', headerName: 'Account Code', flex: 1, sortable: true, filter: true },
-      { field: 'account_name', headerName: 'Account Name', flex: 1, sortable: true, filter: true },
-      { field: 'opening_balance', headerName: 'Opening Balance', flex: 1, sortable: true, 
-        valueFormatter: (params) => params.value ? Number(params.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' },
-      { field: 'debit', headerName: 'Debit', flex: 1, sortable: true,
-        valueFormatter: (params) => params.value ? Number(params.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' },
-      { field: 'credit', headerName: 'Credit', flex: 1, sortable: true,
-        valueFormatter: (params) => params.value ? Number(params.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' },
-      { field: 'Closing balance', headerName: 'Closing Balance', flex: 1, sortable: true,
-        valueFormatter: (params) => params.value ? Number(params.value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' },
+      { field: 'file_id', headerName: 'File ID', flex: 1, sortable: true, filter: true },
+      { field: 'file_name', headerName: 'File Name', flex: 1, sortable: true, filter: true },
+      { field: 'reporting_period', headerName: 'Reporting Period', flex: 1, sortable: true, filter: true,
+        valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString('en-IN') : '—' },
+      { field: 'reconcile_status', headerName: 'Reconcile Status', flex: 1, sortable: true, filter: true,
+        cellRenderer: (params) => {
+          const status = String(params.value || '').toLowerCase()
+          const badgeClass = status === 'reconciled' ? 'badge bg-success' : status === 'pending' ? 'badge bg-warning' : 'badge bg-secondary'
+          return `<span class="${badgeClass}">${params.value || '—'}</span>`
+        } },
+      { field: 'bookclose_status', headerName: 'Bookclose Status', flex: 1, sortable: true, filter: true,
+        cellRenderer: (params) => {
+          const status = String(params.value || '').toLowerCase()
+          const badgeClass = status === 'bookclosed' ? 'badge bg-success' : 'badge bg-secondary'
+          return `<span class="${badgeClass}">${params.value || '—'}</span>`
+        } },
+      { field: 'uploaded_at', headerName: 'Uploaded At', flex: 1, sortable: true, filter: true,
+        valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString('en-IN') : '—' },
       {
         headerName: 'Actions',
         field: 'actions',
@@ -158,7 +166,7 @@ const MigrationPage = () => {
     setErrMsg('')
 
     try {
-      // Call API to get migration table data
+      // Call API to get migration table data (migration records/metadata)
       const res = await getMigrationTableData(fundId)
       
       // Handle response - could be array or object with data property
@@ -171,15 +179,15 @@ const MigrationPage = () => {
         data = res
       }
 
-      // Normalize the data to match column definitions
+      // Normalize the data to match migration table records structure
       const normalized = data.map((row) => ({
-        account_code: row.account_code || row.gl_code || '',
-        account_name: row.account_name || row.gl_name || '',
-        opening_balance: Number(row.opening_balance || row.opening || 0),
-        debit: Number(row.debit || row.debit_amount || 0),
-        credit: Number(row.credit || row.credit_amount || 0),
-        'Closing balance': Number(row['Closing balance'] || row.closing_balance || row.closing || 0),
-        file_id: row.file_id || null, // Include file_id for action button
+        file_id: row.file_id || row.id || '',
+        file_name: row.file_name || row.filename || '',
+        reporting_period: row.reporting_period || row.reporting_period_date || null,
+        reconcile_status: row.reconcile_status || row.reconcileStatus || 'pending',
+        bookclose_status: row.bookclose_status || row.bookcloseStatus || 'pending',
+        uploaded_at: row.uploaded_at || row.created_at || row.uploadedAt || null,
+        status: row.status || 'pending', // Keep status for reference
       }))
       
       setRowData(normalized)
