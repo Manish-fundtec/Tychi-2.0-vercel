@@ -725,11 +725,15 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
   const tokenData = useDashboardToken()
   const [showErrorModal, setShowErrorModal] = useState(false)
   const [errorFileUrl, setErrorFileUrl] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [rowLimitError, setRowLimitError] = useState('')
+  const { showNotification } = useNotificationContext()
 
   const handleFileChange = (e) => {
     const file = e.target.files[0]
     setSelectedFile(file)
     setFileError('')
+    setRowLimitError('') // Clear row limit error when new file is selected
   }
 
   const handleSubmit = async (event) => {
@@ -758,7 +762,11 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
     try {
       const response = await uploadTradeFile(selectedFile) //Call API
       if (response.data.success) {
-        alert('File uploaded successfully!')
+        showNotification({
+          message: 'File uploaded successfully!',
+          variant: 'success',
+          title: 'Upload Success'
+        })
         // Call onSuccess callback to refresh trades list
         if (onSuccess) {
           onSuccess()
@@ -767,20 +775,84 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
       } else {
         // Backend returned validation errors with errorFileUrl (S3 link)
         const errorUrl = response.data.error_file_url
+        const errorMsg = response.data.message || response.data.error_message || 'Validation failed.'
         if (errorUrl) {
           console.log('✅ Received error_file_url:', errorUrl)
           setErrorFileUrl(errorUrl)
+          setErrorMessage(errorMsg)
           setTimeout(() => {
             setShowErrorModal(true) // ✅ Then show error modal
           }, 300)
           onClose?.()
+          
+          // Show notification about the error file
+          showNotification({
+            message: errorMsg || 'Your file contains validation errors. Please download the error file for details.',
+            variant: 'warning',
+            title: 'Validation Errors',
+            delay: 5000
+          })
         } else {
-          alert('Validation failed, but no error file URL provided.')
+          showNotification({
+            message: errorMsg,
+            variant: 'danger',
+            title: 'Validation Failed',
+            delay: 3000
+          })
         }
       }
     } catch (error) {
-      console.error('❌ Upload failed:', error.message)
-      alert('File upload failed: ' + error.message)
+      // Handle 400 status code (row limit exceeded or validation errors) - Expected error, no console logging
+      if (error.response?.status === 400) {
+        const errorData = error.response.data || {}
+        // Prioritize error_message, then message, with fallback
+        const errorMessage = errorData.error_message || errorData.message || 'File upload validation failed.'
+        
+        // Check if it's a row limit error - check message content or status
+        const isRowLimitError = errorMessage.toLowerCase().includes('row limit') || 
+                                errorMessage.toLowerCase().includes('rows found') ||
+                                errorMessage.toLowerCase().includes('maximum allowed') ||
+                                (errorData.status === 'validation_failed' && !errorData.error_file_url)
+        
+        if (isRowLimitError) {
+          // Row limit exceeded - show prominently in form only (no duplicate toast)
+          setRowLimitError(errorMessage) // Display inline in form - this shows the actual backend message
+        } else if (errorData.error_file_url) {
+          // Validation errors with error file URL
+          setErrorFileUrl(errorData.error_file_url)
+          setErrorMessage(errorMessage || 'Your file contains validation errors. Please download the error file for details.')
+          setTimeout(() => {
+            setShowErrorModal(true)
+          }, 300)
+          onClose?.()
+          
+          // Also show notification about the error file
+          showNotification({
+            message: errorMessage || 'Your file contains validation errors. Please download the error file for details.',
+            variant: 'warning',
+            title: 'Validation Errors',
+            delay: 5000
+          })
+        } else {
+          // Other 400 errors
+          showNotification({
+            message: errorMessage,
+            variant: 'danger',
+            title: 'Upload Failed',
+            delay: 7000
+          })
+        }
+      } else {
+        // Handle other errors (network, 500, etc.) - Only log unexpected errors
+        console.error('❌ Upload failed:', error)
+        const errorMsg = error.response?.data?.message || error.message || 'File upload failed. Please try again.'
+        showNotification({
+          message: errorMsg,
+          variant: 'danger',
+          title: 'Upload Failed',
+          delay: 5000
+        })
+      }
     } finally {
       setIsUploading(false)
     }
@@ -788,6 +860,9 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
 
   const handleErrorModalClose = () => {
     setShowErrorModal(false)
+    setErrorMessage('')
+    setErrorFileUrl('')
+    setRowLimitError('')
     setSelectedFile(null)
     setValidated(false)
   }
@@ -808,6 +883,24 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
             </a>
           )}
         </Col>
+
+        {/* Row Limit Error Alert - Display prominently */}
+        {rowLimitError && (
+          <Col xs={12} className="mt-3">
+            <Alert variant="danger" className="mb-0" onClose={() => setRowLimitError('')} dismissible>
+              <Alert.Heading className="h6 mb-2">
+                <strong>⚠️ Upload Failed: Row Limit Exceeded</strong>
+              </Alert.Heading>
+              <p className="mb-0" style={{ fontSize: '14px' }}>
+                {rowLimitError}
+              </p>
+              <hr />
+              <p className="mb-0 small">
+                <strong>Solution:</strong> Please reduce the number of rows in your file to 6000 or fewer and try uploading again.
+              </p>
+            </Alert>
+          </Col>
+        )}
 
         {/* File Upload Section */}
         <FormGroup className="position-relative col-md-12 mt-3">
@@ -831,15 +924,22 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
           <Modal.Title>Validation Errors</Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {errorMessage && (
+            <Alert variant="danger" className="mb-3">
+              <strong>Error:</strong> {errorMessage}
+            </Alert>
+          )}
           <p>Your file contains validation errors. Please download the error file for details, correct the issues, and re-upload.</p>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleErrorModalClose}>
             Close
           </Button>
-          <a href={errorFileUrl} download style={{ textDecoration: 'none' }}>
-            <Button variant="primary">Download Error File</Button>
-          </a>
+          {errorFileUrl && (
+            <a href={errorFileUrl} download style={{ textDecoration: 'none' }}>
+              <Button variant="primary">Download Error File</Button>
+            </a>
+          )}
         </Modal.Footer>
       </Modal>
     </>
