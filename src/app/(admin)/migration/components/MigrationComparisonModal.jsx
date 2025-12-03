@@ -468,6 +468,10 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
       <ReconcileModal
         show={showReconcileModal}
         onClose={() => setShowReconcileModal(false)}
+        onCloseAll={() => {
+          setShowReconcileModal(false)
+          handleClose() // Close main modal too
+        }}
         onPublish={() => {
           // TODO: Implement publish logic
           alert('Publish functionality will be implemented')
@@ -485,7 +489,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
 }
 
 // Reconcile Modal Component
-function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedData, fundId, fileId, lastPricingDate, onRefreshHistory }) {
+function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData, uploadedData, fundId, fileId, lastPricingDate, onRefreshHistory }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
@@ -932,6 +936,10 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
       <PublishReviewModal
         show={showPublishReviewModal}
         onClose={() => setShowPublishReviewModal(false)}
+        onCloseAll={onCloseAll || (() => {
+          setShowPublishReviewModal(false)
+          onClose()
+        })}
         onReview={() => {
           setShowPublishReviewModal(false)
           // Stay on reconcile modal for review
@@ -964,7 +972,7 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
 }
 
 // Publish Review Modal Component
-function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals, lastPricingDate, reconcileData = [], refreshedTrialBalanceData = [], fundId, fileId, onRefreshHistory }) {
+function PublishReviewModal({ show, onClose, onCloseAll, onReview, onConfirmPublish, totals, lastPricingDate, reconcileData = [], refreshedTrialBalanceData = [], fundId, fileId, onRefreshHistory }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   
@@ -994,12 +1002,18 @@ function PublishReviewModal({ show, onClose, onReview, onConfirmPublish, totals,
       const response = await bookcloseMigration(fundId, fileId, reportingPeriod)
       
       if (response.data?.success) {
-        alert('Migration bookclosed successfully!')
         // Refresh history if callback provided
         if (onRefreshHistory) {
           onRefreshHistory()
         }
-        onClose()
+        // Show success alert
+        alert('Migration bookclosed successfully!')
+        // Close all modals after user clicks OK on alert
+        if (onCloseAll) {
+          onCloseAll()
+        } else {
+          onClose()
+        }
       } else {
         const errorMsg = response.data?.message || 'Failed to bookclose migration'
         setError(errorMsg)
