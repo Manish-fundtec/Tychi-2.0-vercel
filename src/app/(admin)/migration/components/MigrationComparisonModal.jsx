@@ -576,6 +576,12 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
         existing.uploadedClosing = uploadedClosing
         existing.uploadedDebit = item.debit || 0
         existing.uploadedCredit = item.credit || 0
+        
+        // Calculate debit/credit differences for journal entry creation
+        const reportDrCr = convertToDebitCredit(existing.reportClosing || 0, key)
+        existing.diffDebit = reportDrCr.debit - (item.debit || 0)  // Report debit - Uploaded debit
+        existing.diffCredit = reportDrCr.credit - (item.credit || 0)  // Report credit - Uploaded credit
+        
         existing.difference = existing.reportClosing - uploadedClosing
       } else {
         merged.set(key, {
@@ -610,9 +616,12 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
   }, [reconcileData])
 
   const handlePublish = async () => {
-    const glCodesWithDifference = reconcileData.filter(
-      (item) => Math.abs(item.difference || 0) >= 0.01
-    )
+    // Filter items with debit or credit differences
+    const glCodesWithDifference = reconcileData.filter((item) => {
+      const diffDebit = item.diffDebit || 0
+      const diffCredit = item.diffCredit || 0
+      return Math.abs(diffDebit) >= 0.01 || Math.abs(diffCredit) >= 0.01
+    })
 
     if (glCodesWithDifference.length > 0) {
       setLoading(true)
@@ -633,22 +642,73 @@ function ReconcileModal({ show, onClose, onPublish, trialBalanceData, uploadedDa
           'Content-Type': 'application/json',
         }
 
-        const journalEntries = glCodesWithDifference.map((item) => {
-          const difference = item.difference || 0
-          const absDifference = Math.abs(difference)
-          const isPositive = difference > 0
+        // Create journal entries based on debit/credit differences
+        const journalEntries = []
+        glCodesWithDifference.forEach((item) => {
+          const diffDebit = item.diffDebit || 0  // Report debit - Uploaded debit
+          const diffCredit = item.diffCredit || 0  // Report credit - Uploaded credit
           const offsetAccount = '99999' // Migration adjustment offset account
 
-          return {
-            gl_code: item.glNumber,
-            gl_name: item.glName,
-            difference: difference,
-            amount: absDifference,
-            is_debit: isPositive,
-            description: `Migration reconciliation adjustment for GL ${item.glNumber} - ${item.glName}`,
-            dr_account: isPositive ? item.glNumber : offsetAccount,
-            cr_account: isPositive ? offsetAccount : item.glNumber,
-            journal_type: 'Migration', // Specific type for migration journals
+          // If uploaded has more debit than report, we need to debit the GL account
+          // diffDebit = reportDebit - uploadedDebit
+          // If diffDebit is negative, uploaded has more debit, so we need to debit GL account
+          if (Math.abs(diffDebit) >= 0.01) {
+            if (diffDebit < 0) {
+              // Uploaded debit > Report debit: Need to add debit to GL account
+              journalEntries.push({
+                gl_code: item.glNumber,
+                gl_name: item.glName,
+                amount: Math.abs(diffDebit),
+                is_debit: true,
+                description: `Migration reconciliation: Adjust debit for GL ${item.glNumber} - ${item.glName}`,
+                dr_account: item.glNumber,  // Debit GL account
+                cr_account: offsetAccount,  // Credit offset
+                journal_type: 'Migration',
+              })
+            } else {
+              // Uploaded debit < Report debit: Need to reduce debit (credit GL account)
+              journalEntries.push({
+                gl_code: item.glNumber,
+                gl_name: item.glName,
+                amount: Math.abs(diffDebit),
+                is_debit: false,
+                description: `Migration reconciliation: Adjust debit for GL ${item.glNumber} - ${item.glName}`,
+                dr_account: offsetAccount,  // Debit offset
+                cr_account: item.glNumber,  // Credit GL account
+                journal_type: 'Migration',
+              })
+            }
+          }
+
+          // If uploaded has more credit than report, we need to credit the GL account
+          // diffCredit = reportCredit - uploadedCredit
+          // If diffCredit is negative, uploaded has more credit, so we need to credit GL account
+          if (Math.abs(diffCredit) >= 0.01) {
+            if (diffCredit < 0) {
+              // Uploaded credit > Report credit: Need to add credit to GL account
+              journalEntries.push({
+                gl_code: item.glNumber,
+                gl_name: item.glName,
+                amount: Math.abs(diffCredit),
+                is_debit: false,
+                description: `Migration reconciliation: Adjust credit for GL ${item.glNumber} - ${item.glName}`,
+                dr_account: offsetAccount,  // Debit offset
+                cr_account: item.glNumber,  // Credit GL account
+                journal_type: 'Migration',
+              })
+            } else {
+              // Uploaded credit < Report credit: Need to reduce credit (debit GL account)
+              journalEntries.push({
+                gl_code: item.glNumber,
+                gl_name: item.glName,
+                amount: Math.abs(diffCredit),
+                is_debit: true,
+                description: `Migration reconciliation: Adjust credit for GL ${item.glNumber} - ${item.glName}`,
+                dr_account: item.glNumber,  // Debit GL account
+                cr_account: offsetAccount,  // Credit offset
+                journal_type: 'Migration',
+              })
+            }
           }
         })
 
