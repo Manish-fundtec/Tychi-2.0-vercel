@@ -3,12 +3,15 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Alert, Tabs, Tab, Button } from 'react-bootstrap'
+import Cookies from 'js-cookie'
 import PageTitle from '@/components/PageTitle'
 import { UploadMigrationModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import MigrationComparisonModal from './components/MigrationComparisonModal'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 import api from '@/lib/api/axios'
 import { getMigrationTableData } from '@/lib/api/migration'
+
+const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
 
@@ -89,9 +92,53 @@ const MigrationPage = () => {
             <Button
               variant="warning"
               size="sm"
-              onClick={() => {
-                // Delete the record from the table
-                setRowData((prev) => prev.filter((row) => row.file_id !== fileId))
+              onClick={async () => {
+                if (!fundId || !fileId) return
+                
+                try {
+                  // Call cleanup API to delete migration data
+                  const token = Cookies.get('dashboardToken')
+                  if (!token) {
+                    alert('Authentication token not found')
+                    return
+                  }
+                  
+                  const headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'dashboard': `Bearer ${token}`,
+                  }
+                  
+                  const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/cleanup?file_id=${encodeURIComponent(fileId)}`
+                  
+                  const resp = await fetch(url, {
+                    method: 'DELETE',
+                    headers,
+                    credentials: 'include',
+                  })
+                  
+                  if (!resp.ok) {
+                    const errorText = await resp.text().catch(() => '')
+                    alert('Failed to cleanup migration data: ' + (errorText || resp.statusText))
+                    return
+                  }
+                  
+                  const result = await resp.json()
+                  console.log('[Migration] Cleanup completed:', result)
+                  
+                  // Delete the record from the table after successful cleanup
+                  setRowData((prev) => prev.filter((row) => row.file_id !== fileId))
+                  
+                  // Show success message
+                  if (result?.data) {
+                    alert(`Migration data cleaned up successfully!\nDeleted: ${result.data.migration_deleted || 0} migration records, ${result.data.buffer_deleted || 0} buffer records`)
+                  } else {
+                    alert('Migration data cleaned up successfully!')
+                  }
+                } catch (error) {
+                  console.error('[Migration] Cleanup error:', error)
+                  alert('Failed to cleanup migration data: ' + (error?.message || 'Unknown error'))
+                }
               }}>
               Open
             </Button>
