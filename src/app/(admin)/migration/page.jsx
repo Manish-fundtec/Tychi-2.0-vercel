@@ -454,6 +454,7 @@ const MigrationPage = () => {
             fetchHistory()
           }
         }}
+        showReviewOnly={true} // When View button clicked, show only the last modal (Publish Review Modal)
       />
     </>
   )

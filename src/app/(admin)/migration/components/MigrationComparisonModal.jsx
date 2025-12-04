@@ -350,11 +350,14 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   }
 
   return (
-    <Modal show={show} onHide={handleClose} size="xl" centered scrollable>
-      <Modal.Header closeButton>
-        <Modal.Title>Migration Data Comparison</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
+    <>
+      {/* Main Comparison Modal - Hide when showReviewOnly is true */}
+      {!showReviewOnly && (
+        <Modal show={show} onHide={handleClose} size="xl" centered scrollable>
+          <Modal.Header closeButton>
+            <Modal.Title>Migration Data Comparison</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
         {error && (
           <Alert variant="danger" className="mb-3" dismissible onClose={() => setError('')}>
             {error}
@@ -463,11 +466,18 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
           Reconcile
         </Button>
       </Modal.Footer>
+        </Modal>
+      )}
 
-      {/* Reconcile Modal */}
+      {/* Reconcile Modal - Always rendered, shown when showReconcileModal is true or showReviewOnly is true */}
       <ReconcileModal
-        show={showReconcileModal}
-        onClose={() => setShowReconcileModal(false)}
+        show={showReviewOnly ? show : showReconcileModal}
+        onClose={() => {
+          setShowReconcileModal(false)
+          if (showReviewOnly) {
+            handleClose() // Close parent modal when showReviewOnly
+          }
+        }}
         onCloseAll={() => {
           setShowReconcileModal(false)
           handleClose() // Close main modal too
@@ -485,7 +495,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
         onRefreshHistory={onRefreshHistory}
         showReviewOnly={showReviewOnly}
       />
-    </Modal>
+    </>
   )
 }
 
@@ -808,23 +818,25 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
 
   return (
     <Modal show={show} onHide={onClose} size="lg" centered scrollable>
-      <Modal.Header closeButton>
-        <Modal.Title>Reconcile Migration Data</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        {error && (
-          <Alert variant="danger" className="mb-3" dismissible onClose={() => setError('')}>
-            {error}
-          </Alert>
-        )}
+      {!showReviewOnly && (
+        <>
+          <Modal.Header closeButton>
+            <Modal.Title>Reconcile Migration Data</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {error && (
+              <Alert variant="danger" className="mb-3" dismissible onClose={() => setError('')}>
+                {error}
+              </Alert>
+            )}
 
-        {lastPricingDate && (
-          <div className="mb-3">
-            <strong>Last Pricing Date:</strong> {lastPricingDate}
-              </div>
-        )}
+            {lastPricingDate && (
+              <div className="mb-3">
+                <strong>Last Pricing Date:</strong> {lastPricingDate}
+                  </div>
+            )}
 
-                <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                   <Table striped bordered hover size="sm">
                     <thead className="table-light sticky-top">
                       <tr>
@@ -923,15 +935,17 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
                     </tbody>
                   </Table>
                 </div>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onClose} disabled={loading}>
-          Close
-        </Button>
-        <Button variant="primary" onClick={handlePublish} disabled={loading}>
-          {loading ? 'Publishing...' : 'Publish'}
-        </Button>
-      </Modal.Footer>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={onClose} disabled={loading}>
+              Close
+            </Button>
+            <Button variant="primary" onClick={handlePublish} disabled={loading}>
+              {loading ? 'Publishing...' : 'Publish'}
+            </Button>
+          </Modal.Footer>
+        </>
+      )}
 
       {/* Publish Review Modal */}
       <PublishReviewModal
