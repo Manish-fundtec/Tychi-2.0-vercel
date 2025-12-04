@@ -50,7 +50,6 @@ const BookcloseStatusRenderer = ({ value }) => {
 
 const MigrationPage = () => {
   const [rowData, setRowData] = useState([])
-  const [columnDefs, setColumnDefs] = useState([])
   const [loading, setLoading] = useState(false)
   const [errMsg, setErrMsg] = useState('')
   const [showComparisonModal, setShowComparisonModal] = useState(false)
@@ -66,7 +65,30 @@ const MigrationPage = () => {
   const tokenData = useDashboardToken()
   const fundId = tokenData?.fund_id
 
-  const defaultColumnDefs = useMemo(
+  // Actions cell renderer - memoized to prevent re-renders
+  // Note: setCurrentFileId and setShowComparisonModal are stable state setters, no need in deps
+  const actionsCellRenderer = useCallback((params) => {
+    const { data } = params
+    const fileId = data?.file_id
+    
+    if (fileId) {
+      return (
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => {
+            setCurrentFileId(fileId)
+            setShowComparisonModal(true)
+          }}>
+          View
+        </Button>
+      )
+    }
+    return '—'
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const columnDefs = useMemo(
     () => [
       { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 70, pinned: 'left', flex: 1 },
       { field: 'file_id', headerName: 'File ID', flex: 1, sortable: true, filter: true },
@@ -98,34 +120,14 @@ const MigrationPage = () => {
         filter: false,
         width: 120,
         pinned: 'right',
-        cellRenderer: (params) => {
-          const { data } = params
-          const fileId = data?.file_id
-          
-          if (fileId) {
-            return (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  setCurrentFileId(fileId)
-                  setShowComparisonModal(true)
-                }}>
-                View
-              </Button>
-            )
-          }
-          return '—'
-        },
+        cellRenderer: actionsCellRenderer,
       },
     ],
-    [],
+    [actionsCellRenderer],
   )
 
-  // Load columns + register AG Grid
+  // Register AG Grid modules
   useEffect(() => {
-    setColumnDefs(defaultColumnDefs)
-
     if (typeof window !== 'undefined') {
       import('ag-grid-community')
         .then(({ ModuleRegistry, AllCommunityModule }) => {
@@ -133,7 +135,7 @@ const MigrationPage = () => {
         })
         .catch(() => {})
     }
-  }, [defaultColumnDefs])
+  }, [])
 
   // Grid ready callback to store grid API reference
   const onGridReady = useCallback((params) => {
