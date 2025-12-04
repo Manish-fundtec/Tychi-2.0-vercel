@@ -103,6 +103,47 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
     return null
   }, [lastPricingDate, tokenData])
 
+  // Cleanup migration data when modal opens
+  useEffect(() => {
+    if (!show || !fundId) return
+
+    const cleanupData = async () => {
+      try {
+        const token = Cookies.get('dashboardToken')
+        const headers = {
+          ...getAuthHeaders(),
+          'dashboard': `Bearer ${token}`,
+        }
+        
+        // Build URL with optional file_id
+        let url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/cleanup`
+        if (fileId) {
+          url += `?file_id=${encodeURIComponent(fileId)}`
+        }
+        
+        const resp = await fetch(url, {
+          method: 'DELETE',
+          headers,
+          credentials: 'include',
+        })
+        
+        if (!resp.ok) {
+          console.warn('[MigrationComparison] Cleanup failed:', resp.status)
+          // Don't throw - cleanup is optional, continue with modal
+          return
+        }
+        
+        const result = await resp.json()
+        console.log('[MigrationComparison] Cleanup completed:', result)
+      } catch (e) {
+        console.error('[MigrationComparison] Cleanup error:', e)
+        // Don't block modal - continue even if cleanup fails
+      }
+    }
+
+    cleanupData()
+  }, [show, fundId, fileId]) // Run when modal opens
+
   // Fetch last pricing date
   useEffect(() => {
     if (!show || !fundId) return
