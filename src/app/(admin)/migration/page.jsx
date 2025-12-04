@@ -8,7 +8,7 @@ import { UploadMigrationModal } from '@/app/(admin)/base-ui/modals/components/Al
 import MigrationComparisonModal from './components/MigrationComparisonModal'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 import api from '@/lib/api/axios'
-import { getMigrationTableData, openBookclose } from '@/lib/api/migration'
+import { getMigrationTableData } from '@/lib/api/migration'
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
 
@@ -54,10 +54,8 @@ const MigrationPage = () => {
   const [loading, setLoading] = useState(false)
   const [errMsg, setErrMsg] = useState('')
   const [showComparisonModal, setShowComparisonModal] = useState(false)
-  const [showReviewModal, setShowReviewModal] = useState(false)
   const [activeTab, setActiveTab] = useState('list')
   const [currentFileId, setCurrentFileId] = useState(null)
-  const [hasMigration, setHasMigration] = useState(false) // Track if migration exists
   
   // History tab states
   const [historyRows, setHistoryRows] = useState([])
@@ -67,6 +65,62 @@ const MigrationPage = () => {
   const gridApiRef = useRef(null)
   const tokenData = useDashboardToken()
   const fundId = tokenData?.fund_id
+
+  const defaultColumnDefs = useMemo(
+    () => [
+      { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 70, pinned: 'left', flex: 1 },
+      { field: 'file_id', headerName: 'File ID', flex: 1, sortable: true, filter: true },
+      // { field: 'file_name', headerName: 'File Name', flex: 1, sortable: true, filter: true },
+      { field: 'reporting_period', headerName: 'Reporting Period', flex: 1, sortable: true, filter: true,
+        valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString('en-IN') : '—' },
+      { 
+        field: 'reconcile_status', 
+        headerName: 'Reconcile Status', 
+        flex: 1, 
+        sortable: true, 
+        filter: true,
+        cellRenderer: ReconcileStatusRenderer
+      },
+      { 
+        field: 'bookclose_status', 
+        headerName: 'Bookclose Status', 
+        flex: 1, 
+        sortable: true, 
+        filter: true,
+        cellRenderer: BookcloseStatusRenderer
+      },
+      // { field: 'uploaded_at', headerName: 'Uploaded At', flex: 1, sortable: true, filter: true,
+      //   valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString('en-IN') : '—' },
+      {
+        headerName: 'Actions',
+        field: 'actions',
+        sortable: false,
+        filter: false,
+        width: 120,
+        pinned: 'right',
+        cellRenderer: (params) => {
+          const { data } = params
+          const fileId = data?.file_id
+          
+          if (fileId) {
+            return (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setCurrentFileId(fileId)
+                  setShowComparisonModal(true)
+                }}>
+                View
+              </Button>
+            )
+          }
+          return '—'
+        },
+      },
+    ],
+    [],
+  )
 
   // Load columns + register AG Grid
   useEffect(() => {
@@ -91,8 +145,6 @@ const MigrationPage = () => {
     if (fileId) {
       setCurrentFileId(fileId)
     }
-    // Set hasMigration to true since upload was successful
-    setHasMigration(true)
     setShowComparisonModal(true)
     // Refresh data based on active tab
     if (activeTab === 'history') {
@@ -179,8 +231,6 @@ const MigrationPage = () => {
       }))
       
       setRowData(normalized)
-      // Set hasMigration to true if any migration records exist
-      setHasMigration(normalized.length > 0)
     } catch (error) {
       const message = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Failed to load migration data'
       setErrMsg(message)
@@ -203,89 +253,6 @@ const MigrationPage = () => {
       fetchHistory()
     }
   }, [activeTab, fetchHistory])
-
-  // Migration table columns - defined after fetchMigrationData so it can access it
-  const defaultColumnDefs = useMemo(
-    () => [
-      { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 70, pinned: 'left', flex: 1 },
-      { field: 'file_id', headerName: 'File ID', flex: 1, sortable: true, filter: true },
-      // { field: 'file_name', headerName: 'File Name', flex: 1, sortable: true, filter: true },
-      { field: 'reporting_period', headerName: 'Reporting Period', flex: 1, sortable: true, filter: true,
-        valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString('en-IN') : '—' },
-      { 
-        field: 'reconcile_status', 
-        headerName: 'Reconcile Status', 
-        flex: 1, 
-        sortable: true, 
-        filter: true,
-        cellRenderer: ReconcileStatusRenderer
-      },
-      { 
-        field: 'bookclose_status', 
-        headerName: 'Bookclose Status', 
-        flex: 1, 
-        sortable: true, 
-        filter: true,
-        cellRenderer: BookcloseStatusRenderer
-      },
-      // { field: 'uploaded_at', headerName: 'Uploaded At', flex: 1, sortable: true, filter: true,
-      //   valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString('en-IN') : '—' },
-      {
-        headerName: 'Actions',
-        field: 'actions',
-        sortable: false,
-        filter: false,
-        width: 180,
-        pinned: 'right',
-        cellRenderer: (params) => {
-          const { data } = params
-          const fileId = data?.file_id
-          const bookcloseStatus = String(data?.bookclose_status || '').toLowerCase()
-          const isBookclosed = bookcloseStatus === 'bookclosed'
-          
-          if (fileId) {
-            return (
-              <div className="d-flex gap-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    setCurrentFileId(fileId)
-                    setShowReviewModal(true) // Open review modal directly
-                  }}>
-                  View
-                </Button>
-                {isBookclosed && (
-                  <Button
-                    variant="warning"
-                    size="sm"
-                    onClick={async () => {
-                      if (!fundId || !fileId) return
-                      try {
-                        const response = await openBookclose(fundId, fileId)
-                        if (response.data?.success) {
-                          alert('Bookclose opened successfully!')
-                          fetchMigrationData() // Refresh data
-                        } else {
-                          alert('Failed to open bookclose: ' + (response.data?.message || 'Unknown error'))
-                        }
-                      } catch (error) {
-                        console.error('Open bookclose failed:', error)
-                        alert('Failed to open bookclose: ' + (error?.response?.data?.message || error?.message || 'Unknown error'))
-                      }
-                    }}>
-                    Open
-                  </Button>
-                )}
-              </div>
-            )
-          }
-          return '—'
-        },
-      },
-    ],
-    [fundId, fetchMigrationData], // Include fetchMigrationData in dependencies
-  )
 
   // History table columns - simple and clear
   const historyColDefs = useMemo(
@@ -342,18 +309,12 @@ const MigrationPage = () => {
           <Card>
             <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
               <CardTitle as="h4">Migration Data</CardTitle>
-              {hasMigration ? (
-                <Button variant="primary" disabled>
-                  Upload (Already Exists)
-                </Button>
-              ) : (
-                <UploadMigrationModal 
-                  buttonLabel="Upload" 
-                  modalTitle="Upload Migration File"
-                  onSuccess={handleUploadSuccess}
-                  onUploadSuccess={handleUploadSuccess}
-                />
-              )}
+              <UploadMigrationModal 
+                buttonLabel="Upload" 
+                modalTitle="Upload Migration File"
+                onSuccess={handleUploadSuccess}
+                onUploadSuccess={handleUploadSuccess}
+              />
             </CardHeader>
             
             {/* Tabs for List and History */}
@@ -489,32 +450,6 @@ const MigrationPage = () => {
           // Simple function to refresh history
           if (activeTab === 'history') {
             fetchHistory()
-          }
-          // Also refresh migration data
-          if (activeTab === 'list') {
-            fetchMigrationData()
-          }
-        }}
-      />
-
-      {/* Review Modal Only (opened from View button) */}
-      <MigrationComparisonModal
-        show={showReviewModal}
-        onClose={() => {
-          setShowReviewModal(false)
-          setCurrentFileId(null) // Reset fileId when modal closes
-        }}
-        fundId={fundId}
-        fileId={currentFileId}
-        showReviewOnly={true}
-        onRefreshHistory={() => {
-          // Simple function to refresh history
-          if (activeTab === 'history') {
-            fetchHistory()
-          }
-          // Also refresh migration data
-          if (activeTab === 'list') {
-            fetchMigrationData()
           }
         }}
       />
