@@ -28,14 +28,22 @@ export const getMigrationData = (fundId) => {
 // Get migration table data for a fund (migration records/metadata)
 // Endpoint: GET /api/v1/migration/trialbalance/:fund_id/migration
 export const getMigrationTableData = (fundId, fileId = null) => {
+  const token = Cookies.get('dashboardToken')
+  
   // Build URL with query parameters
-  let url = `/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/migration`
+  const params = new URLSearchParams()
   if (fileId) {
-    url += `?file_id=${encodeURIComponent(fileId)}`
+    params.append('file_id', fileId)
   }
   
-  // Use api.get() directly - axios interceptor handles Authorization header automatically
-  return api.get(url)
+  const queryString = params.toString()
+  const url = `/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/migration${queryString ? `?${queryString}` : ''}`
+  
+  return api.get(url, {
+    headers: {
+      'dashboard': `Bearer ${token}`,
+    },
+  })
 }
 
 // Mark migration file status as PENDING (simple API call)
