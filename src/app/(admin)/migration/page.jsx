@@ -70,18 +70,33 @@ const MigrationPage = () => {
   const actionsCellRenderer = useCallback((params) => {
     const { data } = params
     const fileId = data?.file_id
+    const bookcloseStatus = String(data?.bookclose_status || '').toLowerCase()
+    const isBookclosed = bookcloseStatus === 'bookclosed'
     
     if (fileId) {
       return (
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => {
-            setCurrentFileId(fileId)
-            setShowComparisonModal(true)
-          }}>
-          View
-        </Button>
+        <div className="d-flex gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setCurrentFileId(fileId)
+              setShowComparisonModal(true)
+            }}>
+            View
+          </Button>
+          {isBookclosed && (
+            <Button
+              variant="warning"
+              size="sm"
+              onClick={() => {
+                // Delete the record from the table
+                setRowData((prev) => prev.filter((row) => row.file_id !== fileId))
+              }}>
+              Open
+            </Button>
+          )}
+        </div>
       )
     }
     return '—'
@@ -118,7 +133,7 @@ const MigrationPage = () => {
         field: 'actions',
         sortable: false,
         filter: false,
-        width: 120,
+        width: 180,
         pinned: 'right',
         cellRenderer: actionsCellRenderer,
       },
