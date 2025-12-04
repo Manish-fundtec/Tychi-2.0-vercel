@@ -68,10 +68,8 @@ const MigrationPage = () => {
   const tokenData = useDashboardToken()
   const fundId = tokenData?.fund_id
 
-  // Load columns + register AG Grid
+  // Register AG Grid modules
   useEffect(() => {
-    setColumnDefs(defaultColumnDefs)
-
     if (typeof window !== 'undefined') {
       import('ag-grid-community')
         .then(({ ModuleRegistry, AllCommunityModule }) => {
@@ -79,7 +77,7 @@ const MigrationPage = () => {
         })
         .catch(() => {})
     }
-  }, [defaultColumnDefs])
+  }, [])
 
   // Grid ready callback to store grid API reference
   const onGridReady = useCallback((params) => {
@@ -204,6 +202,53 @@ const MigrationPage = () => {
     }
   }, [activeTab, fetchHistory])
 
+  // Actions cell renderer - memoized to avoid recreation
+  const actionsCellRenderer = useCallback((params) => {
+    const { data } = params
+    const fileId = data?.file_id
+    const bookcloseStatus = String(data?.bookclose_status || '').toLowerCase()
+    const isBookclosed = bookcloseStatus === 'bookclosed'
+    
+    if (fileId) {
+      return (
+        <div className="d-flex gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setCurrentFileId(fileId)
+              setShowReviewModal(true) // Open review modal directly
+            }}>
+            View
+          </Button>
+          {isBookclosed && (
+            <Button
+              variant="warning"
+              size="sm"
+              onClick={async () => {
+                if (!fundId || !fileId) return
+                try {
+                  const response = await openBookclose(fundId, fileId)
+                  if (response.data?.success) {
+                    alert('Bookclose opened successfully!')
+                    fetchMigrationData() // Refresh data
+                  } else {
+                    alert('Failed to open bookclose: ' + (response.data?.message || 'Unknown error'))
+                  }
+                } catch (error) {
+                  console.error('Open bookclose failed:', error)
+                  alert('Failed to open bookclose: ' + (error?.response?.data?.message || error?.message || 'Unknown error'))
+                }
+              }}>
+              Open
+            </Button>
+          )}
+        </div>
+      )
+    }
+    return '—'
+  }, [fundId, fetchMigrationData])
+
   // Migration table columns - defined after fetchMigrationData so it can access it
   const defaultColumnDefs = useMemo(
     () => [
@@ -237,55 +282,16 @@ const MigrationPage = () => {
         filter: false,
         width: 180,
         pinned: 'right',
-        cellRenderer: (params) => {
-          const { data } = params
-          const fileId = data?.file_id
-          const bookcloseStatus = String(data?.bookclose_status || '').toLowerCase()
-          const isBookclosed = bookcloseStatus === 'bookclosed'
-          
-          if (fileId) {
-            return (
-              <div className="d-flex gap-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    setCurrentFileId(fileId)
-                    setShowReviewModal(true) // Open review modal directly
-                  }}>
-                  View
-                </Button>
-                {isBookclosed && (
-                  <Button
-                    variant="warning"
-                    size="sm"
-                    onClick={async () => {
-                      if (!fundId || !fileId) return
-                      try {
-                        const response = await openBookclose(fundId, fileId)
-                        if (response.data?.success) {
-                          alert('Bookclose opened successfully!')
-                          fetchMigrationData() // Refresh data
-                        } else {
-                          alert('Failed to open bookclose: ' + (response.data?.message || 'Unknown error'))
-                        }
-                      } catch (error) {
-                        console.error('Open bookclose failed:', error)
-                        alert('Failed to open bookclose: ' + (error?.response?.data?.message || error?.message || 'Unknown error'))
-                      }
-                    }}>
-                    Open
-                  </Button>
-                )}
-              </div>
-            )
-          }
-          return '—'
-        },
+        cellRenderer: actionsCellRenderer,
       },
     ],
-    [fundId, fetchMigrationData], // Include fetchMigrationData in dependencies
+    [actionsCellRenderer], // Use memoized cellRenderer
   )
+
+  // Set columnDefs from defaultColumnDefs
+  useEffect(() => {
+    setColumnDefs(defaultColumnDefs)
+  }, [defaultColumnDefs])
 
   // History table columns - simple and clear
   const historyColDefs = useMemo(
