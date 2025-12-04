@@ -682,16 +682,25 @@ export function computePricingWindow(reportingFrequency, reportingStartDate, las
   // DAILY frequency
   if (freq === 'daily') {
     if (rsd) {
-      const hasRealLast = lpd && lpd >= rsd
+      // For daily pricing:
+      // - If lpd is null → no pricing exists → show rsd (first pricing)
+      // - If lpd < rsd → invalid state → show rsd
+      // - If lpd >= rsd → pricing was completed → show next day (lpd + 1)
+      // 
+      // Note: We use >= instead of > to handle the case where lpd equals rsd.
+      // If backend returns lpd = rsd when no pricing exists, that's a backend issue.
+      // But typically, if lpd exists and >= rsd, pricing was completed.
+      const hasCompletedPricing = lpd !== null && lpd.getTime() >= rsd.getTime()
 
-      if (hasRealLast) {
-        // Next day window
+      if (hasCompletedPricing) {
+        // Next day window (after completing pricing for lpd)
         const start = addDaysUTC(lpd, 1)
         const lastDayInclusive = start
         return { start, lastDayInclusive }
       }
 
       // First day window → reporting_start_date
+      // (when lpd is null or lpd < rsd)
       const start = rsd
       const lastDayInclusive = rsd
       return { start, lastDayInclusive }
@@ -1036,6 +1045,9 @@ export const ToggleBetweenModals = ({
       if (typeof onPricingRefresh === 'function') {
         onPricingRefresh()
       }
+
+      // refresh last pricing date after upload
+      await refreshLastPricingDate()
     } catch (e) {
       console.error('[Upload Pricing] Error:', e)
       setFileError(e?.message || 'Upload failed.')
@@ -1182,19 +1194,8 @@ export const ToggleBetweenModals = ({
         onPricingRefresh()
       }
 
-      // refresh last pricing date
-      try {
-        if (currentFundId) {
-          const r = await fetch(`${API_BASE}/api/v1/pricing/lastPricingdate/${encodeURIComponent(currentFundId)}`, {
-            headers: { Accept: 'application/json' },
-          })
-          if (r.ok) {
-            const j = await r.json()
-            const last = j?.last_pricing_date || j?.meta?.last_pricing_date || j?.data?.last_pricing_date || j?.result?.last_pricing_date || null
-            setLastPricingDate(last || null)
-          }
-        }
-      } catch {}
+      // refresh last pricing date after manual save
+      await refreshLastPricingDate()
     } catch (e) {
       setManualError(e?.message || 'Failed to save manual pricing.')
     } finally {
@@ -1202,28 +1203,36 @@ export const ToggleBetweenModals = ({
     }
   }
 
-  // Fetch the last pricing date
-  useEffect(() => {
+  // Function to refresh last pricing date
+  const refreshLastPricingDate = useCallback(async () => {
     if (!currentFundId) return
-    let cancelled = false
-    const url = `${API_BASE}/api/v1/pricing/lastPricingdate/${encodeURIComponent(currentFundId)}`
-    ;(async () => {
-      try {
-        const resp = await fetch(url, { headers: { Accept: 'application/json' } })
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-        const json = await resp.json()
-        const last =
-          json?.last_pricing_date || json?.meta?.last_pricing_date || json?.data?.last_pricing_date || json?.result?.last_pricing_date || null
-        if (!cancelled) setLastPricingDate(last || null)
-      } catch (e) {
-        if (!cancelled) setMetaError('Failed to load last pricing date')
-        console.warn('[summary] last pricing date fetch failed:', e)
-      }
-    })()
-    return () => {
-      cancelled = true
+    try {
+      const url = `${API_BASE}/api/v1/pricing/lastPricingdate/${encodeURIComponent(currentFundId)}`
+      const resp = await fetch(url, { headers: { Accept: 'application/json' } })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const json = await resp.json()
+      const last =
+        json?.last_pricing_date || json?.meta?.last_pricing_date || json?.data?.last_pricing_date || json?.result?.last_pricing_date || null
+      setLastPricingDate(last || null)
+    } catch (e) {
+      setMetaError('Failed to load last pricing date')
+      console.warn('[summary] last pricing date fetch failed:', e)
     }
   }, [API_BASE, currentFundId])
+
+  // Fetch the last pricing date on mount and when fundId changes
+  useEffect(() => {
+    if (!currentFundId) return
+    refreshLastPricingDate()
+  }, [currentFundId, refreshLastPricingDate])
+
+  // Refresh last pricing date when chooser modal opens (e.g., after revert)
+  // This ensures the pricing window shows the correct next period
+  useEffect(() => {
+    if (isChooserOpen && currentFundId) {
+      refreshLastPricingDate()
+    }
+  }, [isChooserOpen, currentFundId, refreshLastPricingDate])
 
   // NEW: From = LPD + 1; or if no LPD, use reporting_start_date
   useEffect(() => {
