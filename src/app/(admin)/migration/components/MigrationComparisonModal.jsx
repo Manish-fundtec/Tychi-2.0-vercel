@@ -57,7 +57,7 @@ const convertToDebitCredit = (closingBalance, glCode) => {
   }
 }
 
-export default function MigrationComparisonModal({ show, onClose, fundId, fileId, onRefreshHistory }) {
+export default function MigrationComparisonModal({ show, onClose, fundId, fileId, onRefreshHistory, showReviewOnly = false }) {
   const [lastPricingDate, setLastPricingDate] = useState(null)
   const [trialBalanceData, setTrialBalanceData] = useState([])
   const [allTrialBalanceData, setAllTrialBalanceData] = useState([]) // All GL codes for reconcile modal
@@ -65,7 +65,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   const [allUploadedData, setAllUploadedData] = useState([]) // All GL codes for reconcile modal
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showReconcileModal, setShowReconcileModal] = useState(false)
+  const [showReconcileModal, setShowReconcileModal] = useState(showReviewOnly) // If showReviewOnly, start with reconcile modal open
   const tokenData = useDashboardToken()
   
   // Helper function to get last day of month from a date
@@ -483,16 +483,17 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
         fileId={fileId}
         lastPricingDate={dateToUse}
         onRefreshHistory={onRefreshHistory}
+        showReviewOnly={showReviewOnly}
       />
     </Modal>
   )
 }
 
 // Reconcile Modal Component
-function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData, uploadedData, fundId, fileId, lastPricingDate, onRefreshHistory }) {
+function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData, uploadedData, fundId, fileId, lastPricingDate, onRefreshHistory, showReviewOnly = false }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
+  const [showPublishReviewModal, setShowPublishReviewModal] = useState(showReviewOnly) // If showReviewOnly, directly open review modal
   const [refreshedTrialBalanceData, setRefreshedTrialBalanceData] = useState([])
   
   // Helper function to fetch trial balance data

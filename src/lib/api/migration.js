@@ -85,4 +85,23 @@ export const bookcloseMigration = (fundId, fileId, reportingPeriod) => {
   })
 }
 
+// Open bookclose - Change bookclose_status from bookclosed to open
+export const openBookclose = (fundId, fileId) => {
+  const token = Cookies.get('dashboardToken')
+  const payload = {
+    bookclose_status: 'open'
+  }
+  
+  // Only include file_id if provided, otherwise backend uses latest file
+  if (fileId) {
+    payload.file_id = fileId
+  }
+  
+  return api.post(`/api/v1/migration/trialbalance/${fundId}/open`, payload, {
+    headers: {
+      'dashboard': `Bearer ${token}`,
+    },
+  })
+}
+
 
