@@ -65,15 +65,8 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   const [allUploadedData, setAllUploadedData] = useState([]) // All GL codes for reconcile modal
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showReconcileModal, setShowReconcileModal] = useState(false)
+  const [showReconcileModal, setShowReconcileModal] = useState(showReviewOnly) // If showReviewOnly, start with reconcile modal open
   const tokenData = useDashboardToken()
-
-  // If showReviewOnly, open reconcile modal after data is loaded
-  useEffect(() => {
-    if (showReviewOnly && show && allTrialBalanceData.length > 0 && allUploadedData.length > 0) {
-      setShowReconcileModal(true)
-    }
-  }, [showReviewOnly, show, allTrialBalanceData.length, allUploadedData.length])
   
   // Helper function to get last day of month from a date
   const getLastDayOfMonth = (dateString) => {
@@ -500,15 +493,8 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
 function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData, uploadedData, fundId, fileId, lastPricingDate, onRefreshHistory, showReviewOnly = false }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
+  const [showPublishReviewModal, setShowPublishReviewModal] = useState(showReviewOnly) // If showReviewOnly, directly open review modal
   const [refreshedTrialBalanceData, setRefreshedTrialBalanceData] = useState([])
-
-  // If showReviewOnly, open review modal after data is ready
-  useEffect(() => {
-    if (showReviewOnly && show && trialBalanceData.length > 0 && uploadedData.length > 0) {
-      setShowPublishReviewModal(true)
-    }
-  }, [showReviewOnly, show, trialBalanceData.length, uploadedData.length])
   
   // Helper function to fetch trial balance data
   const fetchTrialBalanceData = async (fundId, date, setData, setLoading, setError, glCodesToCheck = []) => {
