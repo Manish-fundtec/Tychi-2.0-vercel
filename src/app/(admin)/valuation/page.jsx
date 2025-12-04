@@ -1,10 +1,12 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState ,useCallback } from 'react';
+import { useEffect, useRef, useState ,useCallback, useMemo } from 'react';
 import Cookies from 'js-cookie';
 import { Card, CardBody, CardHeader, CardTitle, Col, Dropdown, Modal, Row, Button } from 'react-bootstrap';
 import { Eye, RotateCcw } from 'lucide-react';
+import { useDashboardToken } from '@/hooks/useDashboardToken';
+import { formatYmd } from '@/lib/dateFormat';
 
 // Toggle (upload/manual)
 const ToggleBetweenModals = dynamic(
@@ -69,7 +71,6 @@ export default function ReviewsPage() {
   const [fundId, setFundId] = useState(null);
 
   const [rowData, setRowData] = useState([]);
-  const [columnDefs, setColumnDefs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
@@ -83,36 +84,56 @@ export default function ReviewsPage() {
   const [symbolLoading, setSymbolLoading] = useState(false);
   const [symbolErr, setSymbolErr] = useState('');
 
-  // set up columns once
+  // Get date format from dashboard token
+  const dashboard = useDashboardToken();
+  const dateFormat = dashboard?.date_format || 'MM/DD/YYYY';
+
+  // set up columns with date formatting
+  const columnDefsMemo = useMemo(() => {
+    const base = [
+      { headerName: 'Sr.No', field: 'srNo', width: 90 ,flex:1 },
+      { 
+        headerName: 'Reporting Period', 
+        field: 'month', 
+        flex: 1,
+        valueFormatter: (params) => {
+          const value = params?.value || '';
+          // Check if value is a date string (YYYY-MM-DD format)
+          if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return formatYmd(value, dateFormat);
+          }
+          return value; // Return as-is if not a date
+        }
+      },
+      { 
+        headerName: 'Reporting Date', 
+        field: 'date', 
+        width: 160,
+        flex:1,
+        valueFormatter: (params) => {
+          const raw = params?.value ? String(params.value).slice(0, 10) : '';
+          if (!raw) return '';
+          return formatYmd(raw, dateFormat);
+        }
+      },
+      { headerName: 'Status', field: 'status', width: 130 },
+    ];
+
+    return [
+      ...base,
+      {
+        headerName: 'View Symbols',
+        field: 'view',
+        width: 150,
+        sortable: false,
+        filter: false,
+        cellRenderer: 'ActionsRenderer',
+      },
+    ];
+  }, [dateFormat]);
+
+  // Initialize AG Grid modules
   useEffect(() => {
-    (async () => {
-      try {
-        const mod = await import('@/assets/tychiData/columnDefs').catch(() => null);
-        const base =
-          mod?.pricingColDefs ||
-          [
-            { headerName: 'Sr.No', field: 'srNo', width: 90 },
-            { headerName: 'Reporting Period', field: 'month', flex: 1 },
-            { headerName: 'Reporting Date', field: 'date', width: 160 },
-            { headerName: 'Status', field: 'status', width: 130 },
-          ];
-
-        setColumnDefs([
-          ...base,
-          {
-            headerName: 'View Symbols',
-            field: 'view',
-            width: 150,
-            sortable: false,
-            filter: false,
-            cellRenderer: 'ActionsRenderer', // register below
-          },
-        ]);
-      } catch (e) {
-        console.error('[Valuation] columnDefs error', e);
-      }
-    })();
-
     // AG Grid community modules (fixes row model module error)
     import('ag-grid-community')
       .then(({ ModuleRegistry, AllCommunityModule }) => {
@@ -167,7 +188,8 @@ export default function ReviewsPage() {
 
   async function handleViewSymbols(row) {
     if (!row || !fundId) return;
-    setSelectedLabel(`${row.month} — ${row.date}`);
+    const formattedDate = formatYmd(row.date, dateFormat);
+    setSelectedLabel(`${row.month} — ${formattedDate}`);
     setShowModal(true);
     setSymbolLoading(true);
     setSymbolErr('');
@@ -206,7 +228,8 @@ export default function ReviewsPage() {
       return;
     }
 
-    if (!confirm(`Revert valuation for ${row.month} — ${row.date}?`)) return;
+    const formattedDate = formatYmd(row.date, dateFormat);
+    if (!confirm(`Revert valuation for ${row.month} — ${formattedDate}?`)) return;
 
     try {
       const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods/revert`;
@@ -297,7 +320,7 @@ export default function ReviewsPage() {
               <div className="ag-theme-quartz">
                 <AgGridReact
                   rowData={rowData}
-                  columnDefs={columnDefs}
+                  columnDefs={columnDefsMemo}
                   domLayout="autoHeight"
                   pagination
                   paginationPageSize={10}
