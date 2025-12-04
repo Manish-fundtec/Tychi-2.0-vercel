@@ -52,6 +52,7 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
   const [validated, setValidated] = useState(false)
   const [rsd, setRsd] = useState(null) // Reporting Start Date from token
   const [duplicateError, setDuplicateError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [form, setForm] = useState({
     broker_name: '',
@@ -132,6 +133,8 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (isSubmitting) return
+    
     const formEl = e.currentTarget
 
     // 1) Native HTML validation
@@ -162,6 +165,7 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
       return
     }
 
+    setIsSubmitting(true)
     try {
       const token = Cookies.get('dashboardToken')
       const decoded = jwtDecode(token)
@@ -182,6 +186,7 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
       onSuccess?.()
       onClose?.()
     } catch (err) {
+      setIsSubmitting(false)
       console.error('❌ Failed to submit broker form:', err)
 
       // Handle different types of errors
@@ -234,7 +239,7 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
       </FormGroup>
 
       <Col xs={12}>
-        <Button type="submit" disabled={isBeforeRSD}>
+        <Button type="submit" disabled={isBeforeRSD || isSubmitting}>
           {isEdit ? 'Update' : 'Submit'}
         </Button>
       </Col>
@@ -1253,6 +1258,7 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
   const [validated, setValidated] = useState(false)
   const [rsd, setRsd] = useState(null) // Reporting Start Date from token
   const [duplicateError, setDuplicateError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [form, setForm] = useState({
     bank_name: '',
@@ -1320,6 +1326,8 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (isSubmitting) return
+    
     const formEl = e.currentTarget
 
     // 1) Native HTML validation
@@ -1350,6 +1358,7 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
       return
     }
 
+    setIsSubmitting(true)
     try {
       const token = Cookies.get('dashboardToken')
       const decoded = jwtDecode(token)
@@ -1370,6 +1379,7 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
       onSuccess?.()
       onClose?.()
     } catch (error) {
+      setIsSubmitting(false)
       console.error('❌ Failed to submit bank form:', error)
 
       // Handle different types of errors
@@ -1417,7 +1427,7 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
       </FormGroup>
 
       <Col xs={12}>
-        <Button type="submit" disabled={isBeforeRSD}>
+        <Button type="submit" disabled={isBeforeRSD || isSubmitting}>
           {isEdit ? 'Update' : 'Submit'}
         </Button>
       </Col>
@@ -1431,6 +1441,7 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
   const [duplicateIdError, setDuplicateIdError] = useState('')
   const [duplicateNameError, setDuplicateNameError] = useState('')
   const [existingExchanges, setExistingExchanges] = useState([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [form, setForm] = useState({
     exchange_id: '',
@@ -1503,6 +1514,8 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (isSubmitting) return
+    
     const formEl = e.currentTarget
 
     if (!formEl.checkValidity()) {
@@ -1512,6 +1525,7 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
       setValidated(true)
       return
     } else {
+      setIsSubmitting(true)
       try {
         const token = Cookies.get('dashboardToken')
         const decoded = jwtDecode(token)
@@ -1533,6 +1547,7 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
         onClose?.()
       } catch (error) {
         console.error('❌ Failed to submit exchange form:', error)
+        setIsSubmitting(false)
       }
     }
 
@@ -1554,7 +1569,7 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
       </FormGroup>
 
       <Col xs={12}>
-        <Button type="submit">{isEdit ? 'Update' : 'Submit'}</Button>
+        <Button type="submit" disabled={isSubmitting}>{isEdit ? 'Update' : 'Submit'}</Button>
       </Col>
     </Form>
   )
@@ -1575,6 +1590,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
   const [exchanges, setExchanges] = useState([])
   const [assetTypes, setAssetTypes] = useState([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (symbol) {
@@ -1617,10 +1633,13 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (isSubmitting) return
+    
     const formEl = e.currentTarget
     if (!formEl.checkValidity()) {
       e.stopPropagation()
     } else {
+      setIsSubmitting(true)
       const token = Cookies.get('dashboardToken')
       const decoded = jwtDecode(token)
 
@@ -1643,6 +1662,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         onClose?.()
         console.log('📤 Submitting payload:', payload)
       } catch (err) {
+        setIsSubmitting(false)
         const status = err?.response?.status
         const duplicateMessage = err?.response?.data?.error
         if (status === 409 && duplicateMessage) {
@@ -1715,7 +1735,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
       </FormGroup>
 
       <Col xs={12} className="mt-3">
-        <Button type="submit">{isEdit ? 'Update Symbol' : 'Add Symbol'}</Button>
+        <Button type="submit" disabled={isSubmitting}>{isEdit ? 'Update Symbol' : 'Add Symbol'}</Button>
       </Col>
     </Form>
   )
