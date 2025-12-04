@@ -65,7 +65,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   const [allUploadedData, setAllUploadedData] = useState([]) // All GL codes for reconcile modal
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showReconcileModal, setShowReconcileModal] = useState(false)
+  const [showReconcileModal, setShowReconcileModal] = useState(showReviewOnly) // If showReviewOnly, start with reconcile modal open
   const tokenData = useDashboardToken()
   
   // Helper function to get last day of month from a date
@@ -492,7 +492,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
 function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData, uploadedData, fundId, fileId, lastPricingDate, onRefreshHistory }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showPublishReviewModal, setShowPublishReviewModal] = useState(false)
+  const [showPublishReviewModal, setShowPublishReviewModal] = useState(showReviewOnly) // If showReviewOnly, directly open review modal
   const [refreshedTrialBalanceData, setRefreshedTrialBalanceData] = useState([])
   
   // Helper function to fetch trial balance data
