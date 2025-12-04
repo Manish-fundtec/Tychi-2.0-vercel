@@ -973,6 +973,8 @@ export const ToggleBetweenModals = ({
   }
 
   const handleUploadSave = async () => {
+    if (isUploading) return
+    
     const err = validateSelectedFile(file)
     if (err) return setFileError(err)
     if (!currentFundId) return setFileError('Fund not selected.')
@@ -1152,6 +1154,8 @@ export const ToggleBetweenModals = ({
   }
 
   const handleManualSave = async () => {
+    if (savingManual) return
+    
     const rows = []
     agGridRef.current?.api?.forEachNode((n) => rows.push({ ...n.data }))
 
@@ -1388,6 +1392,8 @@ export const ToggleBetweenModals = ({
   }
 
   const handleAdhocSave = async () => {
+    if (savingCustom) return
+    
     adhocGridRef.current?.api?.stopEditing()
     const pricing_date = (endDate || '').slice(0, 10)
     const entries = customRows
@@ -1643,8 +1649,8 @@ export const ToggleBetweenModals = ({
           <Button variant="secondary" onClick={backToChooser}>
             Back
           </Button>
-          <Button variant="primary" onClick={handleManualSave}>
-            Save
+          <Button variant="primary" onClick={handleManualSave} disabled={savingManual}>
+            {savingManual ? 'Saving…' : 'Save'}
           </Button>
         </Modal.Footer>
       </Modal>
