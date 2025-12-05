@@ -58,6 +58,7 @@ const MigrationPage = () => {
   const [showComparisonModal, setShowComparisonModal] = useState(false)
   const [activeTab, setActiveTab] = useState('list')
   const [currentFileId, setCurrentFileId] = useState(null)
+  const [showReviewOnly, setShowReviewOnly] = useState(false) // Track if only review modal should show
   
   // History tab states
   const [historyRows, setHistoryRows] = useState([])
@@ -84,6 +85,7 @@ const MigrationPage = () => {
             size="sm"
             onClick={() => {
               setCurrentFileId(fileId)
+              setShowReviewOnly(true) // Show only review modal for View button
               setShowComparisonModal(true)
             }}>
             View
@@ -209,6 +211,7 @@ const MigrationPage = () => {
     if (fileId) {
       setCurrentFileId(fileId)
     }
+    setShowReviewOnly(false) // Show full flow for Upload button
     setShowComparisonModal(true)
     // Refresh data based on active tab
     if (activeTab === 'history') {
@@ -507,6 +510,7 @@ const MigrationPage = () => {
         onClose={() => {
           setShowComparisonModal(false)
           setCurrentFileId(null) // Reset fileId when modal closes
+          setShowReviewOnly(false) // Reset showReviewOnly when modal closes
         }}
         fundId={fundId}
         fileId={currentFileId}
@@ -516,7 +520,7 @@ const MigrationPage = () => {
             fetchHistory()
           }
         }}
-        showReviewOnly={true} // When View button clicked, show only the last modal (Publish Review Modal)
+        showReviewOnly={showReviewOnly} // Show only review modal when View button clicked, full flow when Upload clicked
       />
     </>
   )
