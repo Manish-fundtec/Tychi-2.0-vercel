@@ -143,63 +143,8 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
 
   //   cleanupData()
   // }, [show, fundId, fileId]) // Run when modal opens
-// Cleanup migration data when modal opens
-useEffect(() => {
-  if (!show || !fundId) return
-
-  const cleanupData = async () => {
-    try {
-      console.log('[MigrationComparison] 🧹 Starting cleanup for fundId:', fundId, 'fileId:', fileId)
-      
-      const token = Cookies.get('dashboardToken')
-      if (!token) {
-        console.warn('[MigrationComparison] No dashboard token found')
-        return
-      }
-      
-      const headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'dashboard': `Bearer ${token}`,
-      }
-      
-      // Build URL with optional file_id
-      let url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/cleanup`
-      if (fileId) {
-        url += `?file_id=${encodeURIComponent(fileId)}`
-      }
-      
-      console.log('[MigrationComparison] 🧹 Cleanup URL:', url)
-      
-      const resp = await fetch(url, {
-        method: 'DELETE',
-        headers,
-        credentials: 'include',
-      })
-      
-      console.log('[MigrationComparison] 🧹 Cleanup response status:', resp.status)
-      
-      if (!resp.ok) {
-        const errorText = await resp.text().catch(() => '')
-        console.warn('[MigrationComparison] Cleanup failed:', resp.status, errorText)
-        // Don't throw - cleanup is optional, continue with modal
-        return
-      }
-      
-      const result = await resp.json()
-      console.log('[MigrationComparison] ✅ Cleanup completed:', result)
-      
-      if (result?.data) {
-        console.log(`[MigrationComparison] Deleted: ${result.data.migration_deleted} migration records, ${result.data.buffer_deleted} buffer records`)
-      }
-    } catch (e) {
-      console.error('[MigrationComparison] ❌ Cleanup error:', e)
-      // Don't block modal - continue even if cleanup fails
-    }
-  }
-
-  cleanupData()
-}, [show, fundId, fileId]) // Run when modal opens
+  // Note: Cleanup is handled in the "Open" button click handler in page.jsx
+  // We don't cleanup here because it would delete uploaded data before it can be displayed
 
   // Fetch last pricing date
   useEffect(() => {
@@ -290,12 +235,14 @@ useEffect(() => {
         if (fileId) {
           url += `?file_id=${encodeURIComponent(fileId)}`
         }
+        console.log('[MigrationComparison] 📥 Fetching uploaded data from:', url)
         const resp = await fetch(url, { headers, credentials: 'include' })
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const json = await resp.json()
 
         // Updated response format: { data: [...] }
         const responseData = json?.data || []
+        console.log('[MigrationComparison] 📥 Received uploaded data:', responseData.length, 'records')
 
         // Normalize uploaded migration data - Map fields as per new API format
         // Fields: account_code, account_name, debit, credit (NO closing balance - just use debit/credit directly)
@@ -330,9 +277,11 @@ useEffect(() => {
 
         // For comparison modal display, filter by allowed ranges
         const filteredData = allData.filter((item) => isAllowedGlCode(item.glNumber))
+        console.log('[MigrationComparison] 📥 Filtered uploaded data (13000-13999, 21000-21999):', filteredData.length, 'records')
         setUploadedData(filteredData)
         
         // Store all data for reconcile modal (no filter)
+        console.log('[MigrationComparison] 📥 All uploaded data (for reconcile):', allData.length, 'records')
         setAllUploadedData(allData)
       } catch (e) {
         console.error('[MigrationComparison] Failed to fetch uploaded data:', e)
