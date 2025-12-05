@@ -167,14 +167,14 @@ const MigrationPage = () => {
         filter: true,
         cellRenderer: ReconcileStatusRenderer
       },
-      { 
-        field: 'bookclose_status', 
-        headerName: 'Bookclose Status', 
-        flex: 1, 
-        sortable: true, 
-        filter: true,
-        cellRenderer: BookcloseStatusRenderer
-      },
+      // { 
+      //   field: 'bookclose_status', 
+      //   headerName: 'Bookclose Status', 
+      //   flex: 1, 
+      //   sortable: true, 
+      //   filter: true,
+      //   cellRenderer: BookcloseStatusRenderer
+      // },
       // { field: 'uploaded_at', headerName: 'Uploaded At', flex: 1, sortable: true, filter: true,
       //   valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString('en-IN') : '—' },
       {
