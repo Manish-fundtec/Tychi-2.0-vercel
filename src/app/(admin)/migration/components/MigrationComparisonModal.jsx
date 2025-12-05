@@ -1002,25 +1002,6 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
           setShowPublishReviewModal(false)
           onClose()
         })}
-        onReview={() => {
-          setShowPublishReviewModal(false)
-          // Stay on reconcile modal for review
-        }}
-        onConfirmPublish={async () => {
-          setLoading(true)
-          setError('')
-          try {
-            // Call onPublish callback to complete the publish process
-            onPublish()
-            setShowPublishReviewModal(false)
-            onClose() // Close reconcile modal after publish
-          } catch (e) {
-            console.error('[ReconcileModal] Publish failed:', e)
-            setError('Failed to publish migration data')
-          } finally {
-            setLoading(false)
-          }
-        }}
         totals={totals}
         lastPricingDate={lastPricingDate}
         reconcileData={reconcileData}
@@ -1034,21 +1015,12 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
 }
 
 // Publish Review Modal Component
-function PublishReviewModal({ show, onClose, onCloseAll, onReview, onConfirmPublish, totals, lastPricingDate, reconcileData = [], refreshedTrialBalanceData = [], fundId, fileId, onRefreshHistory }) {
+function PublishReviewModal({ show, onClose, onCloseAll, totals, lastPricingDate, reconcileData = [], refreshedTrialBalanceData = [], fundId, fileId, onRefreshHistory }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   
-  // Check if all differences are 0 (both debit and credit)
-  const canBookclose = useMemo(() => {
-    if (Math.abs(totals.differenceTotal) >= 0.01) return false
-    return reconcileData.every((item) => {
-      const diffDrCr = convertToDebitCredit(item.difference || 0, item.glNumber)
-      return Math.abs(diffDrCr.debit) < 0.01 && Math.abs(diffDrCr.credit) < 0.01
-    })
-  }, [totals, reconcileData])
-
-  // Handle bookclose
-  const handleBookclose = async () => {
+  // Handle Review button click - performs bookclose
+  const handleReview = async () => {
     if (!fundId || !lastPricingDate) {
       setError('Fund ID and reporting period are required')
       return
@@ -1216,22 +1188,12 @@ function PublishReviewModal({ show, onClose, onCloseAll, onReview, onConfirmPubl
         )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={onClose} disabled={loading}>
           Close
         </Button>
-        <Button variant="info" onClick={onReview}>
-          Review
+        <Button variant="info" onClick={handleReview} disabled={loading}>
+          {loading ? 'Bookclosing...' : 'Review'}
         </Button>
-        {/* Show Bookclose button only if both debit and credit differences are 0 */}
-        {canBookclose ? (
-          <Button variant="success" onClick={handleBookclose} disabled={loading}>
-            {loading ? 'Bookclosing...' : 'Bookclose'}
-          </Button>
-        ) : (
-          <Button variant="primary" onClick={onConfirmPublish} disabled={loading}>
-            Confirm Publish
-          </Button>
-        )}
       </Modal.Footer>
     </Modal>
   )
