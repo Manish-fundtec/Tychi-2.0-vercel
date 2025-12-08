@@ -246,7 +246,7 @@ const MigrationPage = () => {
         json?.result?.last_pricing_date ||
         null
       
-      // Get reporting_start_date from tokenData or API
+      // Get reporting_start_date from tokenData (dashboard token)
       const reportingStartDate = 
         tokenData?.fund?.reporting_start_date || 
         tokenData?.reporting_start_date ||
@@ -257,11 +257,12 @@ const MigrationPage = () => {
       console.log('[Migration] Pricing check:', {
         last_pricing_date: lastDate,
         reporting_start_date: reportingStartDate,
-        fund_id: fundId
+        fund_id: fundId,
+        full_response: json
       })
       
       // If no last_pricing_date, pricing is not done
-      if (!lastDate) {
+      if (!lastDate || lastDate === null || lastDate === 'null' || lastDate === '') {
         alert('Please complete pricing first before uploading migration data.')
         return false
       }
