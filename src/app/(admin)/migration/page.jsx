@@ -73,127 +73,6 @@ const MigrationPage = () => {
   const tokenData = useDashboardToken()
   const fundId = tokenData?.fund_id
 
-  // Actions cell renderer - memoized to prevent re-renders
-  // Note: setCurrentFileId and setShowComparisonModal are stable state setters, no need in deps
-  const actionsCellRenderer = useCallback((params) => {
-    const { data } = params
-    const fileId = data?.file_id
-    const bookcloseStatus = String(data?.bookclose_status || '').toLowerCase()
-    const isBookclosed = bookcloseStatus === 'bookclosed'
-    
-    if (fileId) {
-      return (
-        <div className="d-inline-flex align-items-center gap-2">
-          <Eye
-            size={18}
-            className="text-primary cursor-pointer"
-            title="View Migration"
-            onClick={() => {
-              setCurrentFileId(fileId)
-              setShowReviewOnly(true) // Show only review modal for View button
-              setShowComparisonModal(true)
-            }}
-          />
-          {isBookclosed && (
-            <RotateCcw
-              size={18}
-              className="text-primary cursor-pointer"
-              title="Revert/Open Migration"
-              onClick={async () => {
-                if (!fundId || !fileId) return
-                
-                try {
-                  // Call cleanup API to delete migration data
-                  const token = Cookies.get('dashboardToken')
-                  if (!token) {
-                    alert('Authentication token not found')
-                    return
-                  }
-                  
-                  const headers = {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'dashboard': `Bearer ${token}`,
-                  }
-                  
-                  const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/cleanup?file_id=${encodeURIComponent(fileId)}`
-                  
-                  const resp = await fetch(url, {
-                    method: 'DELETE',
-                    headers,
-                    credentials: 'include',
-                  })
-                  
-                  if (!resp.ok) {
-                    const errorText = await resp.text().catch(() => '')
-                    alert('Failed to cleanup migration data: ' + (errorText || resp.statusText))
-                    return
-                  }
-                  
-                  const result = await resp.json()
-                  console.log('[Migration] Cleanup completed:', result)
-                  
-                  // Delete the record from the table after successful cleanup
-                  setRowData((prev) => prev.filter((row) => row.file_id !== fileId))
-                  
-                  // Show success message
-                  if (result?.data) {
-                    alert(`Migration data cleaned up successfully!\nDeleted: ${result.data.migration_deleted || 0} migration records, ${result.data.buffer_deleted || 0} buffer records`)
-                  } else {
-                    alert('Migration data cleaned up successfully!')
-                  }
-                } catch (error) {
-                  console.error('[Migration] Cleanup error:', error)
-                  alert('Failed to cleanup migration data: ' + (error?.message || 'Unknown error'))
-                }
-              }}
-            />
-          )}
-        </div>
-      )
-    }
-    return '—'
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const columnDefs = useMemo(
-    () => [
-      { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 70, pinned: 'left', flex: 1 },
-      { field: 'file_id', headerName: 'File ID', flex: 1, sortable: true, filter: true },
-      // { field: 'file_name', headerName: 'File Name', flex: 1, sortable: true, filter: true },
-      { field: 'reporting_period', headerName: 'Reporting Period', flex: 1, sortable: true, filter: true,
-        valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString('en-IN') : '—' },
-      { 
-        field: 'reconcile_status', 
-        headerName: 'Reconcile Status', 
-        flex: 1, 
-        sortable: true, 
-        filter: true,
-        cellRenderer: ReconcileStatusRenderer
-      },
-      // { 
-      //   field: 'bookclose_status', 
-      //   headerName: 'Bookclose Status', 
-      //   flex: 1, 
-      //   sortable: true, 
-      //   filter: true,
-      //   cellRenderer: BookcloseStatusRenderer
-      // },
-      // { field: 'uploaded_at', headerName: 'Uploaded At', flex: 1, sortable: true, filter: true,
-      //   valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString('en-IN') : '—' },
-      {
-        headerName: 'Actions',
-        field: 'actions',
-        sortable: false,
-        filter: false,
-        width: 100,
-        pinned: 'right',
-        cellRenderer: actionsCellRenderer,
-      },
-    ],
-    [actionsCellRenderer],
-  )
-
   // Register AG Grid modules
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -346,18 +225,27 @@ const MigrationPage = () => {
   }
 
   // Handle success after upload - open comparison modal
-  const handleUploadSuccess = (fileId) => {
+  const handleUploadSuccess = async (fileId) => {
+    console.log('[Migration] 📤 Upload success, fileId:', fileId)
     if (fileId) {
       setCurrentFileId(fileId)
     }
     setShowReviewOnly(false) // Show full flow for Upload button
-    setShowComparisonModal(true)
-    // Refresh data based on active tab
-    if (activeTab === 'history') {
-      fetchHistory()
-    } else if (activeTab === 'list') {
-      fetchMigrationData()
+    
+    // Auto refresh: Fetch migration data first, then open modal
+    try {
+      if (activeTab === 'history') {
+        await fetchHistory()
+      } else if (activeTab === 'list') {
+        await fetchMigrationData()
+      }
+      console.log('[Migration] ✅ Data refreshed after upload')
+    } catch (error) {
+      console.error('[Migration] ❌ Failed to refresh after upload:', error)
     }
+    
+    // Open modal after refresh
+    setShowComparisonModal(true)
   }
 
   // Fetch upload history - simple function like beginner can understand
@@ -445,6 +333,144 @@ const MigrationPage = () => {
       setLoading(false)
     }
   }, [fundId])
+
+  // Actions cell renderer - memoized to prevent re-renders
+  // Defined after fetchMigrationData so it can use it
+  const actionsCellRenderer = useCallback((params) => {
+    const { data } = params
+    const fileId = data?.file_id
+    const bookcloseStatus = String(data?.bookclose_status || '').toLowerCase()
+    const isBookclosed = bookcloseStatus === 'bookclosed'
+    
+    if (fileId) {
+      return (
+        <div className="d-inline-flex align-items-center gap-2">
+          <Eye
+            size={18}
+            className="text-primary cursor-pointer"
+            title="View Migration"
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              console.log('[Migration] 👁️ View icon clicked for fileId:', fileId)
+              console.log('[Migration] 👁️ Setting showReviewOnly to true')
+              console.log('[Migration] 👁️ Setting showComparisonModal to true')
+              setCurrentFileId(fileId)
+              setShowReviewOnly(true) // Show only review modal for View button
+              setShowComparisonModal(true)
+              console.log('[Migration] 👁️ State updated, modal should open now')
+            }}
+            style={{ cursor: 'pointer' }}
+          />
+          {isBookclosed && (
+            <RotateCcw
+              size={18}
+              className="text-primary cursor-pointer"
+              title="Revert Migration"
+              onClick={async (e) => {
+                e.stopPropagation()
+                if (!fundId || !fileId) return
+                
+                if (!confirm('Are you sure you want to revert this migration? This will delete all migration data.')) {
+                  return
+                }
+                
+                try {
+                  console.log('[Migration] 🔄 Revert icon clicked for fileId:', fileId)
+                  
+                  // Call cleanup API to delete migration data
+                  const token = Cookies.get('dashboardToken')
+                  if (!token) {
+                    alert('Authentication token not found')
+                    return
+                  }
+                  
+                  const headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'dashboard': `Bearer ${token}`,
+                  }
+                  
+                  // Use the correct API endpoint: DELETE /:fund_id/cleanup
+                  const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/cleanup?file_id=${encodeURIComponent(fileId)}`
+                  console.log('[Migration] 🌐 Calling cleanup API:', url)
+                  
+                  const resp = await fetch(url, {
+                    method: 'DELETE',
+                    headers,
+                    credentials: 'include',
+                  })
+                  
+                  if (!resp.ok) {
+                    const errorText = await resp.text().catch(() => '')
+                    alert('Failed to cleanup migration data: ' + (errorText || resp.statusText))
+                    return
+                  }
+                  
+                  const result = await resp.json()
+                  console.log('[Migration] ✅ Cleanup completed:', result)
+                  
+                  // Show success message
+                  if (result?.data) {
+                    alert(`Migration data cleaned up successfully!\nDeleted: ${result.data.migration_deleted || 0} migration records, ${result.data.buffer_deleted || 0} buffer records`)
+                  } else {
+                    alert('Migration data cleaned up successfully!')
+                  }
+                  
+                  // Auto refresh: Fetch migration data again
+                  await fetchMigrationData()
+                } catch (error) {
+                  console.error('[Migration] ❌ Cleanup error:', error)
+                  alert('Failed to cleanup migration data: ' + (error?.message || 'Unknown error'))
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            />
+          )}
+        </div>
+      )
+    }
+    return '—'
+  }, [fundId, fetchMigrationData])
+
+  // Column definitions - defined after actionsCellRenderer
+  const columnDefs = useMemo(
+    () => [
+      { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 70, pinned: 'left', flex: 1 },
+      { field: 'file_id', headerName: 'File ID', flex: 1, sortable: true, filter: true },
+      // { field: 'file_name', headerName: 'File Name', flex: 1, sortable: true, filter: true },
+      { field: 'reporting_period', headerName: 'Reporting Period', flex: 1, sortable: true, filter: true,
+        valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString('en-IN') : '—' },
+      { 
+        field: 'reconcile_status', 
+        headerName: 'Reconcile Status', 
+        flex: 1, 
+        sortable: true, 
+        filter: true,
+        cellRenderer: ReconcileStatusRenderer
+      },
+      // { 
+      //   field: 'bookclose_status', 
+      //   headerName: 'Bookclose Status', 
+      //   flex: 1, 
+      //   sortable: true, 
+      //   filter: true,
+      //   cellRenderer: BookcloseStatusRenderer
+      // },
+      // { field: 'uploaded_at', headerName: 'Uploaded At', flex: 1, sortable: true, filter: true,
+      //   valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString('en-IN') : '—' },
+      {
+        headerName: 'Actions',
+        field: 'actions',
+        sortable: false,
+        filter: false,
+        width: 100,
+        pinned: 'right',
+        cellRenderer: actionsCellRenderer,
+      },
+    ],
+    [actionsCellRenderer],
+  )
 
   // Fetch migration data when "Migration Data" tab is selected
   useEffect(() => {
@@ -778,13 +804,13 @@ const MigrationPage = () => {
         }}
         fundId={fundId}
         fileId={currentFileId}
+        showReviewOnly={showReviewOnly} // Show only review modal when View button clicked, full flow when Upload clicked
         onRefreshHistory={() => {
           // Simple function to refresh history
           if (activeTab === 'history') {
             fetchHistory()
           }
         }}
-        showReviewOnly={showReviewOnly} // Show only review modal when View button clicked, full flow when Upload clicked
       />
     </>
   )
