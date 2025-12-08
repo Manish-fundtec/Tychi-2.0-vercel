@@ -1256,8 +1256,20 @@ export const ToggleBetweenModals = ({
   }, [isChooserOpen, currentFundId, refreshLastPricingDate])
 
   // NEW: From = LPD + 1; or if no LPD, use reporting_start_date
+  // For annual frequency, use windowInfo.start (which handles year boundaries correctly)
   useEffect(() => {
     if (!isAdhocOpen) return
+
+    const freq = String(reportingFrequency || '').toLowerCase()
+    const isAnnual = freq === 'annual' || freq === 'annually'
+
+    // For annual frequency, use windowInfo.start which correctly handles year transitions
+    if (isAnnual && windowInfo?.start) {
+      setStartDate(ymdUTC(windowInfo.start))
+      setEndDate('')
+      setCustomError('')
+      return
+    }
 
     if (lastPricingDate) {
       const next = addDaysUTC(ymdUTC(lastPricingDate), 1) // 2025-08-31 -> 2025-09-01
@@ -1273,7 +1285,7 @@ export const ToggleBetweenModals = ({
       setEndDate('')
       setCustomError('')
     }
-  }, [isAdhocOpen, lastPricingDate, reportingStartDate])
+  }, [isAdhocOpen, lastPricingDate, reportingStartDate, reportingFrequency, windowInfo])
 
   // Adhoc helpers
   const addCustomRow = () => {
@@ -1525,21 +1537,64 @@ export const ToggleBetweenModals = ({
     return last.toISOString().slice(0, 10)
   }
 
+  // Year end for a given YYYY-MM-DD (UTC)
+  const endOfYearUTC = (ymd) => {
+    if (!ymd) return ''
+    const d = new Date(`${ymd}T00:00:00Z`)
+    if (Number.isNaN(d.getTime())) return ''
+    // Dec 31 of the same year
+    const last = new Date(Date.UTC(d.getUTCFullYear(), 11, 31))
+    return last.toISOString().slice(0, 10)
+  }
+
   // Check if two YYYY-MM-DD are in the same calendar month (UTC)
   const sameMonthUTC = (a, b) => {
     if (!a || !b) return true
     return a.slice(0, 7) === b.slice(0, 7)
   }
+
+  // Check if two YYYY-MM-DD are in the same calendar year (UTC)
+  const sameYearUTC = (a, b) => {
+    if (!a || !b) return true
+    return a.slice(0, 4) === b.slice(0, 4)
+  }
+
   useEffect(() => {
     if (!startDate) return
-    const maxAllowed = endOfMonthUTC(startDate)
-    if (endDate && (!sameMonthUTC(startDate, endDate) || endDate > maxAllowed || endDate < startDate)) {
-      setEndDate('')
-      setCustomError('')
+    
+    const freq = String(reportingFrequency || '').toLowerCase()
+    const isAnnual = freq === 'annual' || freq === 'annually'
+    
+    if (isAnnual) {
+      // For annual frequency, allow dates within the same year
+      const maxAllowed = endOfYearUTC(startDate)
+      if (endDate && (!sameYearUTC(startDate, endDate) || endDate > maxAllowed || endDate < startDate)) {
+        setEndDate('')
+        setCustomError('')
+      }
+    } else {
+      // For other frequencies, restrict to same month
+      const maxAllowed = endOfMonthUTC(startDate)
+      if (endDate && (!sameMonthUTC(startDate, endDate) || endDate > maxAllowed || endDate < startDate)) {
+        setEndDate('')
+        setCustomError('')
+      }
     }
-  }, [startDate])
+  }, [startDate, reportingFrequency])
   useEffect(() => {
     if (!isAdhocOpen) return
+
+    const freq = String(reportingFrequency || '').toLowerCase()
+    const isAnnual = freq === 'annual' || freq === 'annually'
+
+    // For annual frequency, use windowInfo.start which correctly handles year transitions
+    // e.g., lastPricingDate 12/31/2026 → From = 01/01/2027
+    if (isAnnual && windowInfo?.start) {
+      setStartDate(ymdUTC(windowInfo.start))
+      setEndDate('')
+      setCustomError('')
+      return
+    }
 
     // CASE A: we have a lastPricingDate → From = LPD + 1
     if (lastPricingDate) {
@@ -1558,7 +1613,7 @@ export const ToggleBetweenModals = ({
     } else {
       setStartDate('')
     }
-  }, [isAdhocOpen, lastPricingDate, reportingStartDate])
+  }, [isAdhocOpen, lastPricingDate, reportingStartDate, reportingFrequency, windowInfo])
 
   return (
     <>
@@ -1736,7 +1791,11 @@ export const ToggleBetweenModals = ({
                 className="form-control"
                 value={endDate}
                 min={startDate || undefined}
-                max={startDate ? endOfMonthUTC(startDate) : undefined}
+                max={startDate ? (() => {
+                  const freq = String(reportingFrequency || '').toLowerCase()
+                  const isAnnual = freq === 'annual' || freq === 'annually'
+                  return isAnnual ? endOfYearUTC(startDate) : endOfMonthUTC(startDate)
+                })() : undefined}
                 onChange={(e) => {
                   const v = e.target.value
                   if (!startDate) {
@@ -1744,19 +1803,31 @@ export const ToggleBetweenModals = ({
                     return
                   }
 
+                  const freq = String(reportingFrequency || '').toLowerCase()
+                  const isAnnual = freq === 'annual' || freq === 'annually'
                   const minAllowed = startDate
-                  const maxAllowed = endOfMonthUTC(startDate)
+                  const maxAllowed = isAnnual ? endOfYearUTC(startDate) : endOfMonthUTC(startDate)
 
                   let next = v
                   if (v && v < minAllowed) next = minAllowed
                   if (v && v > maxAllowed) next = maxAllowed
 
-                  // month lock (shouldn’t trigger because of max, but safe guard)
-                  if (next && !sameMonthUTC(startDate, next)) {
-                    setCustomError('Till Date must be within the same month.')
-                    next = maxAllowed
+                  // For annual frequency, check same year; for others, check same month
+                  if (isAnnual) {
+                    if (next && !sameYearUTC(startDate, next)) {
+                      setCustomError('Till Date must be within the same year.')
+                      next = maxAllowed
+                    } else {
+                      setCustomError('')
+                    }
                   } else {
-                    setCustomError('')
+                    // month lock (shouldn't trigger because of max, but safe guard)
+                    if (next && !sameMonthUTC(startDate, next)) {
+                      setCustomError('Till Date must be within the same month.')
+                      next = maxAllowed
+                    } else {
+                      setCustomError('')
+                    }
                   }
 
                   setEndDate(next)
