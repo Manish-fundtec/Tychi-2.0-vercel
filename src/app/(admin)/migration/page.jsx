@@ -211,34 +211,48 @@ const MigrationPage = () => {
 
   // Handle upload button click - validate pricing first
   const handleUploadClick = async () => {
+    console.log('[Migration] 🔍 handleUploadClick called')
+    
     // Check if migration already exists
     if (hasMigration) {
+      console.log('[Migration] ❌ Migration already exists')
       alert('Migration has already been uploaded and reconciled. Please use the View button to review existing migration data.')
       return false
     }
 
     // Check pricing in real-time (don't rely on state which might be stale)
     if (!fundId) {
+      console.log('[Migration] ❌ Fund ID missing')
       alert('Fund ID is required')
       return false
     }
+
+    console.log('[Migration] 📊 Starting pricing validation for fundId:', fundId)
+    console.log('[Migration] 📊 tokenData:', tokenData)
 
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
       
       // Fetch last pricing date
       const url = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
+      console.log('[Migration] 🌐 Fetching pricing from:', url)
+      
       const resp = await fetch(url, { 
         headers: { 'Accept': 'application/json' }, 
         credentials: 'include' 
       })
       
+      console.log('[Migration] 📡 Response status:', resp.status)
+      
       if (!resp.ok) {
+        console.log('[Migration] ❌ API call failed:', resp.status)
         alert('Please complete pricing first before uploading migration data.')
         return false
       }
       
       const json = await resp.json()
+      console.log('[Migration] 📦 Full API response:', json)
+      
       const lastDate =
         json?.last_pricing_date ||
         json?.meta?.last_pricing_date ||
@@ -254,39 +268,74 @@ const MigrationPage = () => {
         tokenData?.reportingStartDate ||
         null
       
-      console.log('[Migration] Pricing check:', {
+      console.log('[Migration] ✅ Pricing check result:', {
         last_pricing_date: lastDate,
         reporting_start_date: reportingStartDate,
         fund_id: fundId,
+        tokenData_fund: tokenData?.fund,
         full_response: json
       })
       
       // If no last_pricing_date, pricing is not done
       if (!lastDate || lastDate === null || lastDate === 'null' || lastDate === '') {
+        console.log('[Migration] ❌ No last_pricing_date found')
         alert('Please complete pricing first before uploading migration data.')
         return false
       }
       
       // If reporting_start_date exists, compare with last_pricing_date
-      // Pricing is done if last_pricing_date >= reporting_start_date
+      // Pricing is done ONLY if last_pricing_date > reporting_start_date
+      // If they are equal, pricing is NOT done (pricing hasn't been completed yet)
       if (reportingStartDate) {
+        console.log('[Migration] 🔄 Comparing dates:', {
+          last_pricing_date: lastDate,
+          reporting_start_date: reportingStartDate
+        })
+        
         const lastDateObj = new Date(lastDate + 'T00:00:00Z')
         const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
         
+        console.log('[Migration] 📅 Parsed dates:', {
+          lastDateObj: lastDateObj.toISOString(),
+          reportingStartObj: reportingStartObj.toISOString(),
+          lastDateTimestamp: lastDateObj.getTime(),
+          reportingStartTimestamp: reportingStartObj.getTime()
+        })
+        
         if (isNaN(lastDateObj.getTime()) || isNaN(reportingStartObj.getTime())) {
-          console.warn('[Migration] Invalid date format:', { lastDate, reportingStartDate })
+          console.warn('[Migration] ⚠️ Invalid date format:', { lastDate, reportingStartDate })
           // If dates are invalid, just check if lastDate exists
+          console.log('[Migration] ✅ Allowing upload (invalid date format, but lastDate exists)')
           return true
         }
         
-        // Pricing is done if last_pricing_date >= reporting_start_date
-        if (lastDateObj < reportingStartObj) {
-          alert('Please complete pricing first before uploading migration data.')
+        // Pricing is done ONLY if last_pricing_date > reporting_start_date
+        // If equal, pricing is NOT done
+        const isPricingDone = lastDateObj > reportingStartObj
+        console.log('[Migration] 🎯 Comparison result:', {
+          last_pricing_date: lastDate,
+          reporting_start_date: reportingStartDate,
+          isPricingDone: isPricingDone,
+          comparison: `${lastDate} > ${reportingStartDate} = ${isPricingDone}`,
+          areEqual: lastDateObj.getTime() === reportingStartObj.getTime()
+        })
+        
+        if (!isPricingDone) {
+          if (lastDateObj.getTime() === reportingStartObj.getTime()) {
+            console.log('[Migration] ❌ Pricing not done (last_pricing_date === reporting_start_date)')
+            alert('Please complete pricing first before uploading migration data.')
+          } else {
+            console.log('[Migration] ❌ Pricing not done (last_pricing_date < reporting_start_date)')
+            alert('Please complete pricing first before uploading migration data.')
+          }
           return false
         }
+      } else {
+        console.log('[Migration] ⚠️ No reporting_start_date found in tokenData, allowing upload if lastDate exists')
       }
       
       // Pricing exists and is valid, allow upload
+      console.log('[Migration] ✅ Pricing validation passed, allowing upload')
       return true
     } catch (e) {
       console.error('[Migration] Failed to check pricing:', e)
@@ -431,19 +480,28 @@ const MigrationPage = () => {
     }
 
     const fetchLastPricingDate = async () => {
+      console.log('[Migration] 🔄 useEffect: Fetching pricing data for fundId:', fundId)
       try {
         const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
         const url = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
+        console.log('[Migration] 🌐 useEffect: Fetching from:', url)
+        
         const resp = await fetch(url, { 
           headers: { 'Accept': 'application/json' }, 
           credentials: 'include' 
         })
+        
+        console.log('[Migration] 📡 useEffect: Response status:', resp.status)
+        
         if (!resp.ok) {
+          console.log('[Migration] ❌ useEffect: API call failed')
           setHasPricing(false)
           setLastPricingDate(null)
           return
         }
         const json = await resp.json()
+        console.log('[Migration] 📦 useEffect: Full API response:', json)
+        
         const lastDate =
           json?.last_pricing_date ||
           json?.meta?.last_pricing_date ||
@@ -459,33 +517,58 @@ const MigrationPage = () => {
           tokenData?.reportingStartDate ||
           null
         
-        console.log('[Migration] Pricing check (useEffect):', {
+        console.log('[Migration] ✅ useEffect: Pricing check result:', {
           last_pricing_date: lastDate,
           reporting_start_date: reportingStartDate,
-          fund_id: fundId
+          fund_id: fundId,
+          tokenData_fund: tokenData?.fund,
+          tokenData_keys: tokenData ? Object.keys(tokenData) : 'no tokenData'
         })
         
         if (lastDate) {
           const lastDateStr = lastDate.slice(0, 10)
           setLastPricingDate(lastDateStr)
+          console.log('[Migration] 📅 useEffect: lastDate found:', lastDateStr)
           
           // Check if pricing is done by comparing with reporting_start_date
           if (reportingStartDate) {
+            console.log('[Migration] 🔄 useEffect: Comparing dates:', {
+              last_pricing_date: lastDateStr,
+              reporting_start_date: reportingStartDate
+            })
+            
             const lastDateObj = new Date(lastDateStr + 'T00:00:00Z')
             const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
             
+            console.log('[Migration] 📅 useEffect: Parsed dates:', {
+              lastDateObj: lastDateObj.toISOString(),
+              reportingStartObj: reportingStartObj.toISOString(),
+              lastDateTimestamp: lastDateObj.getTime(),
+              reportingStartTimestamp: reportingStartObj.getTime()
+            })
+            
             if (!isNaN(lastDateObj.getTime()) && !isNaN(reportingStartObj.getTime())) {
-              // Pricing is done if last_pricing_date >= reporting_start_date
-              setHasPricing(lastDateObj >= reportingStartObj)
+              // Pricing is done ONLY if last_pricing_date > reporting_start_date
+              // If equal, pricing is NOT done
+              const isPricingDone = lastDateObj > reportingStartObj
+              console.log('[Migration] 🎯 useEffect: Comparison result:', {
+                isPricingDone: isPricingDone,
+                comparison: `${lastDateStr} > ${reportingStartDate} = ${isPricingDone}`,
+                areEqual: lastDateObj.getTime() === reportingStartObj.getTime()
+              })
+              setHasPricing(isPricingDone)
             } else {
               // If dates are invalid, just check if lastDate exists
+              console.log('[Migration] ⚠️ useEffect: Invalid date format, setting hasPricing = true')
               setHasPricing(true)
             }
           } else {
             // If no reporting_start_date, just check if lastDate exists
+            console.log('[Migration] ⚠️ useEffect: No reporting_start_date, setting hasPricing = true')
             setHasPricing(true)
           }
         } else {
+          console.log('[Migration] ❌ useEffect: No lastDate found')
           setHasPricing(false)
           setLastPricingDate(null)
         }
