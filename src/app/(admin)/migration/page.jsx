@@ -225,6 +225,8 @@ const MigrationPage = () => {
 
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
+      
+      // Fetch last pricing date
       const url = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
       const resp = await fetch(url, { 
         headers: { 'Accept': 'application/json' }, 
@@ -244,12 +246,46 @@ const MigrationPage = () => {
         json?.result?.last_pricing_date ||
         null
       
+      // Get reporting_start_date from tokenData or API
+      const reportingStartDate = 
+        tokenData?.fund?.reporting_start_date || 
+        tokenData?.reporting_start_date ||
+        tokenData?.fund?.reportingStartDate ||
+        tokenData?.reportingStartDate ||
+        null
+      
+      console.log('[Migration] Pricing check:', {
+        last_pricing_date: lastDate,
+        reporting_start_date: reportingStartDate,
+        fund_id: fundId
+      })
+      
+      // If no last_pricing_date, pricing is not done
       if (!lastDate) {
         alert('Please complete pricing first before uploading migration data.')
         return false
       }
       
-      // Pricing exists, allow upload
+      // If reporting_start_date exists, compare with last_pricing_date
+      // Pricing is done if last_pricing_date >= reporting_start_date
+      if (reportingStartDate) {
+        const lastDateObj = new Date(lastDate + 'T00:00:00Z')
+        const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
+        
+        if (isNaN(lastDateObj.getTime()) || isNaN(reportingStartObj.getTime())) {
+          console.warn('[Migration] Invalid date format:', { lastDate, reportingStartDate })
+          // If dates are invalid, just check if lastDate exists
+          return true
+        }
+        
+        // Pricing is done if last_pricing_date >= reporting_start_date
+        if (lastDateObj < reportingStartObj) {
+          alert('Please complete pricing first before uploading migration data.')
+          return false
+        }
+      }
+      
+      // Pricing exists and is valid, allow upload
       return true
     } catch (e) {
       console.error('[Migration] Failed to check pricing:', e)
@@ -414,9 +450,40 @@ const MigrationPage = () => {
           json?.result?.last_pricing_date ||
           null
         
+        // Get reporting_start_date from tokenData
+        const reportingStartDate = 
+          tokenData?.fund?.reporting_start_date || 
+          tokenData?.reporting_start_date ||
+          tokenData?.fund?.reportingStartDate ||
+          tokenData?.reportingStartDate ||
+          null
+        
+        console.log('[Migration] Pricing check (useEffect):', {
+          last_pricing_date: lastDate,
+          reporting_start_date: reportingStartDate,
+          fund_id: fundId
+        })
+        
         if (lastDate) {
-          setLastPricingDate(lastDate.slice(0, 10))
-          setHasPricing(true)
+          const lastDateStr = lastDate.slice(0, 10)
+          setLastPricingDate(lastDateStr)
+          
+          // Check if pricing is done by comparing with reporting_start_date
+          if (reportingStartDate) {
+            const lastDateObj = new Date(lastDateStr + 'T00:00:00Z')
+            const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
+            
+            if (!isNaN(lastDateObj.getTime()) && !isNaN(reportingStartObj.getTime())) {
+              // Pricing is done if last_pricing_date >= reporting_start_date
+              setHasPricing(lastDateObj >= reportingStartObj)
+            } else {
+              // If dates are invalid, just check if lastDate exists
+              setHasPricing(true)
+            }
+          } else {
+            // If no reporting_start_date, just check if lastDate exists
+            setHasPricing(true)
+          }
         } else {
           setHasPricing(false)
           setLastPricingDate(null)
@@ -429,7 +496,7 @@ const MigrationPage = () => {
     }
 
     fetchLastPricingDate()
-  }, [fundId])
+  }, [fundId, tokenData])
 
   // History table columns - simple and clear
   const historyColDefs = useMemo(
