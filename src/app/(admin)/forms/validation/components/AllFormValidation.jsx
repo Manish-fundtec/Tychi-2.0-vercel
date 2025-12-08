@@ -2087,15 +2087,6 @@ export const UploadManualJournal = ({ onClose }) => {
         </Alert>
       )}
 
-      {resp && (
-        <Alert variant="info" className="py-2">
-          <strong>Response:</strong>
-          <pre className="mt-2 text-sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {JSON.stringify(resp, null, 2)}
-          </pre>
-        </Alert>
-      )}
-
       <div className="d-flex justify-content-end gap-2">
         <Button variant="secondary" onClick={() => onClose?.()} disabled={submitting}>
           Close

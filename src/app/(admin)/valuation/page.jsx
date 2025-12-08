@@ -1,10 +1,12 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState ,useCallback } from 'react';
+import { useEffect, useRef, useState ,useCallback, useMemo } from 'react';
 import Cookies from 'js-cookie';
 import { Card, CardBody, CardHeader, CardTitle, Col, Dropdown, Modal, Row, Button } from 'react-bootstrap';
 import { Eye, RotateCcw } from 'lucide-react';
+import { useDashboardToken } from '@/hooks/useDashboardToken';
+import { formatYmd } from '@/lib/dateFormat';
 
 // Toggle (upload/manual)
 const ToggleBetweenModals = dynamic(
@@ -69,7 +71,6 @@ export default function ReviewsPage() {
   const [fundId, setFundId] = useState(null);
 
   const [rowData, setRowData] = useState([]);
-  const [columnDefs, setColumnDefs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
@@ -83,36 +84,56 @@ export default function ReviewsPage() {
   const [symbolLoading, setSymbolLoading] = useState(false);
   const [symbolErr, setSymbolErr] = useState('');
 
-  // set up columns once
+  // Get date format from dashboard token
+  const dashboard = useDashboardToken();
+  const dateFormat = dashboard?.date_format || 'MM/DD/YYYY';
+
+  // set up columns with date formatting
+  const columnDefsMemo = useMemo(() => {
+    const base = [
+      { headerName: 'Sr.No', field: 'srNo', width: 90 ,flex:1 },
+      { 
+        headerName: 'Reporting Period', 
+        field: 'month', 
+        flex: 1,
+        valueFormatter: (params) => {
+          const value = params?.value || '';
+          // Check if value is a date string (YYYY-MM-DD format)
+          if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return formatYmd(value, dateFormat);
+          }
+          return value; // Return as-is if not a date
+        }
+      },
+      { 
+        headerName: 'Reporting Date', 
+        field: 'date', 
+        width: 160,
+        flex:1,
+        valueFormatter: (params) => {
+          const raw = params?.value ? String(params.value).slice(0, 10) : '';
+          if (!raw) return '';
+          return formatYmd(raw, dateFormat);
+        }
+      },
+      { headerName: 'Status', field: 'status', width: 130 },
+    ];
+
+    return [
+      ...base,
+      {
+        headerName: 'View Symbols',
+        field: 'view',
+        width: 150,
+        sortable: false,
+        filter: false,
+        cellRenderer: 'ActionsRenderer',
+      },
+    ];
+  }, [dateFormat]);
+
+  // Initialize AG Grid modules
   useEffect(() => {
-    (async () => {
-      try {
-        const mod = await import('@/assets/tychiData/columnDefs').catch(() => null);
-        const base =
-          mod?.pricingColDefs ||
-          [
-            { headerName: 'Sr.No', field: 'srNo', width: 90 },
-            { headerName: 'Reporting Period', field: 'month', flex: 1 },
-            { headerName: 'Reporting Date', field: 'date', width: 160 },
-            { headerName: 'Status', field: 'status', width: 130 },
-          ];
-
-        setColumnDefs([
-          ...base,
-          {
-            headerName: 'View Symbols',
-            field: 'view',
-            width: 150,
-            sortable: false,
-            filter: false,
-            cellRenderer: 'ActionsRenderer', // register below
-          },
-        ]);
-      } catch (e) {
-        console.error('[Valuation] columnDefs error', e);
-      }
-    })();
-
     // AG Grid community modules (fixes row model module error)
     import('ag-grid-community')
       .then(({ ModuleRegistry, AllCommunityModule }) => {
@@ -165,30 +186,108 @@ export default function ReviewsPage() {
     fetchReportingPeriods();
   }, [fundId, fetchReportingPeriods]);
 
+  // Helper to normalize date to YYYY-MM-DD format
+  const normalizeDate = (dateStr) => {
+    if (!dateStr) return '';
+    const str = String(dateStr).trim();
+    // Already in YYYY-MM-DD format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+    // Try to parse and format
+    const date = new Date(str);
+    if (isNaN(date.getTime())) return str; // Return as-is if invalid
+    return date.toISOString().slice(0, 10);
+  };
+
   async function handleViewSymbols(row) {
-    if (!row || !fundId) return;
-    setSelectedLabel(`${row.month} — ${row.date}`);
+    if (!row || !fundId) {
+      console.warn('[Valuation] handleViewSymbols: Missing row or fundId', { row, fundId });
+      return;
+    }
+    
+    // Normalize date to ensure YYYY-MM-DD format
+    const normalizedDate = normalizeDate(row.date);
+    
+    console.log('[Valuation] handleViewSymbols called:', { 
+      row, 
+      originalDate: row.date,
+      normalizedDate,
+      month: row.month,
+      fundId 
+    });
+    
+    if (!normalizedDate) {
+      console.error('[Valuation] Invalid date format:', row.date);
+      setSymbolErr(`Invalid date format: ${row.date}`);
+      setShowModal(true);
+      return;
+    }
+    
+    const formattedDate = formatYmd(normalizedDate, dateFormat);
+    setSelectedLabel(`${row.month} — ${formattedDate}`);
     setShowModal(true);
     setSymbolLoading(true);
     setSymbolErr('');
     setSymbolRows([]);
+    
     try {
       const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(
         fundId
-      )}/reporting-periods/symbols?date=${encodeURIComponent(row.date)}`;
+      )}/reporting-periods/symbols?date=${encodeURIComponent(normalizedDate)}`;
+      
+      console.log('[Valuation] Fetching symbols from:', url);
+      console.log('[Valuation] Request headers:', getAuthHeaders());
+      
       const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const json = await resp.json(); // { rows }
-      const rows = (json?.rows || []).map((r) => ({
-        symbol: r.symbol_name || r.symbol_id,
-        price: Number(r.price ?? 0),
-      }));
+      
+      console.log('[Valuation] Response status:', resp.status, resp.statusText);
+      console.log('[Valuation] Response headers:', Object.fromEntries(resp.headers.entries()));
+      
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => '');
+        console.error('[Valuation] API error response:', errorText);
+        throw new Error(`HTTP ${resp.status}: ${errorText || resp.statusText}`);
+      }
+      
+      const json = await resp.json();
+      console.log('[Valuation] API response:', json);
+      console.log('[Valuation] Response type:', typeof json);
+      console.log('[Valuation] Has rows?', !!json?.rows);
+      console.log('[Valuation] Has data?', !!json?.data);
+      console.log('[Valuation] Is array?', Array.isArray(json));
+      
+      // Handle different response structures
+      const dataRows = json?.rows || json?.data || (Array.isArray(json) ? json : []);
+      console.log('[Valuation] Parsed rows count:', dataRows.length);
+      console.log('[Valuation] First row sample:', dataRows[0]);
+      
+      const rows = dataRows.map((r, idx) => {
+        const symbol = r.symbol_name || r.symbol_id || r.symbol || r.name || '';
+        const price = Number(r.price ?? r.price_value ?? 0);
+        if (idx < 3) { // Log first 3 rows for debugging
+          console.log(`[Valuation] Row ${idx}:`, { symbol, price, raw: r });
+        }
+        return { symbol, price };
+      });
+      
+      console.log('[Valuation] Final mapped rows:', rows);
+      console.log('[Valuation] Setting symbolRows with', rows.length, 'items');
       setSymbolRows(rows);
+      
+      if (rows.length === 0) {
+        console.warn('[Valuation] No symbols found for date:', normalizedDate);
+        console.warn('[Valuation] This might mean:');
+        console.warn('  1. No pricing data uploaded for this date');
+        console.warn('  2. Date format mismatch');
+        console.warn('  3. API returned empty result');
+      }
     } catch (e) {
       console.error('[Valuation] load symbols failed:', e);
-      setSymbolErr('Failed to load symbols for this period.');
+      console.error('[Valuation] Error stack:', e.stack);
+      const errorMsg = e?.message || 'Failed to load symbols for this period.';
+      setSymbolErr(errorMsg);
     } finally {
       setSymbolLoading(false);
+      console.log('[Valuation] handleViewSymbols completed');
     }
   }
 
@@ -206,7 +305,8 @@ export default function ReviewsPage() {
       return;
     }
 
-    if (!confirm(`Revert valuation for ${row.month} — ${row.date}?`)) return;
+    const formattedDate = formatYmd(row.date, dateFormat);
+    if (!confirm(`Revert valuation for ${row.month} — ${formattedDate}?`)) return;
 
     try {
       const url = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods/revert`;
@@ -297,7 +397,7 @@ export default function ReviewsPage() {
               <div className="ag-theme-quartz">
                 <AgGridReact
                   rowData={rowData}
-                  columnDefs={columnDefs}
+                  columnDefs={columnDefsMemo}
                   domLayout="autoHeight"
                   pagination
                   paginationPageSize={10}
@@ -325,10 +425,13 @@ export default function ReviewsPage() {
         </Modal.Header>
         <Modal.Body>
           {symbolLoading ? (
-            <p className="text-muted">Loading…</p>
+            <p className="text-muted">Loading symbols…</p>
           ) : symbolErr ? (
-            <p className="text-danger">{symbolErr}</p>
-          ) : symbolRows.length ? (
+            <div>
+              <p className="text-danger fw-bold">Error: {symbolErr}</p>
+              <p className="text-muted small">Check the browser console for more details.</p>
+            </div>
+          ) : symbolRows.length > 0 ? (
             <div className="table-responsive">
               <table className="table table-bordered table-striped">
                 <thead className="table-light">
@@ -340,15 +443,19 @@ export default function ReviewsPage() {
                 <tbody>
                   {symbolRows.map((it, i) => (
                     <tr key={i}>
-                      <td>{it.symbol}</td>
-                      <td className="text-end">{it.price}</td>
+                      <td>{it.symbol || '—'}</td>
+                      <td className="text-end">{it.price || '0.00'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <p className="text-muted small mt-2">Total: {symbolRows.length} symbol(s)</p>
             </div>
           ) : (
-            <p className="text-muted text-center">No symbols available for this period.</p>
+            <div className="text-center">
+              <p className="text-muted">No symbols available for this period.</p>
+              <p className="text-muted small">Make sure pricing data has been uploaded for this reporting period.</p>
+            </div>
           )}
         </Modal.Body>
         <Modal.Footer>
