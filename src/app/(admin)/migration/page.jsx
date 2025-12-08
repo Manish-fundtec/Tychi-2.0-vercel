@@ -334,104 +334,108 @@ const MigrationPage = () => {
     }
   }, [fundId])
 
-  // Actions cell renderer - memoized to prevent re-renders
-  // Defined after fetchMigrationData so it can use it
-  const actionsCellRenderer = useCallback((params) => {
+  // Actions cell renderer component
+  const ActionsCellRenderer = useCallback((params) => {
     const { data } = params
     const fileId = data?.file_id
     const bookcloseStatus = String(data?.bookclose_status || '').toLowerCase()
     const isBookclosed = bookcloseStatus === 'bookclosed'
     
-    if (fileId) {
-      return (
-        <div className="d-inline-flex align-items-center gap-2">
-          <Eye
+    const handleViewClick = (e) => {
+      e.stopPropagation()
+      console.log('[Migration] 👁️ View icon clicked for fileId:', fileId)
+      setCurrentFileId(fileId)
+      setShowReviewOnly(true)
+      setShowComparisonModal(true)
+      console.log('[Migration] 👁️ State updated, modal should open now')
+    }
+    
+    const handleRevertClick = async (e) => {
+      e.stopPropagation()
+      if (!fundId || !fileId) {
+        console.warn('[Migration] Missing fundId or fileId')
+        return
+      }
+      
+      if (!confirm('Are you sure you want to revert this migration? This will delete all migration data.')) {
+        return
+      }
+      
+      try {
+        console.log('[Migration] 🔄 Revert icon clicked for fileId:', fileId)
+        
+        const token = Cookies.get('dashboardToken')
+        if (!token) {
+          alert('Authentication token not found')
+          return
+        }
+        
+        const headers = {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'dashboard': `Bearer ${token}`,
+        }
+        
+        const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/cleanup?file_id=${encodeURIComponent(fileId)}`
+        console.log('[Migration] 🌐 Calling cleanup API:', url)
+        
+        const resp = await fetch(url, {
+          method: 'DELETE',
+          headers,
+          credentials: 'include',
+        })
+        
+        if (!resp.ok) {
+          const errorText = await resp.text().catch(() => '')
+          alert('Failed to cleanup migration data: ' + (errorText || resp.statusText))
+          return
+        }
+        
+        const result = await resp.json()
+        console.log('[Migration] ✅ Cleanup completed:', result)
+        
+        if (result?.data) {
+          alert(`Migration data cleaned up successfully!\nDeleted: ${result.data.migration_deleted || 0} migration records, ${result.data.buffer_deleted || 0} buffer records`)
+        } else {
+          alert('Migration data cleaned up successfully!')
+        }
+        
+        // Auto refresh
+        await fetchMigrationData()
+      } catch (error) {
+        console.error('[Migration] ❌ Cleanup error:', error)
+        alert('Failed to cleanup migration data: ' + (error?.message || 'Unknown error'))
+      }
+    }
+    
+    if (!fileId) {
+      return <span>—</span>
+    }
+    
+    return (
+      <div className="d-inline-flex align-items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <Eye
+          size={18}
+          className="text-primary"
+          title="View Migration"
+          onClick={handleViewClick}
+          style={{ cursor: 'pointer' }}
+        />
+        {isBookclosed && (
+          <RotateCcw
             size={18}
-            className="text-primary cursor-pointer"
-            title="View Migration"
-            onClick={(e) => {
-              e.stopPropagation()
-              e.preventDefault()
-              console.log('[Migration] 👁️ View icon clicked for fileId:', fileId)
-              console.log('[Migration] 👁️ Setting showReviewOnly to true')
-              console.log('[Migration] 👁️ Setting showComparisonModal to true')
-              setCurrentFileId(fileId)
-              setShowReviewOnly(true) // Show only review modal for View button
-              setShowComparisonModal(true)
-              console.log('[Migration] 👁️ State updated, modal should open now')
-            }}
+            className="text-primary"
+            title="Revert Migration"
+            onClick={handleRevertClick}
             style={{ cursor: 'pointer' }}
           />
-          {isBookclosed && (
-            <RotateCcw
-              size={18}
-              className="text-primary cursor-pointer"
-              title="Revert Migration"
-              onClick={async (e) => {
-                e.stopPropagation()
-                if (!fundId || !fileId) return
-                
-                if (!confirm('Are you sure you want to revert this migration? This will delete all migration data.')) {
-                  return
-                }
-                
-                try {
-                  console.log('[Migration] 🔄 Revert icon clicked for fileId:', fileId)
-                  
-                  // Call cleanup API to delete migration data
-                  const token = Cookies.get('dashboardToken')
-                  if (!token) {
-                    alert('Authentication token not found')
-                    return
-                  }
-                  
-                  const headers = {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'dashboard': `Bearer ${token}`,
-                  }
-                  
-                  // Use the correct API endpoint: DELETE /:fund_id/cleanup
-                  const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/cleanup?file_id=${encodeURIComponent(fileId)}`
-                  console.log('[Migration] 🌐 Calling cleanup API:', url)
-                  
-                  const resp = await fetch(url, {
-                    method: 'DELETE',
-                    headers,
-                    credentials: 'include',
-                  })
-                  
-                  if (!resp.ok) {
-                    const errorText = await resp.text().catch(() => '')
-                    alert('Failed to cleanup migration data: ' + (errorText || resp.statusText))
-                    return
-                  }
-                  
-                  const result = await resp.json()
-                  console.log('[Migration] ✅ Cleanup completed:', result)
-                  
-                  // Show success message
-                  if (result?.data) {
-                    alert(`Migration data cleaned up successfully!\nDeleted: ${result.data.migration_deleted || 0} migration records, ${result.data.buffer_deleted || 0} buffer records`)
-                  } else {
-                    alert('Migration data cleaned up successfully!')
-                  }
-                  
-                  // Auto refresh: Fetch migration data again
-                  await fetchMigrationData()
-                } catch (error) {
-                  console.error('[Migration] ❌ Cleanup error:', error)
-                  alert('Failed to cleanup migration data: ' + (error?.message || 'Unknown error'))
-                }
-              }}
-              style={{ cursor: 'pointer' }}
-            />
-          )}
-        </div>
-      )
-    }
-    return '—'
+        )}
+      </div>
+    )
   }, [fundId, fetchMigrationData])
+  
+  // Actions cell renderer wrapper for AG Grid
+  const actionsCellRenderer = ActionsCellRenderer
 
   // Column definitions - defined after actionsCellRenderer
   const columnDefs = useMemo(
