@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Alert, Tabs, Tab, Button } from 'react-bootstrap'
+import { Eye, RotateCcw } from 'lucide-react'
 import Cookies from 'js-cookie'
 import PageTitle from '@/components/PageTitle'
 import { UploadMigrationModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
@@ -82,21 +83,22 @@ const MigrationPage = () => {
     
     if (fileId) {
       return (
-        <div className="d-flex gap-2">
-          <Button
-            variant="primary"
-            size="sm"
+        <div className="d-inline-flex align-items-center gap-2">
+          <Eye
+            size={18}
+            className="text-primary cursor-pointer"
+            title="View Migration"
             onClick={() => {
               setCurrentFileId(fileId)
               setShowReviewOnly(true) // Show only review modal for View button
               setShowComparisonModal(true)
-            }}>
-            View
-          </Button>
+            }}
+          />
           {isBookclosed && (
-            <Button
-              variant="warning"
-              size="sm"
+            <RotateCcw
+              size={18}
+              className="text-primary cursor-pointer"
+              title="Revert/Open Migration"
               onClick={async () => {
                 if (!fundId || !fileId) return
                 
@@ -144,9 +146,8 @@ const MigrationPage = () => {
                   console.error('[Migration] Cleanup error:', error)
                   alert('Failed to cleanup migration data: ' + (error?.message || 'Unknown error'))
                 }
-              }}>
-              Open
-            </Button>
+              }}
+            />
           )}
         </div>
       )
@@ -185,7 +186,7 @@ const MigrationPage = () => {
         field: 'actions',
         sortable: false,
         filter: false,
-        width: 180,
+        width: 100,
         pinned: 'right',
         cellRenderer: actionsCellRenderer,
       },
