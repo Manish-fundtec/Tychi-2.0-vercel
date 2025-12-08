@@ -59,6 +59,9 @@ const MigrationPage = () => {
   const [activeTab, setActiveTab] = useState('list')
   const [currentFileId, setCurrentFileId] = useState(null)
   const [showReviewOnly, setShowReviewOnly] = useState(false) // Track if only review modal should show
+  const [hasMigration, setHasMigration] = useState(false) // Track if migration already exists
+  const [hasPricing, setHasPricing] = useState(false) // Track if pricing is done
+  const [lastPricingDate, setLastPricingDate] = useState(null) // Store last pricing date
   
   // History tab states
   const [historyRows, setHistoryRows] = useState([])
@@ -206,6 +209,23 @@ const MigrationPage = () => {
     gridApiRef.current = params.api
   }, [])
 
+  // Handle upload button click - validate pricing first
+  const handleUploadClick = () => {
+    // Check if migration already exists
+    if (hasMigration) {
+      alert('Migration has already been uploaded and reconciled. Please use the View button to review existing migration data.')
+      return false
+    }
+
+    // Check if pricing is done
+    if (!hasPricing || !lastPricingDate) {
+      alert('Please complete pricing first before uploading migration data.')
+      return false
+    }
+
+    return true
+  }
+
   // Handle success after upload - open comparison modal
   const handleUploadSuccess = (fileId) => {
     if (fileId) {
@@ -321,6 +341,64 @@ const MigrationPage = () => {
     }
   }, [activeTab, fetchHistory])
 
+  // Check if migration already exists (disable upload button if exists)
+  useEffect(() => {
+    // Migration exists if there's any row with reconcile_status not empty or bookclose_status not empty
+    const migrationExists = rowData.some((row) => {
+      const reconcileStatus = String(row.reconcile_status || '').toLowerCase()
+      const bookcloseStatus = String(row.bookclose_status || '').toLowerCase()
+      // Migration exists if it's reconciled or bookclosed
+      return reconcileStatus === 'reconciled' || bookcloseStatus === 'bookclosed' || reconcileStatus !== 'pending'
+    })
+    setHasMigration(migrationExists)
+  }, [rowData])
+
+  // Fetch last pricing date to check if pricing is done
+  useEffect(() => {
+    if (!fundId) {
+      setHasPricing(false)
+      setLastPricingDate(null)
+      return
+    }
+
+    const fetchLastPricingDate = async () => {
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
+        const url = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
+        const resp = await fetch(url, { 
+          headers: { 'Accept': 'application/json' }, 
+          credentials: 'include' 
+        })
+        if (!resp.ok) {
+          setHasPricing(false)
+          setLastPricingDate(null)
+          return
+        }
+        const json = await resp.json()
+        const lastDate =
+          json?.last_pricing_date ||
+          json?.meta?.last_pricing_date ||
+          json?.data?.last_pricing_date ||
+          json?.result?.last_pricing_date ||
+          null
+        
+        if (lastDate) {
+          setLastPricingDate(lastDate.slice(0, 10))
+          setHasPricing(true)
+        } else {
+          setHasPricing(false)
+          setLastPricingDate(null)
+        }
+      } catch (e) {
+        console.error('[Migration] Failed to fetch last pricing date:', e)
+        setHasPricing(false)
+        setLastPricingDate(null)
+      }
+    }
+
+    fetchLastPricingDate()
+  }, [fundId])
+
   // History table columns - simple and clear
   const historyColDefs = useMemo(
     () => [
@@ -381,6 +459,8 @@ const MigrationPage = () => {
                 modalTitle="Upload Migration File"
                 onSuccess={handleUploadSuccess}
                 onUploadSuccess={handleUploadSuccess}
+                disabled={hasMigration}
+                beforeOpen={handleUploadClick}
               />
             </CardHeader>
             

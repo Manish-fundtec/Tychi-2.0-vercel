@@ -489,7 +489,7 @@ export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload 
   )
 }
 
-export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upload Migration File', onSave, onClose, onSuccess, onUploadSuccess }) {
+export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upload Migration File', onSave, onClose, onSuccess, onUploadSuccess, disabled = false, beforeOpen }) {
   const { isTrue, toggle } = useToggle()
 
   const handleModalClose = () => {
@@ -510,10 +510,21 @@ export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upl
     handleSuccess()
   }
 
+  const handleButtonClick = () => {
+    // Validate before opening if beforeOpen callback is provided
+    if (beforeOpen) {
+      const canOpen = beforeOpen()
+      if (canOpen === false) {
+        return // Don't open modal if validation fails
+      }
+    }
+    toggle()
+  }
+
   return (
     <>
       {/* Button to open the modal */}
-      <Button variant="primary" onClick={toggle}>
+      <Button variant="primary" onClick={handleButtonClick} disabled={disabled}>
         {buttonLabel}
       </Button>
 
