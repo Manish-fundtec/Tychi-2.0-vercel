@@ -210,20 +210,52 @@ const MigrationPage = () => {
   }, [])
 
   // Handle upload button click - validate pricing first
-  const handleUploadClick = () => {
+  const handleUploadClick = async () => {
     // Check if migration already exists
     if (hasMigration) {
       alert('Migration has already been uploaded and reconciled. Please use the View button to review existing migration data.')
       return false
     }
 
-    // Check if pricing is done
-    if (!hasPricing || !lastPricingDate) {
-      alert('Please complete pricing first before uploading migration data.')
+    // Check pricing in real-time (don't rely on state which might be stale)
+    if (!fundId) {
+      alert('Fund ID is required')
       return false
     }
 
-    return true
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
+      const url = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
+      const resp = await fetch(url, { 
+        headers: { 'Accept': 'application/json' }, 
+        credentials: 'include' 
+      })
+      
+      if (!resp.ok) {
+        alert('Please complete pricing first before uploading migration data.')
+        return false
+      }
+      
+      const json = await resp.json()
+      const lastDate =
+        json?.last_pricing_date ||
+        json?.meta?.last_pricing_date ||
+        json?.data?.last_pricing_date ||
+        json?.result?.last_pricing_date ||
+        null
+      
+      if (!lastDate) {
+        alert('Please complete pricing first before uploading migration data.')
+        return false
+      }
+      
+      // Pricing exists, allow upload
+      return true
+    } catch (e) {
+      console.error('[Migration] Failed to check pricing:', e)
+      alert('Please complete pricing first before uploading migration data.')
+      return false
+    }
   }
 
   // Handle success after upload - open comparison modal

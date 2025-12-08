@@ -510,10 +510,10 @@ export function UploadMigrationModal({ buttonLabel = 'Upload', modalTitle = 'Upl
     handleSuccess()
   }
 
-  const handleButtonClick = () => {
+  const handleButtonClick = async () => {
     // Validate before opening if beforeOpen callback is provided
     if (beforeOpen) {
-      const canOpen = beforeOpen()
+      const canOpen = await beforeOpen()
       if (canOpen === false) {
         return // Don't open modal if validation fails
       }
