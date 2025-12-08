@@ -3,12 +3,15 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Alert, Tabs, Tab, Button } from 'react-bootstrap'
+import Cookies from 'js-cookie'
 import PageTitle from '@/components/PageTitle'
 import { UploadMigrationModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import MigrationComparisonModal from './components/MigrationComparisonModal'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 import api from '@/lib/api/axios'
 import { getMigrationTableData } from '@/lib/api/migration'
+
+const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
 
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
 
@@ -55,6 +58,10 @@ const MigrationPage = () => {
   const [showComparisonModal, setShowComparisonModal] = useState(false)
   const [activeTab, setActiveTab] = useState('list')
   const [currentFileId, setCurrentFileId] = useState(null)
+  const [showReviewOnly, setShowReviewOnly] = useState(false) // Track if only review modal should show
+  const [hasMigration, setHasMigration] = useState(false) // Track if migration already exists
+  const [hasPricing, setHasPricing] = useState(false) // Track if pricing is done
+  const [lastPricingDate, setLastPricingDate] = useState(null) // Store last pricing date
   
   // History tab states
   const [historyRows, setHistoryRows] = useState([])
@@ -70,18 +77,78 @@ const MigrationPage = () => {
   const actionsCellRenderer = useCallback((params) => {
     const { data } = params
     const fileId = data?.file_id
+    const bookcloseStatus = String(data?.bookclose_status || '').toLowerCase()
+    const isBookclosed = bookcloseStatus === 'bookclosed'
     
     if (fileId) {
       return (
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => {
-            setCurrentFileId(fileId)
-            setShowComparisonModal(true)
-          }}>
-          View
-        </Button>
+        <div className="d-flex gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setCurrentFileId(fileId)
+              setShowReviewOnly(true) // Show only review modal for View button
+              setShowComparisonModal(true)
+            }}>
+            View
+          </Button>
+          {isBookclosed && (
+            <Button
+              variant="warning"
+              size="sm"
+              onClick={async () => {
+                if (!fundId || !fileId) return
+                
+                try {
+                  // Call cleanup API to delete migration data
+                  const token = Cookies.get('dashboardToken')
+                  if (!token) {
+                    alert('Authentication token not found')
+                    return
+                  }
+                  
+                  const headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'dashboard': `Bearer ${token}`,
+                  }
+                  
+                  const url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/cleanup?file_id=${encodeURIComponent(fileId)}`
+                  
+                  const resp = await fetch(url, {
+                    method: 'DELETE',
+                    headers,
+                    credentials: 'include',
+                  })
+                  
+                  if (!resp.ok) {
+                    const errorText = await resp.text().catch(() => '')
+                    alert('Failed to cleanup migration data: ' + (errorText || resp.statusText))
+                    return
+                  }
+                  
+                  const result = await resp.json()
+                  console.log('[Migration] Cleanup completed:', result)
+                  
+                  // Delete the record from the table after successful cleanup
+                  setRowData((prev) => prev.filter((row) => row.file_id !== fileId))
+                  
+                  // Show success message
+                  if (result?.data) {
+                    alert(`Migration data cleaned up successfully!\nDeleted: ${result.data.migration_deleted || 0} migration records, ${result.data.buffer_deleted || 0} buffer records`)
+                  } else {
+                    alert('Migration data cleaned up successfully!')
+                  }
+                } catch (error) {
+                  console.error('[Migration] Cleanup error:', error)
+                  alert('Failed to cleanup migration data: ' + (error?.message || 'Unknown error'))
+                }
+              }}>
+              Open
+            </Button>
+          )}
+        </div>
       )
     }
     return '—'
@@ -103,14 +170,14 @@ const MigrationPage = () => {
         filter: true,
         cellRenderer: ReconcileStatusRenderer
       },
-      { 
-        field: 'bookclose_status', 
-        headerName: 'Bookclose Status', 
-        flex: 1, 
-        sortable: true, 
-        filter: true,
-        cellRenderer: BookcloseStatusRenderer
-      },
+      // { 
+      //   field: 'bookclose_status', 
+      //   headerName: 'Bookclose Status', 
+      //   flex: 1, 
+      //   sortable: true, 
+      //   filter: true,
+      //   cellRenderer: BookcloseStatusRenderer
+      // },
       // { field: 'uploaded_at', headerName: 'Uploaded At', flex: 1, sortable: true, filter: true,
       //   valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString('en-IN') : '—' },
       {
@@ -118,7 +185,7 @@ const MigrationPage = () => {
         field: 'actions',
         sortable: false,
         filter: false,
-        width: 120,
+        width: 180,
         pinned: 'right',
         cellRenderer: actionsCellRenderer,
       },
@@ -142,11 +209,97 @@ const MigrationPage = () => {
     gridApiRef.current = params.api
   }, [])
 
+  // Handle upload button click - validate pricing first
+  const handleUploadClick = async () => {
+    // Check if migration already exists
+    if (hasMigration) {
+      alert('Migration has already been uploaded and reconciled. Please use the View button to review existing migration data.')
+      return false
+    }
+
+    // Check pricing in real-time (don't rely on state which might be stale)
+    if (!fundId) {
+      alert('Fund ID is required')
+      return false
+    }
+
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
+      
+      // Fetch last pricing date
+      const url = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
+      const resp = await fetch(url, { 
+        headers: { 'Accept': 'application/json' }, 
+        credentials: 'include' 
+      })
+      
+      if (!resp.ok) {
+        alert('Please complete pricing first before uploading migration data.')
+        return false
+      }
+      
+      const json = await resp.json()
+      const lastDate =
+        json?.last_pricing_date ||
+        json?.meta?.last_pricing_date ||
+        json?.data?.last_pricing_date ||
+        json?.result?.last_pricing_date ||
+        null
+      
+      // Get reporting_start_date from tokenData or API
+      const reportingStartDate = 
+        tokenData?.fund?.reporting_start_date || 
+        tokenData?.reporting_start_date ||
+        tokenData?.fund?.reportingStartDate ||
+        tokenData?.reportingStartDate ||
+        null
+      
+      console.log('[Migration] Pricing check:', {
+        last_pricing_date: lastDate,
+        reporting_start_date: reportingStartDate,
+        fund_id: fundId
+      })
+      
+      // If no last_pricing_date, pricing is not done
+      if (!lastDate) {
+        alert('Please complete pricing first before uploading migration data.')
+        return false
+      }
+      
+      // If reporting_start_date exists, compare with last_pricing_date
+      // Pricing is done if last_pricing_date >= reporting_start_date
+      if (reportingStartDate) {
+        const lastDateObj = new Date(lastDate + 'T00:00:00Z')
+        const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
+        
+        if (isNaN(lastDateObj.getTime()) || isNaN(reportingStartObj.getTime())) {
+          console.warn('[Migration] Invalid date format:', { lastDate, reportingStartDate })
+          // If dates are invalid, just check if lastDate exists
+          return true
+        }
+        
+        // Pricing is done if last_pricing_date >= reporting_start_date
+        if (lastDateObj < reportingStartObj) {
+          alert('Please complete pricing first before uploading migration data.')
+          return false
+        }
+      }
+      
+      // Pricing exists and is valid, allow upload
+      return true
+    } catch (e) {
+      console.error('[Migration] Failed to check pricing:', e)
+      alert('Please complete pricing first before uploading migration data.')
+      return false
+    }
+  }
+
   // Handle success after upload - open comparison modal
   const handleUploadSuccess = (fileId) => {
     if (fileId) {
       setCurrentFileId(fileId)
     }
+    setShowReviewOnly(false) // Show full flow for Upload button
     setShowComparisonModal(true)
     // Refresh data based on active tab
     if (activeTab === 'history') {
@@ -256,6 +409,95 @@ const MigrationPage = () => {
     }
   }, [activeTab, fetchHistory])
 
+  // Check if migration already exists (disable upload button if exists)
+  useEffect(() => {
+    // Migration exists if there's any row with reconcile_status not empty or bookclose_status not empty
+    const migrationExists = rowData.some((row) => {
+      const reconcileStatus = String(row.reconcile_status || '').toLowerCase()
+      const bookcloseStatus = String(row.bookclose_status || '').toLowerCase()
+      // Migration exists if it's reconciled or bookclosed
+      return reconcileStatus === 'reconciled' || bookcloseStatus === 'bookclosed' || reconcileStatus !== 'pending'
+    })
+    setHasMigration(migrationExists)
+  }, [rowData])
+
+  // Fetch last pricing date to check if pricing is done
+  useEffect(() => {
+    if (!fundId) {
+      setHasPricing(false)
+      setLastPricingDate(null)
+      return
+    }
+
+    const fetchLastPricingDate = async () => {
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
+        const url = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
+        const resp = await fetch(url, { 
+          headers: { 'Accept': 'application/json' }, 
+          credentials: 'include' 
+        })
+        if (!resp.ok) {
+          setHasPricing(false)
+          setLastPricingDate(null)
+          return
+        }
+        const json = await resp.json()
+        const lastDate =
+          json?.last_pricing_date ||
+          json?.meta?.last_pricing_date ||
+          json?.data?.last_pricing_date ||
+          json?.result?.last_pricing_date ||
+          null
+        
+        // Get reporting_start_date from tokenData
+        const reportingStartDate = 
+          tokenData?.fund?.reporting_start_date || 
+          tokenData?.reporting_start_date ||
+          tokenData?.fund?.reportingStartDate ||
+          tokenData?.reportingStartDate ||
+          null
+        
+        console.log('[Migration] Pricing check (useEffect):', {
+          last_pricing_date: lastDate,
+          reporting_start_date: reportingStartDate,
+          fund_id: fundId
+        })
+        
+        if (lastDate) {
+          const lastDateStr = lastDate.slice(0, 10)
+          setLastPricingDate(lastDateStr)
+          
+          // Check if pricing is done by comparing with reporting_start_date
+          if (reportingStartDate) {
+            const lastDateObj = new Date(lastDateStr + 'T00:00:00Z')
+            const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
+            
+            if (!isNaN(lastDateObj.getTime()) && !isNaN(reportingStartObj.getTime())) {
+              // Pricing is done if last_pricing_date >= reporting_start_date
+              setHasPricing(lastDateObj >= reportingStartObj)
+            } else {
+              // If dates are invalid, just check if lastDate exists
+              setHasPricing(true)
+            }
+          } else {
+            // If no reporting_start_date, just check if lastDate exists
+            setHasPricing(true)
+          }
+        } else {
+          setHasPricing(false)
+          setLastPricingDate(null)
+        }
+      } catch (e) {
+        console.error('[Migration] Failed to fetch last pricing date:', e)
+        setHasPricing(false)
+        setLastPricingDate(null)
+      }
+    }
+
+    fetchLastPricingDate()
+  }, [fundId, tokenData])
+
   // History table columns - simple and clear
   const historyColDefs = useMemo(
     () => [
@@ -316,6 +558,8 @@ const MigrationPage = () => {
                 modalTitle="Upload Migration File"
                 onSuccess={handleUploadSuccess}
                 onUploadSuccess={handleUploadSuccess}
+                disabled={hasMigration}
+                beforeOpen={handleUploadClick}
               />
             </CardHeader>
             
@@ -445,6 +689,7 @@ const MigrationPage = () => {
         onClose={() => {
           setShowComparisonModal(false)
           setCurrentFileId(null) // Reset fileId when modal closes
+          setShowReviewOnly(false) // Reset showReviewOnly when modal closes
         }}
         fundId={fundId}
         fileId={currentFileId}
@@ -454,6 +699,7 @@ const MigrationPage = () => {
             fetchHistory()
           }
         }}
+        showReviewOnly={showReviewOnly} // Show only review modal when View button clicked, full flow when Upload clicked
       />
     </>
   )

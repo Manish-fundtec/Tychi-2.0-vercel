@@ -103,6 +103,49 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
     return null
   }, [lastPricingDate, tokenData])
 
+  // // Cleanup migration data when modal opens
+  // useEffect(() => {
+  //   if (!show || !fundId) return
+
+  //   const cleanupData = async () => {
+  //     try {
+  //       const token = Cookies.get('dashboardToken')
+  //       const headers = {
+  //         ...getAuthHeaders(),
+  //         'dashboard': `Bearer ${token}`,
+  //       }
+        
+  //       // Build URL with optional file_id
+  //       let url = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/cleanup`
+  //       if (fileId) {
+  //         url += `?file_id=${encodeURIComponent(fileId)}`
+  //       }
+        
+  //       const resp = await fetch(url, {
+  //         method: 'DELETE',
+  //         headers,
+  //         credentials: 'include',
+  //       })
+        
+  //       if (!resp.ok) {
+  //         console.warn('[MigrationComparison] Cleanup failed:', resp.status)
+  //         // Don't throw - cleanup is optional, continue with modal
+  //         return
+  //       }
+        
+  //       const result = await resp.json()
+  //       console.log('[MigrationComparison] Cleanup completed:', result)
+  //     } catch (e) {
+  //       console.error('[MigrationComparison] Cleanup error:', e)
+  //       // Don't block modal - continue even if cleanup fails
+  //     }
+  //   }
+
+  //   cleanupData()
+  // }, [show, fundId, fileId]) // Run when modal opens
+  // Note: Cleanup is handled in the "Open" button click handler in page.jsx
+  // We don't cleanup here because it would delete uploaded data before it can be displayed
+
   // Fetch last pricing date
   useEffect(() => {
     if (!show || !fundId) return
@@ -192,12 +235,14 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
         if (fileId) {
           url += `?file_id=${encodeURIComponent(fileId)}`
         }
+        console.log('[MigrationComparison] 📥 Fetching uploaded data from:', url)
         const resp = await fetch(url, { headers, credentials: 'include' })
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const json = await resp.json()
 
         // Updated response format: { data: [...] }
         const responseData = json?.data || []
+        console.log('[MigrationComparison] 📥 Received uploaded data:', responseData.length, 'records')
 
         // Normalize uploaded migration data - Map fields as per new API format
         // Fields: account_code, account_name, debit, credit (NO closing balance - just use debit/credit directly)
@@ -232,9 +277,11 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
 
         // For comparison modal display, filter by allowed ranges
         const filteredData = allData.filter((item) => isAllowedGlCode(item.glNumber))
+        console.log('[MigrationComparison] 📥 Filtered uploaded data (13000-13999, 21000-21999):', filteredData.length, 'records')
         setUploadedData(filteredData)
         
         // Store all data for reconcile modal (no filter)
+        console.log('[MigrationComparison] 📥 All uploaded data (for reconcile):', allData.length, 'records')
         setAllUploadedData(allData)
       } catch (e) {
         console.error('[MigrationComparison] Failed to fetch uploaded data:', e)
@@ -350,11 +397,14 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   }
 
   return (
-    <Modal show={show} onHide={handleClose} size="xl" centered scrollable>
-      <Modal.Header closeButton>
-        <Modal.Title>Migration Data Comparison</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
+    <>
+      {/* Main Comparison Modal - Hide when showReviewOnly is true */}
+      {!showReviewOnly && (
+        <Modal show={show} onHide={handleClose} size="xl" centered scrollable>
+          <Modal.Header closeButton>
+            <Modal.Title>Migration Data Comparison</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
         {error && (
           <Alert variant="danger" className="mb-3" dismissible onClose={() => setError('')}>
             {error}
@@ -463,11 +513,18 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
           Reconcile
         </Button>
       </Modal.Footer>
+        </Modal>
+      )}
 
-      {/* Reconcile Modal */}
+      {/* Reconcile Modal - Always rendered, shown when showReconcileModal is true or showReviewOnly is true */}
       <ReconcileModal
-        show={showReconcileModal}
-        onClose={() => setShowReconcileModal(false)}
+        show={showReviewOnly ? show : showReconcileModal}
+        onClose={() => {
+          setShowReconcileModal(false)
+          if (showReviewOnly) {
+            handleClose() // Close parent modal when showReviewOnly
+          }
+        }}
         onCloseAll={() => {
           setShowReconcileModal(false)
           handleClose() // Close main modal too
@@ -485,7 +542,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
         onRefreshHistory={onRefreshHistory}
         showReviewOnly={showReviewOnly}
       />
-    </Modal>
+    </>
   )
 }
 
@@ -808,23 +865,25 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
 
   return (
     <Modal show={show} onHide={onClose} size="lg" centered scrollable>
-      <Modal.Header closeButton>
-        <Modal.Title>Reconcile Migration Data</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        {error && (
-          <Alert variant="danger" className="mb-3" dismissible onClose={() => setError('')}>
-            {error}
-          </Alert>
-        )}
+      {!showReviewOnly && (
+        <>
+          <Modal.Header closeButton>
+            <Modal.Title>Reconcile Migration Data</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {error && (
+              <Alert variant="danger" className="mb-3" dismissible onClose={() => setError('')}>
+                {error}
+              </Alert>
+            )}
 
-        {lastPricingDate && (
-          <div className="mb-3">
-            <strong>Last Pricing Date:</strong> {lastPricingDate}
-              </div>
-        )}
+            {lastPricingDate && (
+              <div className="mb-3">
+                <strong>Last Pricing Date:</strong> {lastPricingDate}
+                  </div>
+            )}
 
-                <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                   <Table striped bordered hover size="sm">
                     <thead className="table-light sticky-top">
                       <tr>
@@ -923,15 +982,17 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
                     </tbody>
                   </Table>
                 </div>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onClose} disabled={loading}>
-          Close
-        </Button>
-        <Button variant="primary" onClick={handlePublish} disabled={loading}>
-          {loading ? 'Publishing...' : 'Publish'}
-        </Button>
-      </Modal.Footer>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={onClose} disabled={loading}>
+              Close
+            </Button>
+            <Button variant="primary" onClick={handlePublish} disabled={loading}>
+              {loading ? 'Publishing...' : 'Publish'}
+            </Button>
+          </Modal.Footer>
+        </>
+      )}
 
       {/* Publish Review Modal */}
       <PublishReviewModal
@@ -941,25 +1002,6 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
           setShowPublishReviewModal(false)
           onClose()
         })}
-        onReview={() => {
-          setShowPublishReviewModal(false)
-          // Stay on reconcile modal for review
-        }}
-        onConfirmPublish={async () => {
-          setLoading(true)
-          setError('')
-          try {
-            // Call onPublish callback to complete the publish process
-            onPublish()
-            setShowPublishReviewModal(false)
-            onClose() // Close reconcile modal after publish
-          } catch (e) {
-            console.error('[ReconcileModal] Publish failed:', e)
-            setError('Failed to publish migration data')
-          } finally {
-            setLoading(false)
-          }
-        }}
         totals={totals}
         lastPricingDate={lastPricingDate}
         reconcileData={reconcileData}
@@ -973,21 +1015,12 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
 }
 
 // Publish Review Modal Component
-function PublishReviewModal({ show, onClose, onCloseAll, onReview, onConfirmPublish, totals, lastPricingDate, reconcileData = [], refreshedTrialBalanceData = [], fundId, fileId, onRefreshHistory }) {
+function PublishReviewModal({ show, onClose, onCloseAll, totals, lastPricingDate, reconcileData = [], refreshedTrialBalanceData = [], fundId, fileId, onRefreshHistory }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   
-  // Check if all differences are 0 (both debit and credit)
-  const canBookclose = useMemo(() => {
-    if (Math.abs(totals.differenceTotal) >= 0.01) return false
-    return reconcileData.every((item) => {
-      const diffDrCr = convertToDebitCredit(item.difference || 0, item.glNumber)
-      return Math.abs(diffDrCr.debit) < 0.01 && Math.abs(diffDrCr.credit) < 0.01
-    })
-  }, [totals, reconcileData])
-
-  // Handle bookclose
-  const handleBookclose = async () => {
+  // Handle Review button click - performs bookclose
+  const handleReview = async () => {
     if (!fundId || !lastPricingDate) {
       setError('Fund ID and reporting period are required')
       return
@@ -1155,22 +1188,12 @@ function PublishReviewModal({ show, onClose, onCloseAll, onReview, onConfirmPubl
         )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={onClose} disabled={loading}>
           Close
         </Button>
-        <Button variant="info" onClick={onReview}>
-          Review
+        <Button variant="info" onClick={handleReview} disabled={loading}>
+          {loading ? 'Bookclosing...' : 'Review'}
         </Button>
-        {/* Show Bookclose button only if both debit and credit differences are 0 */}
-        {canBookclose ? (
-          <Button variant="success" onClick={handleBookclose} disabled={loading}>
-            {loading ? 'Bookclosing...' : 'Bookclose'}
-          </Button>
-        ) : (
-          <Button variant="primary" onClick={onConfirmPublish} disabled={loading}>
-            Confirm Publish
-          </Button>
-        )}
       </Modal.Footer>
     </Modal>
   )
