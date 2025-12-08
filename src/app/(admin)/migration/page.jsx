@@ -395,7 +395,7 @@ const MigrationPage = () => {
         console.log('[Migration] ✅ Cleanup completed:', result)
         
         if (result?.data) {
-          alert(`Migration data cleaned up successfully!\nDeleted: ${result.data.migration_deleted || 0} migration records, ${result.data.buffer_deleted || 0} buffer records`)
+          alert(`Migration data cleaned up successfully!\nDeleted: ${result.data.migration_deleted || 0} migration records, ${result.data.buffer_deleted || 0} buffer records, ${result.data.journals_deleted || 0} Journals records`)
         } else {
           alert('Migration data cleaned up successfully!')
         }

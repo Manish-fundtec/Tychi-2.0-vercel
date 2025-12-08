@@ -1068,7 +1068,7 @@ function PublishReviewModal({ show, onClose, onCloseAll, totals, lastPricingDate
           onRefreshHistory()
         }
         // Show success alert
-        alert('Migration bookclosed successfully!')
+        alert('Migration Reviewed successfully!')
         // Close all modals after user clicks OK on alert
         if (onCloseAll) {
           onCloseAll()
@@ -1076,15 +1076,15 @@ function PublishReviewModal({ show, onClose, onCloseAll, totals, lastPricingDate
           onClose()
         }
       } else {
-        const errorMsg = response.data?.message || 'Failed to bookclose migration'
+        const errorMsg = response.data?.message || 'Failed to Review migration'
         setError(errorMsg)
         alert('Failed to bookclose: ' + errorMsg)
       }
     } catch (e) {
-      console.error('[PublishReviewModal] Bookclose failed:', e)
-      const errorMsg = e?.response?.data?.message || e?.message || 'Failed to bookclose migration'
+      console.error('[PublishReviewModal] Review failed:', e)
+      const errorMsg = e?.response?.data?.message || e?.message || 'Failed to Review migration'
       setError(errorMsg)
-      alert('Failed to bookclose: ' + errorMsg)
+      alert('Failed to Review: ' + errorMsg)
     } finally {
       setLoading(false)
     }
@@ -1219,7 +1219,7 @@ function PublishReviewModal({ show, onClose, onCloseAll, totals, lastPricingDate
           Close
         </Button>
         <Button variant="info" onClick={handleReview} disabled={loading}>
-          {loading ? 'Bookclosing...' : 'Review'}
+          {loading ? 'Reviewing...' : 'Review'}
         </Button>
       </Modal.Footer>
     </Modal>
