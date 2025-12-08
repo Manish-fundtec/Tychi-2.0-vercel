@@ -990,6 +990,23 @@ export const ToggleBetweenModals = ({
         fd.append('fund_id', currentFundId)
         if (orgId) fd.append('org_id', orgId)
 
+        // Add frequency and period (similar to manual pricing logic)
+        const freq = String(reportingFrequency || '').toLowerCase()
+        if (reportingFrequency) {
+          fd.append('frequency', reportingFrequency)
+        }
+
+        // For annual frequency, use the computed window period (full year)
+        if (freq === 'annual' || freq === 'annually') {
+          if (windowInfo) {
+            const periodStr = `${ymdUTC(windowInfo.start)}_${ymdUTC(windowInfo.lastDayInclusive)}`
+            fd.append('period', periodStr)
+          }
+        } else if (tokenData?.selected_period) {
+          // For other frequencies, use selected_period from tokenData if available
+          fd.append('period', tokenData.selected_period)
+        }
+
         const token = Cookies.get('dashboardToken') || ''
         const url = `${API_BASE}/api/v1/pricing/${encodeURIComponent(currentFundId)}/upload`
         const resp = await fetch(url, {
