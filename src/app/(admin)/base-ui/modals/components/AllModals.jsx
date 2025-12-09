@@ -803,6 +803,7 @@ export const ToggleBetweenModals = ({
   const [file, setFile] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [fileError, setFileError] = useState('')
+  const [uploadButtonClicked, setUploadButtonClicked] = useState(false)
 
   // ───────────────────────────────
   // Misc state
@@ -832,12 +833,14 @@ export const ToggleBetweenModals = ({
   const [customRows, setCustomRows] = useState([]) // [{ id, symbol, symbol_id?, price }]
   const [bulkPrice, setBulkPrice] = useState('')
   const [savingManual, setSavingManual] = useState(false)
+  const [manualButtonClicked, setManualButtonClicked] = useState(false)
   const [lastPricingLoading, setLastPricingLoading] = useState(false)
   const [lastPricingError, setLastPricingError] = useState('')
   const [newSymbol, setNewSymbol] = useState('')
   const [adhocError, setAdhocError] = useState('')
   const [adhocLoading, setAdhocLoading] = useState(false)
   const [savingCustom, setSavingCustom] = useState(false)
+  const [adhocButtonClicked, setAdhocButtonClicked] = useState(false)
   const [customError, setCustomError] = useState('')
   const [hasValidPrice, setHasValidPrice] = useState(false)
   // helpers
@@ -956,6 +959,7 @@ export const ToggleBetweenModals = ({
 
   const backToChooser = () => {
     setManualOpen(false)
+    setManualButtonClicked(false)
     setChooserOpen(true)
   }
 
@@ -984,12 +988,13 @@ export const ToggleBetweenModals = ({
   }
 
   const handleUploadSave = async () => {
-    if (isUploading) return
+    if (isUploading || uploadButtonClicked) return
     
     const err = validateSelectedFile(file)
     if (err) return setFileError(err)
     if (!currentFundId) return setFileError('Fund not selected.')
 
+    setUploadButtonClicked(true)
     setIsUploading(true)
     setFileError('')
     try {
@@ -1063,14 +1068,14 @@ export const ToggleBetweenModals = ({
           })
         }
       }
-      
-      // Close ALL modals after successful upload
+         // Close ALL modals after successful upload
       setUploadOpen(false)
       setChooserOpen(false)
       setManualOpen(false)
       setAdhocOpen(false)
       setFile(null)
       setFileError('')
+      setUploadButtonClicked(false)
 
       if (typeof onPricingRefresh === 'function') {
         onPricingRefresh()
@@ -1081,6 +1086,7 @@ export const ToggleBetweenModals = ({
     } catch (e) {
       console.error('[Upload Pricing] Error:', e)
       setFileError(e?.message || 'Upload failed.')
+      setUploadButtonClicked(false)
     } finally {
       setIsUploading(false)
     }
@@ -1182,7 +1188,7 @@ export const ToggleBetweenModals = ({
   }
 
   const handleManualSave = async () => {
-    if (savingManual) return
+    if (savingManual || manualButtonClicked) return
     
     const rows = []
     agGridRef.current?.api?.forEachNode((n) => rows.push({ ...n.data }))
@@ -1212,6 +1218,7 @@ export const ToggleBetweenModals = ({
 
     try {
       setManualError('')
+      setManualButtonClicked(true)
       setSavingManual(true)
 
       await postManualPricing(payload)
@@ -1230,6 +1237,7 @@ export const ToggleBetweenModals = ({
       await refreshLastPricingDate()
     } catch (e) {
       setManualError(e?.message || 'Failed to save manual pricing.')
+      setManualButtonClicked(false)
     } finally {
       setSavingManual(false)
     }
@@ -1432,7 +1440,7 @@ export const ToggleBetweenModals = ({
   }
 
   const handleAdhocSave = async () => {
-    if (savingCustom) return
+    if (savingCustom || adhocButtonClicked) return
     
     adhocGridRef.current?.api?.stopEditing()
     const pricing_date = (endDate || '').slice(0, 10)
@@ -1445,6 +1453,7 @@ export const ToggleBetweenModals = ({
 
     try {
       setCustomError('')
+      setAdhocButtonClicked(true)
       setSavingCustom(true)
       await postCustomPricing({ pricing_date, entries /*, file_id*/ })
 
@@ -1474,6 +1483,7 @@ export const ToggleBetweenModals = ({
       } catch {}
     } catch (e) {
       setCustomError(e?.message || 'Failed to save custom pricing.')
+      setAdhocButtonClicked(false)
     } finally {
       setSavingCustom(false)
     }
@@ -1496,7 +1506,7 @@ export const ToggleBetweenModals = ({
     })
   }
 
-  const canSaveAdhoc = !!endDate && hasValidPrice && !savingCustom
+  const canSaveAdhoc = !!endDate && hasValidPrice && !savingCustom && !adhocButtonClicked
 
   const recomputeHasValid = useCallback(() => {
     if (!adhocGridRef.current?.api) {
@@ -1697,7 +1707,10 @@ export const ToggleBetweenModals = ({
       </Modal>
 
       {/* ===== Manual ===== */}
-      <Modal show={isManualOpen} onHide={() => setManualOpen(false)} centered size="lg">
+      <Modal show={isManualOpen} onHide={() => {
+        setManualOpen(false)
+        setManualButtonClicked(false)
+      }} centered size="lg">
         <Modal.Header closeButton style={{ borderTop: '4px solid #0d6efd' }}>
           <Modal.Title as="h5">Manual Pricing</Modal.Title>
         </Modal.Header>
@@ -1732,14 +1745,17 @@ export const ToggleBetweenModals = ({
           <Button variant="secondary" onClick={backToChooser}>
             Back
           </Button>
-          <Button variant="primary" onClick={handleManualSave} disabled={savingManual}>
+          <Button variant="primary" onClick={handleManualSave} disabled={savingManual || manualButtonClicked}>
             {savingManual ? 'Saving…' : 'Save'}
           </Button>
         </Modal.Footer>
       </Modal>
 
       {/* ===== Upload ===== */}
-      <Modal show={isUploadOpen} onHide={() => setUploadOpen(false)} centered>
+      <Modal show={isUploadOpen} onHide={() => {
+        setUploadOpen(false)
+        setUploadButtonClicked(false)
+      }} centered>
         <Modal.Header closeButton style={{ borderTop: '4px solid #20c997' }}>
           <Modal.Title as="h5">Upload Pricing File</Modal.Title>
         </Modal.Header>
@@ -1778,14 +1794,17 @@ export const ToggleBetweenModals = ({
           <Button variant="secondary" onClick={() => setUploadOpen(false)} disabled={isUploading}>
             Back
           </Button>
-          <Button variant="success" onClick={handleUploadSave} disabled={isUploading || !file || !!fileError}>
+          <Button variant="success" onClick={handleUploadSave} disabled={isUploading || uploadButtonClicked || !file || !!fileError}>
             {isUploading ? 'Uploading…' : 'Upload'}
           </Button>
         </Modal.Footer>
       </Modal>
 
       {/* ===== Adhoc (advanced) ===== */}
-      <Modal show={isAdhocOpen} onHide={() => setAdhocOpen(false)} centered size="xl">
+      <Modal show={isAdhocOpen} onHide={() => {
+        setAdhocOpen(false)
+        setAdhocButtonClicked(false)
+      }} centered size="xl">
         <Modal.Header closeButton style={{ borderTop: '4px solid #6f42c1' }}>
           <Modal.Title as="h5">Adhoc Pricing (Advanced)</Modal.Title>
         </Modal.Header>
@@ -1869,7 +1888,10 @@ export const ToggleBetweenModals = ({
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setAdhocOpen(false)}>
+          <Button variant="secondary" onClick={() => {
+            setAdhocOpen(false)
+            setAdhocButtonClicked(false)
+          }}>
             Close
           </Button>
           <Button variant="primary" onClick={handleAdhocSave} disabled={!canSaveAdhoc}>
