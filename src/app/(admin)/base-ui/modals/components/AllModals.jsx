@@ -1049,7 +1049,10 @@ export const ToggleBetweenModals = ({
       }
       
       // Step 3: Compare reporting_start_date with last_pricing_date
-      // If doing pricing for 2nd month (last_pricing_date > reporting_start_date), check migration
+      // Only check migration for 2nd month pricing (exactly 1 month after reporting_start_date)
+      // First month: No check ✅
+      // Second month: Check migration ✅
+      // Third month onwards: No check ✅
       if (reportingStartDate) {
         const lastDateObj = new Date(lastPricingDate + 'T00:00:00Z')
         const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
@@ -1059,18 +1062,21 @@ export const ToggleBetweenModals = ({
           return true // Allow to proceed if dates are invalid
         }
         
-        // Check if doing pricing for 2nd month (last_pricing_date > reporting_start_date)
-        const isSecondMonthPricing = lastDateObj > reportingStartObj
+        // Calculate months difference between last_pricing_date and reporting_start_date
+        const monthsDiff = (lastDateObj.getUTCFullYear() - reportingStartObj.getUTCFullYear()) * 12 + 
+                          (lastDateObj.getUTCMonth() - reportingStartObj.getUTCMonth())
         
-        console.log('[Pricing] 🎯 Comparison result:', {
+        console.log('[Pricing] 🎯 Month calculation:', {
           last_pricing_date: lastPricingDate,
           reporting_start_date: reportingStartDate,
-          isSecondMonthPricing: isSecondMonthPricing,
-          comparison: `${lastPricingDate} > ${reportingStartDate} = ${isSecondMonthPricing}`
+          months_diff: monthsDiff,
+          is_second_month: monthsDiff === 1
         })
         
-        // If doing pricing for 2nd month, check if migration exists for previous month
-        if (isSecondMonthPricing) {
+        // Only check migration if this is exactly the 2nd month pricing (monthsDiff === 1)
+        if (monthsDiff === 1) {
+          console.log('[Pricing] 🔍 Second month pricing detected - checking migration')
+          
           // Get previous month from last_pricing_date (migration is always for previous month)
           const lastPricingMonth = new Date(lastDateObj)
           lastPricingMonth.setUTCMonth(lastPricingMonth.getUTCMonth() - 1)
@@ -1103,14 +1109,16 @@ export const ToggleBetweenModals = ({
             })
             
             if (!hasMigration) {
-              alert(`⚠️ Migration Required\n\nFor existing funds, migration must be completed for the previous month (${prevMonthStr}) before pricing can be done.\n\nPlease complete migration first.`)
+              alert(`⚠️ Migration Required\n\nFor existing funds, migration must be completed for the previous month (${prevMonthStr}) before second month pricing can be done.\n\nPlease complete migration first.`)
               return false
             }
             
             console.log('[Pricing] ✅ Migration found for previous month')
           }
-        } else {
+        } else if (monthsDiff === 0) {
           console.log('[Pricing] ✅ First month pricing - no migration check needed')
+        } else {
+          console.log('[Pricing] ✅ Third month or later pricing - no migration check needed')
         }
       }
       
