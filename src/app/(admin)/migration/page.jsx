@@ -259,9 +259,16 @@ const MigrationPage = () => {
     setHistoryError('')
 
     try {
-      // Call API to get migration upload history
+      // Get token from cookie
+      const token = Cookies.get('dashboardToken')
+      
+      // Call API to get migration upload history with token in headers
       // Updated: Response is now a direct array [{ file_id, file_name, status, uploaded_at, user_id }, ...]
-      const res = await api.get(`/api/v1/migration/upload/history/${fundId}`)
+      const res = await api.get(`/api/v1/migration/upload/history/${fundId}`, {
+        headers: {
+          'dashboard': `Bearer ${token}`,
+        },
+      })
       
       // Response is direct array, not wrapped in object
       let rows = []
