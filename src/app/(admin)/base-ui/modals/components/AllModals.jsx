@@ -845,7 +845,7 @@ export const ToggleBetweenModals = ({
   const [hasValidPrice, setHasValidPrice] = useState(false)
   // helpers
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
-  const currentFundId = fundId || tokenData?.fund_id || ''
+  const currentFundId = fundId || dashboard?.fund_id || dashboard?.fundId || tokenData?.fund_id || ''
 
   const coalesce = (...vals) => vals.find((v) => v !== undefined && v !== null && v !== '') ?? ''
 
@@ -965,8 +965,12 @@ export const ToggleBetweenModals = ({
 
   // Validation function to check migration before opening pricing modal (for existing funds)
   const validateMigrationBeforePricing = async () => {
-    // Step 1: Check onboarding mode
+    // Step 1: Check onboarding mode - use dashboard from hook instead of tokenData prop
     const onboardingMode = 
+      dashboard?.fund?.onboarding_mode || 
+      dashboard?.onboarding_mode || 
+      dashboard?.fund?.onboardingMode ||
+      dashboard?.onboardingMode ||
       tokenData?.fund?.onboarding_mode || 
       tokenData?.onboarding_mode || 
       tokenData?.fund?.onboardingMode ||
@@ -983,6 +987,7 @@ export const ToggleBetweenModals = ({
       onboardingMode,
       normalizedMode,
       isExistingFund,
+      dashboard_fund: dashboard?.fund,
       tokenData_fund: tokenData?.fund
     })
     
@@ -1019,8 +1024,12 @@ export const ToggleBetweenModals = ({
         lastPricingJson?.result?.last_pricing_date ||
         null
       
-      // Get reporting_start_date from tokenData
+      // Get reporting_start_date from dashboard hook (fallback to tokenData prop)
       const reportingStartDate = 
+        dashboard?.fund?.reporting_start_date || 
+        dashboard?.reporting_start_date ||
+        dashboard?.fund?.reportingStartDate ||
+        dashboard?.reportingStartDate ||
         tokenData?.fund?.reporting_start_date || 
         tokenData?.reporting_start_date ||
         tokenData?.fund?.reportingStartDate ||
