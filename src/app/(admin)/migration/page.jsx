@@ -364,6 +364,27 @@ const MigrationPage = () => {
       try {
         console.log('[Migration] 🔄 Revert icon clicked for fileId:', fileId)
         
+        // Check onboarding mode from tokenData (similar to pricing revert handler)
+        const onboardingMode = 
+          tokenData?.fund?.onboarding_mode || 
+          tokenData?.onboarding_mode || 
+          tokenData?.fund?.onboardingMode ||
+          tokenData?.onboardingMode ||
+          ''
+        
+        const normalizedMode = String(onboardingMode || '').trim().toLowerCase()
+        const isExistingFund = normalizedMode === 'existing fund' || 
+                              normalizedMode === 'existing' || 
+                              normalizedMode === 'existingfund' ||
+                              normalizedMode.includes('existing')
+        
+        console.log('[Migration] 🔄 Onboarding mode check:', {
+          onboardingMode,
+          normalizedMode,
+          isExistingFund,
+          tokenData_fund: tokenData?.fund
+        })
+        
         const token = Cookies.get('dashboardToken')
         if (!token) {
           alert('Authentication token not found')
@@ -386,8 +407,27 @@ const MigrationPage = () => {
         })
         
         if (!resp.ok) {
-          const errorText = await resp.text().catch(() => '')
-          alert('Failed to cleanup migration data: ' + (errorText || resp.statusText))
+          // Try to parse error response as JSON first
+          let errorMessage = resp.statusText
+          try {
+            const errorJson = await resp.json()
+            if (errorJson?.error) {
+              errorMessage = errorJson.error
+            } else if (errorJson?.message) {
+              errorMessage = errorJson.message
+            }
+          } catch {
+            // If JSON parse fails, try text
+            const errorText = await resp.text().catch(() => '')
+            if (errorText) errorMessage = errorText
+          }
+          
+          // Show specific error message for validation errors (409 Conflict)
+          if (resp.status === 409) {
+            alert(`⚠️ Cannot revert migration:\n\n${errorMessage}`)
+          } else {
+            alert(`Failed to cleanup migration data:\n\n${errorMessage}`)
+          }
           return
         }
         
