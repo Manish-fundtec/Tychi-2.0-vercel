@@ -963,6 +963,153 @@ export const ToggleBetweenModals = ({
     setChooserOpen(true)
   }
 
+  // Validation function to check migration before opening pricing modal
+  const validateMigrationBeforePricing = async () => {
+    // Step 1: Check onboarding mode
+    const onboardingMode = 
+      tokenData?.fund?.onboarding_mode || 
+      tokenData?.onboarding_mode || 
+      tokenData?.fund?.onboardingMode ||
+      tokenData?.onboardingMode ||
+      ''
+    
+    const normalizedMode = String(onboardingMode || '').trim().toLowerCase()
+    const isExistingFund = normalizedMode === 'existing fund' || 
+                          normalizedMode === 'existing' || 
+                          normalizedMode === 'existingfund' ||
+                          normalizedMode.includes('existing')
+    
+    console.log('[Pricing] 🔍 Onboarding mode check:', {
+      onboardingMode,
+      normalizedMode,
+      isExistingFund,
+      tokenData_fund: tokenData?.fund
+    })
+    
+    // If not existing fund, skip migration check
+    if (!isExistingFund) {
+      console.log('[Pricing] ✅ New fund - skipping migration check')
+      return true
+    }
+    
+    // Step 2: For existing fund, check if previous month's migration was done
+    if (!currentFundId || !reportingStartDate) {
+      console.warn('[Pricing] ⚠️ Missing fundId or reportingStartDate')
+      return true // Allow to proceed if data is missing
+    }
+    
+    try {
+      // Get last pricing date
+      const lastPricingUrl = `${API_BASE}/api/v1/pricing/lastPricingdate/${encodeURIComponent(currentFundId)}`
+      const lastPricingResp = await fetch(lastPricingUrl, { 
+        headers: { Accept: 'application/json' },
+        credentials: 'include'
+      })
+      
+      if (!lastPricingResp.ok) {
+        console.warn('[Pricing] ⚠️ Failed to fetch last pricing date')
+        return true // Allow to proceed if API fails
+      }
+      
+      const lastPricingJson = await lastPricingResp.json()
+      const lastPricingDate = 
+        lastPricingJson?.last_pricing_date ||
+        lastPricingJson?.meta?.last_pricing_date ||
+        lastPricingJson?.data?.last_pricing_date ||
+        lastPricingJson?.result?.last_pricing_date ||
+        null
+      
+      console.log('[Pricing] 📅 Date comparison:', {
+        reporting_start_date: reportingStartDate,
+        last_pricing_date: lastPricingDate
+      })
+      
+      // If no last pricing date, this is first pricing - check if migration is needed
+      if (!lastPricingDate) {
+        // First pricing - check if migration exists for reporting_start_date month
+        const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
+        const reportingMonth = `${reportingStartObj.getUTCFullYear()}-${String(reportingStartObj.getUTCMonth() + 1).padStart(2, '0')}`
+        
+        console.log('[Pricing] 🔍 First pricing - checking migration for month:', reportingMonth)
+        
+        // Check migration for this month
+        const token = Cookies.get('dashboardToken')
+        const migrationUrl = `${API_BASE}/api/v1/migration/trialbalance/${encodeURIComponent(currentFundId)}/migration`
+        const migrationResp = await fetch(migrationUrl, {
+          headers: {
+            'Accept': 'application/json',
+            'dashboard': `Bearer ${token}`,
+          },
+          credentials: 'include'
+        })
+        
+        if (migrationResp.ok) {
+          const migrationData = await migrationResp.json()
+          const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
+                           Array.isArray(migrationData) ? migrationData : []
+          
+          // Check if any migration exists for the reporting_start_date month
+          const hasMigration = migrations.some((m) => {
+            if (!m.reporting_period) return false
+            const migrationDate = new Date(m.reporting_period + 'T00:00:00Z')
+            const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+            return migrationMonth === reportingMonth
+          })
+          
+          if (!hasMigration) {
+            alert(`⚠️ Migration Required\n\nFor existing funds, migration must be completed for the reporting period (${reportingMonth}) before pricing can be done.\n\nPlease complete migration first.`)
+            return false
+          }
+        }
+        
+        return true
+      }
+      
+      // Step 3: Check if migration was done for the month of last_pricing_date
+      // Migration is always for the previous month, so check migration for last_pricing_date month
+      const lastPricingObj = new Date(lastPricingDate + 'T00:00:00Z')
+      const lastPricingMonth = `${lastPricingObj.getUTCFullYear()}-${String(lastPricingObj.getUTCMonth() + 1).padStart(2, '0')}`
+      
+      console.log('[Pricing] 🔍 Checking migration for last pricing month:', lastPricingMonth)
+      
+      // Check migration for last_pricing_date month
+      const token = Cookies.get('dashboardToken')
+      const migrationUrl = `${API_BASE}/api/v1/migration/trialbalance/${encodeURIComponent(currentFundId)}/migration`
+      const migrationResp = await fetch(migrationUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'dashboard': `Bearer ${token}`,
+        },
+        credentials: 'include'
+      })
+      
+      if (migrationResp.ok) {
+        const migrationData = await migrationResp.json()
+        const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
+                         Array.isArray(migrationData) ? migrationData : []
+        
+        // Check if migration exists for last_pricing_date month
+        const hasMigration = migrations.some((m) => {
+          if (!m.reporting_period) return false
+          const migrationDate = new Date(m.reporting_period + 'T00:00:00Z')
+          const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+          return migrationMonth === lastPricingMonth
+        })
+        
+        if (!hasMigration) {
+          alert(`⚠️ Migration Required\n\nFor existing funds, migration must be completed for the previous month (${lastPricingMonth}) before pricing can be done.\n\nPlease complete migration first.`)
+          return false
+        }
+      }
+      
+      return true
+    } catch (error) {
+      console.error('[Pricing] ❌ Migration validation error:', error)
+      // On error, allow to proceed (don't block user)
+      return true
+    }
+  }
+
   // Upload
   const MAX_UPLOAD_MB = 5
   const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
@@ -1640,7 +1787,15 @@ export const ToggleBetweenModals = ({
     <>
       {/* ===== Launcher bar (outside any modal) ===== */}
       <div className="d-flex align-items-center gap-2 mb-3">
-        <Button variant="primary" onClick={() => setChooserOpen(true)}>
+        <Button 
+          variant="primary" 
+          onClick={async () => {
+            // Validate migration before opening pricing modal
+            const canOpen = await validateMigrationBeforePricing()
+            if (canOpen) {
+              setChooserOpen(true)
+            }
+          }}>
           Add Valuation
         </Button>
 
