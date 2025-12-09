@@ -553,6 +553,14 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
   const [showPublishReviewModal, setShowPublishReviewModal] = useState(showReviewOnly) // If showReviewOnly, directly open review modal
   const [refreshedTrialBalanceData, setRefreshedTrialBalanceData] = useState([])
   
+  // When showReviewOnly is true and modal is shown, immediately open PublishReviewModal
+  useEffect(() => {
+    if (showReviewOnly && show && !showPublishReviewModal) {
+      console.log('[ReconcileModal] showReviewOnly is true, opening PublishReviewModal directly')
+      setShowPublishReviewModal(true)
+    }
+  }, [showReviewOnly, show, showPublishReviewModal])
+  
   // Helper function to fetch trial balance data
   const fetchTrialBalanceData = async (fundId, date, setData, setLoading, setError, glCodesToCheck = []) => {
     if (!fundId || !date) return []
@@ -863,14 +871,35 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
     }
   }
 
+  // If showReviewOnly is true, don't render ReconcileModal at all, only render PublishReviewModal
+  if (showReviewOnly) {
+    return (
+      <PublishReviewModal
+        show={showPublishReviewModal}
+        onClose={() => {
+          setShowPublishReviewModal(false)
+          onClose()
+        }}
+        onCloseAll={onCloseAll || (() => {
+          setShowPublishReviewModal(false)
+          onClose()
+        })}
+        totals={totals}
+        reconcileData={reconcileData}
+        lastPricingDate={lastPricingDate}
+        fundId={fundId}
+        fileId={fileId}
+        onRefreshHistory={onRefreshHistory}
+      />
+    )
+  }
+
   return (
     <Modal show={show} onHide={onClose} size="lg" centered scrollable>
-      {!showReviewOnly && (
-        <>
-          <Modal.Header closeButton>
-            <Modal.Title>Reconcile Migration Data</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
+      <Modal.Header closeButton>
+        <Modal.Title>Reconcile Migration Data</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
             {error && (
               <Alert variant="danger" className="mb-3" dismissible onClose={() => setError('')}>
                 {error}
@@ -991,8 +1020,6 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
               {loading ? 'Publishing...' : 'Publish'}
             </Button>
           </Modal.Footer>
-        </>
-      )}
 
       {/* Publish Review Modal */}
       <PublishReviewModal
@@ -1041,7 +1068,7 @@ function PublishReviewModal({ show, onClose, onCloseAll, totals, lastPricingDate
           onRefreshHistory()
         }
         // Show success alert
-        alert('Migration bookclosed successfully!')
+        alert('Migration Reviewed successfully!')
         // Close all modals after user clicks OK on alert
         if (onCloseAll) {
           onCloseAll()
@@ -1049,15 +1076,15 @@ function PublishReviewModal({ show, onClose, onCloseAll, totals, lastPricingDate
           onClose()
         }
       } else {
-        const errorMsg = response.data?.message || 'Failed to bookclose migration'
+        const errorMsg = response.data?.message || 'Failed to Review migration'
         setError(errorMsg)
         alert('Failed to bookclose: ' + errorMsg)
       }
     } catch (e) {
-      console.error('[PublishReviewModal] Bookclose failed:', e)
-      const errorMsg = e?.response?.data?.message || e?.message || 'Failed to bookclose migration'
+      console.error('[PublishReviewModal] Review failed:', e)
+      const errorMsg = e?.response?.data?.message || e?.message || 'Failed to Review migration'
       setError(errorMsg)
-      alert('Failed to bookclose: ' + errorMsg)
+      alert('Failed to Review: ' + errorMsg)
     } finally {
       setLoading(false)
     }
@@ -1192,7 +1219,7 @@ function PublishReviewModal({ show, onClose, onCloseAll, totals, lastPricingDate
           Close
         </Button>
         <Button variant="info" onClick={handleReview} disabled={loading}>
-          {loading ? 'Bookclosing...' : 'Review'}
+          {loading ? 'Reviewing...' : 'Review'}
         </Button>
       </Modal.Footer>
     </Modal>
