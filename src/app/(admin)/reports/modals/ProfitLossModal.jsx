@@ -5,6 +5,7 @@ import Cookies from 'js-cookie';
 import { Button, Modal, Table, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
+import { useDashboardToken } from '@/hooks/useDashboardToken';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -27,19 +28,55 @@ export default function ProfitLossModal({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
-  const exportHeaders = useMemo(
-    () => [
+  
+  // Get reporting frequency from dashboard token
+  const dashboard = useDashboardToken();
+  const reportingFrequency = String(dashboard?.fund?.reporting_frequency || dashboard?.reporting_frequency || 'monthly').toLowerCase();
+  
+  // Dynamic columns based on reporting frequency
+  const exportHeaders = useMemo(() => {
+    const base = [
       { key: 'category', label: 'Category' },
       { key: 'gl_code', label: 'GL Number' },
       { key: 'gl_name', label: 'GL Name' },
-      { key: 'mtd_amount', label: 'MTD' },
-      { key: 'qtd_amount', label: 'QTD' },
-      { key: 'ytd_amount', label: 'YTD' },
-    ],
-    [],
-  );
+    ];
+    
+    // Add columns based on frequency
+    if (reportingFrequency === 'daily') {
+      base.push(
+        { key: 'ptd_amount', label: 'PTD' },
+        { key: 'mtd_amount', label: 'MTD' },
+        { key: 'qtd_amount', label: 'QTD' },
+        { key: 'ytd_amount', label: 'YTD' }
+      );
+    } else if (reportingFrequency === 'monthly') {
+      base.push(
+        { key: 'mtd_amount', label: 'MTD' },
+        { key: 'qtd_amount', label: 'QTD' },
+        { key: 'ytd_amount', label: 'YTD' }
+      );
+    } else if (reportingFrequency === 'quarterly' || reportingFrequency === 'quarter') {
+      base.push(
+        { key: 'qtd_amount', label: 'QTD' },
+        { key: 'ytd_amount', label: 'YTD' }
+      );
+    } else if (reportingFrequency === 'annual' || reportingFrequency === 'annually') {
+      base.push(
+        { key: 'ytd_amount', label: 'YTD' }
+      );
+    } else {
+      // Default: monthly
+      base.push(
+        { key: 'mtd_amount', label: 'MTD' },
+        { key: 'qtd_amount', label: 'QTD' },
+        { key: 'ytd_amount', label: 'YTD' }
+      );
+    }
+    
+    return base;
+  }, [reportingFrequency]);
   const formatExportValue = (key, value) =>
-    ['mtd_amount', 'qtd_amount', 'ytd_amount'].includes(String(key))
+    ['ptd_amount', 'mtd_amount', 'qtd_amount', 'ytd_amount'].includes(String(key))
       ? fmt(value)
       : value ?? '';
 
@@ -179,9 +216,9 @@ export default function ProfitLossModal({
   // group & totals
   const {
     incomeRows, expenseRows,
-    incMTD, incQTD, incYTD,
-    expMTD, expQTD, expYTD,
-    netMTD, netQTD, netYTD,
+    incPTD, incMTD, incQTD, incYTD,
+    expPTD, expMTD, expQTD, expYTD,
+    netPTD, netMTD, netQTD, netYTD,
   } = useMemo(() => {
     const byCat = (cat) =>
       rows
@@ -200,53 +237,92 @@ export default function ProfitLossModal({
 
     const sum = (arr, k) => arr.reduce((s, x) => s + Number(x?.[k] || 0), 0);
 
-    const incMTD = sum(incomeRows, 'mtd_amount');
-    const incQTD = sum(incomeRows, 'qtd_amount');
-    const incYTD = sum(incomeRows, 'ytd_amount');
-
-    const expMTD = sum(expenseRows, 'mtd_amount');
-    const expQTD = sum(expenseRows, 'qtd_amount');
-    const expYTD = sum(expenseRows, 'ytd_amount');
-
-    // ✅ Net Income = Income − Expenses (signs preserved exactly as rows carry them)
-    const netMTD = incMTD - expMTD;
-    const netQTD = incQTD - expQTD;
-    const netYTD = incYTD - expYTD;
-
-    return {
-      incomeRows, expenseRows,
-      incMTD, incQTD, incYTD,
-      expMTD, expQTD, expYTD,
-      netMTD, netQTD, netYTD,
+    // Calculate totals based on frequency
+    const totals = {
+      incomeRows,
+      expenseRows,
+      // Initialize all totals to 0
+      incPTD: 0,
+      incMTD: 0,
+      incQTD: 0,
+      incYTD: 0,
+      expPTD: 0,
+      expMTD: 0,
+      expQTD: 0,
+      expYTD: 0,
+      netPTD: 0,
+      netMTD: 0,
+      netQTD: 0,
+      netYTD: 0,
     };
-  }, [rows]);
 
-  const renderSection = (title, data) => (
-    <>
-      <tr className="table-light">
-        <th colSpan={2}>{title}</th>
-        <th className="text-end">MTD</th>
-        <th className="text-end">QTD</th>
-        <th className="text-end">YTD</th>
-      </tr>
-      {data.map((r, idx) => (
-        <tr key={`${title}-${idx}`}>
-          <td style={{ width: 120 }}>{r.gl_code || r.glNumber || r.glnumber}</td>
-          <td>{r.gl_name || r.glName}</td>
-          <td className="text-end">{fmt(r.mtd_amount)}</td>
-          <td className="text-end">{fmt(r.qtd_amount)}</td>
-          <td className="text-end">{fmt(r.ytd_amount)}</td>
+    // PTD (only for daily frequency)
+    if (reportingFrequency === 'daily') {
+      totals.incPTD = sum(incomeRows, 'ptd_amount');
+      totals.expPTD = sum(expenseRows, 'ptd_amount');
+      totals.netPTD = totals.incPTD - totals.expPTD;
+    }
+
+    // MTD (for daily and monthly frequency)
+    if (reportingFrequency === 'daily' || reportingFrequency === 'monthly') {
+      totals.incMTD = sum(incomeRows, 'mtd_amount');
+      totals.expMTD = sum(expenseRows, 'mtd_amount');
+      totals.netMTD = totals.incMTD - totals.expMTD;
+    }
+
+    // QTD (for daily, monthly, and quarterly frequency)
+    if (reportingFrequency === 'daily' || reportingFrequency === 'monthly' || reportingFrequency === 'quarterly' || reportingFrequency === 'quarter') {
+      totals.incQTD = sum(incomeRows, 'qtd_amount');
+      totals.expQTD = sum(expenseRows, 'qtd_amount');
+      totals.netQTD = totals.incQTD - totals.expQTD;
+    }
+
+    // YTD (always available)
+    totals.incYTD = sum(incomeRows, 'ytd_amount');
+    totals.expYTD = sum(expenseRows, 'ytd_amount');
+    totals.netYTD = totals.incYTD - totals.expYTD;
+
+    return totals;
+  }, [rows, reportingFrequency]);
+
+  const renderSection = (title, data) => {
+    // Get column headers based on frequency (excluding category, gl_code, gl_name)
+    const amountColumns = exportHeaders.filter(h => 
+      ['ptd_amount', 'mtd_amount', 'qtd_amount', 'ytd_amount'].includes(h.key)
+    );
+    
+    return (
+      <>
+        <tr className="table-light">
+          <th colSpan={2}>{title}</th>
+          {amountColumns.map((col) => (
+            <th key={col.key} className="text-end">{col.label}</th>
+          ))}
         </tr>
-      ))}
-    </>
-  );
+        {data.map((r, idx) => (
+          <tr key={`${title}-${idx}`}>
+            <td style={{ width: 120 }}>{r.gl_code || r.glNumber || r.glnumber}</td>
+            <td>{r.gl_name || r.glName}</td>
+            {amountColumns.map((col) => (
+              <td key={col.key} className="text-end">{fmt(r[col.key] || 0)}</td>
+            ))}
+          </tr>
+        ))}
+      </>
+    );
+  };
 
   return (
     <Modal show={show} onHide={handleClose} size="xl" centered>
       <Modal.Header closeButton>
         <Modal.Title>
           <Eye className="me-2" size={18} />
-          PROFIT &amp; LOSS – MTD / QTD / YTD <span className="text-muted ms-2">{date || ''}</span>
+          PROFIT &amp; LOSS
+          {reportingFrequency === 'daily' && ' – PTD / MTD / QTD / YTD'}
+          {reportingFrequency === 'monthly' && ' – MTD / QTD / YTD'}
+          {(reportingFrequency === 'quarterly' || reportingFrequency === 'quarter') && ' – QTD / YTD'}
+          {(reportingFrequency === 'annual' || reportingFrequency === 'annually') && ' – YTD'}
+          <span className="text-muted ms-2">{date || ''}</span>
         </Modal.Title>
       </Modal.Header>
 
@@ -263,9 +339,11 @@ export default function ProfitLossModal({
                 <tr>
                   <th style={{ width: 120 }}>GL Number</th>
                   <th>GL Name</th>
-                  <th className="text-end">MTD</th>
-                  <th className="text-end">QTD</th>
-                  <th className="text-end">YTD</th>
+                  {exportHeaders
+                    .filter(h => ['ptd_amount', 'mtd_amount', 'qtd_amount', 'ytd_amount'].includes(h.key))
+                    .map((col) => (
+                      <th key={col.key} className="text-end">{col.label}</th>
+                    ))}
                 </tr>
               </thead>
               <tbody>
@@ -273,26 +351,56 @@ export default function ProfitLossModal({
                 {renderSection('INCOME', incomeRows)}
                 <tr className="fw-semibold">
                   <td colSpan={2}>Total Income</td>
-                  <td className="text-end">{fmt(incMTD)}</td>
-                  <td className="text-end">{fmt(incQTD)}</td>
-                  <td className="text-end">{fmt(incYTD)}</td>
+                  {exportHeaders
+                    .filter(h => ['ptd_amount', 'mtd_amount', 'qtd_amount', 'ytd_amount'].includes(h.key))
+                    .map((col) => {
+                      const key = col.key;
+                      let value = 0;
+                      if (key === 'ptd_amount') value = incPTD;
+                      else if (key === 'mtd_amount') value = incMTD;
+                      else if (key === 'qtd_amount') value = incQTD;
+                      else if (key === 'ytd_amount') value = incYTD;
+                      return (
+                        <td key={col.key} className="text-end">{fmt(value)}</td>
+                      );
+                    })}
                 </tr>
 
                 {/* EXPENSES */}
                 {renderSection('EXPENSES', expenseRows)}
                 <tr className="fw-semibold">
                   <td colSpan={2}>Total Expenses</td>
-                  <td className="text-end">{fmt(expMTD)}</td>
-                  <td className="text-end">{fmt(expQTD)}</td>
-                  <td className="text-end">{fmt(expYTD)}</td>
+                  {exportHeaders
+                    .filter(h => ['ptd_amount', 'mtd_amount', 'qtd_amount', 'ytd_amount'].includes(h.key))
+                    .map((col) => {
+                      const key = col.key;
+                      let value = 0;
+                      if (key === 'ptd_amount') value = expPTD;
+                      else if (key === 'mtd_amount') value = expMTD;
+                      else if (key === 'qtd_amount') value = expQTD;
+                      else if (key === 'ytd_amount') value = expYTD;
+                      return (
+                        <td key={col.key} className="text-end">{fmt(value)}</td>
+                      );
+                    })}
                 </tr>
 
                 {/* NET INCOME */}
                 <tr className="table-light fw-bold">
                   <td colSpan={2}>Net Income</td>
-                  <td className="text-end">{fmt(netMTD)}</td>
-                  <td className="text-end">{fmt(netQTD)}</td>
-                  <td className="text-end">{fmt(netYTD)}</td>
+                  {exportHeaders
+                    .filter(h => ['ptd_amount', 'mtd_amount', 'qtd_amount', 'ytd_amount'].includes(h.key))
+                    .map((col) => {
+                      const key = col.key;
+                      let value = 0;
+                      if (key === 'ptd_amount') value = netPTD;
+                      else if (key === 'mtd_amount') value = netMTD;
+                      else if (key === 'qtd_amount') value = netQTD;
+                      else if (key === 'ytd_amount') value = netYTD;
+                      return (
+                        <td key={col.key} className="text-end">{fmt(value)}</td>
+                      );
+                    })}
                 </tr>
               </tbody>
             </Table>
