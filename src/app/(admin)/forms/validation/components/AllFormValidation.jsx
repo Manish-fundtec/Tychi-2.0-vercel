@@ -727,6 +727,7 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
   const [errorFileUrl, setErrorFileUrl] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [rowLimitError, setRowLimitError] = useState('')
+  const [errorType, setErrorType] = useState('') // 'row_limit' or 'invalid_data' or 'validation'
   const { showNotification } = useNotificationContext()
 
   const handleFileChange = (e) => {
@@ -734,6 +735,7 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
     setSelectedFile(file)
     setFileError('')
     setRowLimitError('') // Clear row limit error when new file is selected
+    setErrorType('') // Clear error type when new file is selected
   }
 
   const handleSubmit = async (event) => {
@@ -790,14 +792,14 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
             message: errorMsg || 'Your file contains validation errors. Please download the error file for details.',
             variant: 'warning',
             title: 'Validation Errors',
-            delay: 5000
+            delay: 7000
           })
         } else {
           showNotification({
             message: errorMsg,
             variant: 'danger',
             title: 'Validation Failed',
-            delay: 3000
+            delay: 7000
           })
         }
       }
@@ -808,19 +810,27 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
         // Prioritize error_message, then message, with fallback
         const errorMessage = errorData.error_message || errorData.message || 'File upload validation failed.'
         
-        // Check if it's a row limit error - check message content or status
+        // Check if it's a row limit error - ONLY check message content for row limit keywords
         const isRowLimitError = errorMessage.toLowerCase().includes('row limit') || 
                                 errorMessage.toLowerCase().includes('rows found') ||
                                 errorMessage.toLowerCase().includes('maximum allowed') ||
-                                (errorData.status === 'validation_failed' && !errorData.error_file_url)
+                                (errorMessage.toLowerCase().includes('exceeded') && errorMessage.toLowerCase().includes('row'))
+        
+        // Check if it's invalid data error (validation failed without error file URL and not row limit)
+        const isInvalidDataError = !isRowLimitError && 
+                                  ((errorData.status === 'validation_failed' && !errorData.error_file_url) ||
+                                   (errorMessage.toLowerCase().includes('invalid data') || 
+                                    errorMessage.toLowerCase().includes('invalid')))
         
         if (isRowLimitError) {
           // Row limit exceeded - show prominently in form only (no duplicate toast)
           setRowLimitError(errorMessage) // Display inline in form - this shows the actual backend message
+          setErrorType('row_limit')
         } else if (errorData.error_file_url) {
           // Validation errors with error file URL
           setErrorFileUrl(errorData.error_file_url)
           setErrorMessage(errorMessage || 'Your file contains validation errors. Please download the error file for details.')
+          setErrorType('validation')
           setTimeout(() => {
             setShowErrorModal(true)
           }, 300)
@@ -831,15 +841,32 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
             message: errorMessage || 'Your file contains validation errors. Please download the error file for details.',
             variant: 'warning',
             title: 'Validation Errors',
-            delay: 5000
+            delay: 7000
+          })
+        } else if (isInvalidDataError) {
+          // Invalid data error - show in error modal
+          setErrorMessage(errorMessage || 'Your file contains invalid data. Please review the data, correct the issues, and try again.')
+          setErrorType('invalid_data')
+          setTimeout(() => {
+            setShowErrorModal(true)
+          }, 300)
+          onClose?.()
+          
+          showNotification({
+            message: errorMessage || 'Your file contains invalid data. Please review the data, correct the issues, and try again.',
+            variant: 'danger',
+            title: 'Invalid Data',
+            delay: 8000
           })
         } else {
           // Other 400 errors
+          setErrorMessage(errorMessage)
+          setErrorType('other')
           showNotification({
             message: errorMessage,
             variant: 'danger',
             title: 'Upload Failed',
-            delay: 7000
+            delay: 8000
           })
         }
       } else {
@@ -850,7 +877,7 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
           message: errorMsg,
           variant: 'danger',
           title: 'Upload Failed',
-          delay: 5000
+          delay: 8000
         })
       }
     } finally {
@@ -863,6 +890,7 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
     setErrorMessage('')
     setErrorFileUrl('')
     setRowLimitError('')
+    setErrorType('')
     setSelectedFile(null)
     setValidated(false)
   }
@@ -921,15 +949,46 @@ export const UploadTrade = ({ onClose, onSuccess }) => {
       {/* Error Modal */}
       <Modal show={showErrorModal} centered backdrop="static" keyboard={false} onHide={handleErrorModalClose}>
         <Modal.Header closeButton>
-          <Modal.Title>Validation Errors</Modal.Title>
+          <Modal.Title>
+            {errorType === 'row_limit' ? 'Row Limit Exceeded' : 
+             errorType === 'invalid_data' ? 'Invalid Data' : 
+             'Validation Errors'}
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {errorMessage && (
             <Alert variant="danger" className="mb-3">
-              <strong>Error:</strong> {errorMessage}
+              <Alert.Heading className="h6 mb-2">
+                <strong>
+                  {errorType === 'row_limit' ? '⚠️ Upload Failed: Row Limit Exceeded' : 
+                   errorType === 'invalid_data' ? '⚠️ Upload Failed: Invalid Data' : 
+                   '⚠️ Upload Failed: Validation Errors'}
+                </strong>
+              </Alert.Heading>
+              <p className="mb-0" style={{ fontSize: '14px' }}>
+                {errorMessage}
+              </p>
+              {errorType === 'row_limit' && (
+                <>
+                  <hr />
+                  <p className="mb-0 small">
+                    <strong>Solution:</strong> Please reduce the number of rows in your file to 6000 or fewer and try again.
+                  </p>
+                </>
+              )}
+              {errorType === 'invalid_data' && (
+                <>
+                  <hr />
+                  <p className="mb-0 small">
+                    <strong>Solution:</strong> Please review the data, correct the issues, and try again.
+                  </p>
+                </>
+              )}
             </Alert>
           )}
-          <p>Your file contains validation errors. Please download the error file for details, correct the issues, and re-upload.</p>
+          {errorType === 'validation' && (
+            <p>Your file contains validation errors. Please download the error file for details, correct the issues, and re-upload.</p>
+          )}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleErrorModalClose}>
