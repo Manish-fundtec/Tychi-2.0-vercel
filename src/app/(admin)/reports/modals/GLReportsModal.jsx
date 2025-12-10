@@ -5,6 +5,7 @@ import Cookies from 'js-cookie';
 import { Modal, Button, Form, Row, Col, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
+import { useDashboardToken } from '@/hooks/useDashboardToken';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -25,9 +26,23 @@ const fmt = (v) =>
  * - Client-side pagination
  */
 export default function GLReportsModal({ show, handleClose, fundId, date }) {
+  // Get reporting frequency from dashboard token
+  const dashboard = useDashboardToken();
+  const reportingFrequency = String(dashboard?.fund?.reporting_frequency || dashboard?.reporting_frequency || 'monthly').toLowerCase();
+  
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [scope, setScope] = useState('MTD');
+  
+  // Set default scope to PTD if frequency is daily when modal opens (only once)
+  useEffect(() => {
+    if (show && reportingFrequency === 'daily') {
+      setScope('PTD');
+    } else if (show && reportingFrequency !== 'daily' && scope === 'PTD') {
+      // Reset to MTD if frequency is not daily
+      setScope('MTD');
+    }
+  }, [show, reportingFrequency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -246,6 +261,7 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
             <Col md={5}>
               <Form.Label>Select Category</Form.Label>
               <Form.Select value={scope} onChange={(e) => setScope(e.target.value)}>
+                {reportingFrequency === 'daily' && <option value="PTD">PTD</option>}
                 <option value="MTD">MTD</option>
                 <option value="QTD">QTD</option>
                 <option value="YTD">YTD</option>
