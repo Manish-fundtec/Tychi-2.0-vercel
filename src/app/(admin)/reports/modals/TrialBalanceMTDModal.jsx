@@ -5,6 +5,7 @@ import Cookies from 'js-cookie';
 import { Button, Modal, Table, Form, Row, Col, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
+import { useDashboardToken } from '@/hooks/useDashboardToken';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -40,9 +41,15 @@ export default function TrialBalanceModalGrouped({
   handleClose,
   fundId,
   date,                // 'YYYY-MM-DD'
-  defaultScope = 'MTD' // MTD | QTD | YTD
+  defaultScope = 'MTD' // MTD | QTD | YTD | PTD
 }) {
-  const [scope, setScope] = useState(String(defaultScope).toUpperCase());
+  // Get reporting frequency from dashboard token
+  const dashboard = useDashboardToken();
+  const reportingFrequency = String(dashboard?.fund?.reporting_frequency || dashboard?.reporting_frequency || 'monthly').toLowerCase();
+  
+  // Set default scope to PTD if frequency is daily, otherwise use provided defaultScope
+  const initialScope = reportingFrequency === 'daily' && defaultScope === 'MTD' ? 'PTD' : String(defaultScope).toUpperCase();
+  const [scope, setScope] = useState(initialScope);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -224,6 +231,7 @@ export default function TrialBalanceModalGrouped({
             <Col sm="auto">
               <Form.Label>Scope</Form.Label>
               <Form.Select value={scope} onChange={(e) => setScope(e.target.value)}>
+                {reportingFrequency === 'daily' && <option value="PTD">PTD</option>}
                 <option value="MTD">MTD</option>
                 <option value="QTD">QTD</option>
                 <option value="YTD">YTD</option>
