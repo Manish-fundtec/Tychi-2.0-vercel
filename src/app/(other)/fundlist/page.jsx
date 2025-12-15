@@ -2,7 +2,10 @@
 
 import React, { useEffect, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { Card, CardBody, CardFooter, CardHeader, CardTitle, Col, Dropdown, Row } from 'react-bootstrap'
+import { Card, CardBody, CardFooter, CardHeader, CardTitle, Col, Dropdown, Row, Button } from 'react-bootstrap'
+import { useRouter } from 'next/navigation'
+import Cookies from 'js-cookie'
+import IconifyIcon from '@/components/wrappers/IconifyIcon'
 
 import PageTitle from '@/components/PageTitle'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
@@ -20,6 +23,44 @@ const FundListPage = () => {
   const [columnDefs, setColumnDefs] = useState([])
   const [rowData, setRowData] = useState([])
   const [funds, setFunds] = useState([])
+  const [loggingOut, setLoggingOut] = useState(false)
+  const router = useRouter()
+
+  // Logout handler
+  const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      const res = await fetch('/api/logout', {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const logoutJson = await res.json().catch(() => ({}))
+      console.log('🔒 Logout response:', logoutJson)
+
+      // Clear cookies client-side
+      Cookies.remove('dashboardToken', { path: '/' })
+      Cookies.remove('userToken', { path: '/' })
+      
+      // Clear any client-side leftovers
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      sessionStorage.clear()
+
+      // Redirect to sign-in
+      router.replace('/auth/sign-in')
+    } catch (e) {
+      console.error('Logout failed:', e)
+      // Still clear cookies and redirect even if API call fails
+      Cookies.remove('dashboardToken', { path: '/' })
+      Cookies.remove('userToken', { path: '/' })
+      router.replace('/auth/sign-in')
+    } finally {
+      setLoggingOut(false)
+    }
+  }
 
   // Make sure this is declared in the same component scope and BEFORE JSX uses it
   const refreshFunds = useCallback(async () => {
@@ -61,13 +102,24 @@ const FundListPage = () => {
           <Card>
             <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
               <CardTitle as="h4">Fundadmin</CardTitle>
-              <Dropdown>
-                <AddFundModal
-                  onFundCreated={() => {
-                    refreshFunds() 
-                  }}
-                />
-              </Dropdown>
+              <div className="d-flex gap-2 align-items-center">
+                <Dropdown>
+                  <AddFundModal
+                    onFundCreated={() => {
+                      refreshFunds() 
+                    }}
+                  />
+                </Dropdown>
+                <Button 
+                  variant="danger" 
+                  onClick={handleLogout} 
+                  disabled={loggingOut}
+                  className="d-flex align-items-center gap-1"
+                >
+                  <IconifyIcon icon="ri:logout-box-line" className="fs-18" />
+                  <span>{loggingOut ? 'Logging out…' : 'Logout'}</span>
+                </Button>
+              </div>
             </CardHeader>
 
             <CardBody className="p-0">
