@@ -32,7 +32,7 @@ import { useSearchParams } from 'next/navigation'
 import { createBroker, updateBroker } from '@/lib/api/broker'
 import { createBank, updateBank } from '@/lib/api/bank'
 import { createExchange, updateExchange } from '@/lib/api/exchange'
-import { createSymbol, updateSymbol } from '@/lib/api/symbol'
+import { createSymbol, updateSymbol, getSymbolsByFundId } from '@/lib/api/symbol'
 import { getExchangesByFundId } from '@/lib/api/exchange'
 import { getAssetTypesActive } from '@/lib/api/assetType'
 import { updateAssetType } from '@/lib/api/assetType'
@@ -1590,8 +1590,10 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
   const [exchanges, setExchanges] = useState([])
   const [assetTypes, setAssetTypes] = useState([])
+  const [existingSymbols, setExistingSymbols] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [contractSizeError, setContractSizeError] = useState('')
+  const [duplicateError, setDuplicateError] = useState('')
 
   useEffect(() => {
     if (symbol) {
@@ -1628,15 +1630,63 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         // Fetch exchanges filtered by fund_id (same as asset types)
         const exRes = await getExchangesByFundId(decoded.fund_id)
         const atRes = await getAssetTypesActive(decoded.fund_id) // ⬅ only active ones
+        const symbolsRes = await getSymbolsByFundId(decoded.fund_id) // ⬅ fetch existing symbols
 
         setExchanges(exRes.data || [])
         setAssetTypes(atRes.data || [])
+        // Handle different response structures
+        const symbolsData = symbolsRes?.data || symbolsRes || []
+        setExistingSymbols(Array.isArray(symbolsData) ? symbolsData : [])
       } catch (err) {
         console.error('❌ Dropdown Fetch Error:', err)
       }
     }
     fetchDropdowns()
   }, [])
+
+  // Check for duplicate when relevant fields change (for preventing submission, but don't show error in form)
+  useEffect(() => {
+    const symbolId = form.symbol_id?.trim().toLowerCase() || ''
+    const symbolName = form.symbol_name?.trim().toLowerCase() || ''
+    const exchangeId = String(form.exchange_id || '').trim()
+    const assetTypeId = String(form.asset_type_id || '').trim()
+    
+    // Only check if all required fields are filled
+    if (symbolId && symbolName && exchangeId && assetTypeId && existingSymbols.length > 0) {
+      const isDuplicate = existingSymbols.some((sym) => {
+        // For edit mode, exclude current symbol from check
+        if (isEdit && symbol?.symbol_uid === sym.symbol_uid) return false
+        
+        // Check if Symbol ID matches (case-insensitive)
+        const symSymbolId = String(sym.symbol_id || '').trim().toLowerCase()
+        const matchesSymbolId = symSymbolId === symbolId
+        
+        // Check if Symbol Name matches (case-insensitive)
+        const symSymbolName = String(sym.symbol_name || '').trim().toLowerCase()
+        const matchesSymbolName = symSymbolName === symbolName
+        
+        // Check if Exchange matches - form.exchange_id contains exchange_uid from dropdown
+        // Existing symbol might have exchange_id or exchange_uid
+        const symExchangeId = String(sym.exchange_id || sym.exchange_uid || '').trim()
+        const matchesExchange = symExchangeId === exchangeId
+        
+        // Check if Asset Type matches
+        const symAssetTypeId = String(sym.asset_type_id || sym.assettype_id || '').trim()
+        const matchesAssetType = symAssetTypeId === assetTypeId
+        
+        // Only duplicate if ALL four match
+        return matchesSymbolId && matchesSymbolName && matchesExchange && matchesAssetType
+      })
+      
+      if (isDuplicate) {
+        setDuplicateError('duplicate') // Just a flag, not shown in form
+      } else {
+        setDuplicateError('')
+      }
+    } else {
+      setDuplicateError('')
+    }
+  }, [form.symbol_id, form.symbol_name, form.exchange_id, form.asset_type_id, existingSymbols, isEdit, symbol])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -1662,6 +1712,11 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
       e.stopPropagation()
     } else if (contractSizeError) {
       // Prevent submission if contract size is negative
+      setValidated(true)
+      return
+    } else if (duplicateError) {
+      // Show alert for duplicate and prevent submission
+      alert('Symbol already exists with same Exchange and Asset Type')
       setValidated(true)
       return
     } else {
@@ -1690,14 +1745,15 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
       } catch (err) {
         setIsSubmitting(false)
         const status = err?.response?.status
-        const duplicateMessage = err?.response?.data?.error
-        if (status === 409 && duplicateMessage) {
-          console.warn('⚠️ Duplicate symbol detected:', duplicateMessage)
-          alert(duplicateMessage)
+        const duplicateMessage = err?.response?.data?.error || err?.response?.data?.message
+        
+        // Show alert for duplicate symbol
+        if (status === 409 || duplicateMessage?.toLowerCase().includes('already exists') || duplicateMessage?.toLowerCase().includes('duplicate')) {
+          alert('Symbol already exists with same Exchange and Asset Type')
         } else {
           console.error('❌ Failed to submit symbol form:', err)
-          const errorMsg = err?.response?.data?.error || err?.message || 'Failed to save symbol'
-          alert(errorMsg)
+          const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to save symbol'
+          toast.error(errorMsg)
         }
       }
     }
@@ -1709,13 +1765,25 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
     <Form noValidate validated={validated} onSubmit={handleSubmit} className="row g-3 m-1">
       <FormGroup className="col-md-6">
         <FormLabel>Symbol ID</FormLabel>
-        <FormControl name="symbol_id" type="text" required value={form.symbol_id} onChange={handleChange} />
+        <FormControl 
+          name="symbol_id" 
+          type="text" 
+          required 
+          value={form.symbol_id} 
+          onChange={handleChange}
+        />
         <Feedback type="invalid">Required</Feedback>
       </FormGroup>
 
       <FormGroup className="col-md-6">
         <FormLabel>Symbol Name</FormLabel>
-        <FormControl name="symbol_name" type="text" required value={form.symbol_name} onChange={handleChange} />
+        <FormControl 
+          name="symbol_name" 
+          type="text" 
+          required 
+          value={form.symbol_name} 
+          onChange={handleChange}
+        />
         <Feedback type="invalid">Required</Feedback>
       </FormGroup>
 
@@ -1745,7 +1813,13 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
       <FormGroup className="col-md-6">
         <FormLabel>Exchange</FormLabel>
-        <FormControl as="select" name="exchange_id" required value={form.exchange_id} onChange={handleChange}>
+        <FormControl 
+          as="select" 
+          name="exchange_id" 
+          required 
+          value={form.exchange_id} 
+          onChange={handleChange}
+        >
           <option value="">Select Exchange</option>
           {exchanges.map((ex) => (
             <option key={ex.exchange_uid} value={ex.exchange_uid}>
@@ -1758,7 +1832,13 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
       <FormGroup className="col-md-6">
         <FormLabel>Asset Type</FormLabel>
-        <FormControl as="select" name="asset_type_id" required value={form.asset_type_id} onChange={handleChange}>
+        <FormControl 
+          as="select" 
+          name="asset_type_id" 
+          required 
+          value={form.asset_type_id} 
+          onChange={handleChange}
+        >
           <option value="">Select Asset Type</option>
           {assetTypes.map((at) => (
             <option key={at.assettype_id} value={at.assettype_id}>
@@ -1770,7 +1850,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
       </FormGroup>
 
       <Col xs={12} className="mt-3">
-        <Button type="submit" disabled={isSubmitting || !!contractSizeError}>{isEdit ? 'Update Symbol' : 'Add Symbol'}</Button>
+        <Button type="submit" disabled={isSubmitting || !!contractSizeError || !!duplicateError}>{isEdit ? 'Update Symbol' : 'Add Symbol'}</Button>
       </Col>
     </Form>
   )
