@@ -1090,20 +1090,56 @@ export const ToggleBetweenModals = ({
           is_second_month: monthsDiff === 1
         })
         
-        // Migration check logic:
-        // We can't know at button click if user wants first month or second month pricing
-        // So we'll allow the modal to open for first month pricing
-        // Migration check for second month will be handled when user tries to save
-        
-        // Allow first month pricing without migration check
-        // Migration validation for second month will be added to pricing form save handler
-        if (monthsSinceStart === 0) {
-          console.log('[Pricing] ✅ First month pricing - allowing without migration check')
-          return true
+        // Check migration ONLY if:
+        // 1. last_pricing_date is in the first month (same as reporting_start_date) → monthsSinceStart === 0
+        // 2. AND next pricing will be in the second month → monthsDiff === 1
+        // This means: First month pricing is done, now trying to do 2nd month pricing
+        if (monthsSinceStart === 0 && monthsDiff === 1) {
+          console.log('[Pricing] 🔍 Second month pricing detected - checking migration')
+          
+          // Get previous month from last_pricing_date (migration is always for previous month)
+          // Migration should be for the month of last_pricing_date
+          const lastPricingMonth = new Date(lastDateObj)
+          const migrationMonthStr = `${lastPricingMonth.getUTCFullYear()}-${String(lastPricingMonth.getUTCMonth() + 1).padStart(2, '0')}`
+          
+          console.log('[Pricing] 🔍 Checking migration for last pricing month:', migrationMonthStr)
+          
+          // Check migration for last_pricing_date month
+          const token = Cookies.get('dashboardToken')
+          const migrationUrl = `${API_BASE}/api/v1/migration/trialbalance/${encodeURIComponent(currentFundId)}/migration`
+          const migrationResp = await fetch(migrationUrl, {
+            headers: {
+              'Accept': 'application/json',
+              'dashboard': `Bearer ${token}`,
+            },
+            credentials: 'include'
+          })
+          
+          if (migrationResp.ok) {
+            const migrationData = await migrationResp.json()
+            const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
+                             Array.isArray(migrationData) ? migrationData : []
+            
+            // Check if migration exists for last_pricing_date month
+            const hasMigration = migrations.some((m) => {
+              if (!m.reporting_period) return false
+              const migrationDate = new Date(m.reporting_period + 'T00:00:00Z')
+              const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+              return migrationMonth === migrationMonthStr
+            })
+            
+            if (!hasMigration) {
+              alert(`⚠️ Migration Required\n\nFor existing funds, migration must be completed for the previous month (${migrationMonthStr}) before second month pricing can be done.\n\nPlease complete migration first.`)
+              return false
+            }
+            
+            console.log('[Pricing] ✅ Migration found for previous month')
+          }
+        } else if (monthsDiff === 0) {
+          console.log('[Pricing] ✅ First month pricing - no migration check needed')
+        } else {
+          console.log('[Pricing] ✅ Third month or later pricing - no migration check needed')
         }
-        
-        // For other cases (third month+), no migration check needed
-        console.log('[Pricing] ✅ Third month or later pricing - no migration check needed')
       }
       
       return true
