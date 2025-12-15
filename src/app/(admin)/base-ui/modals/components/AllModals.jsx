@@ -1080,16 +1080,17 @@ export const ToggleBetweenModals = ({
           is_second_month: monthsDiff === 1
         })
         
-        // Only check migration if next pricing is exactly the 2nd month (monthsDiff === 1)
-        if (monthsDiff === 1) {
-          console.log('[Pricing] 🔍 Second month pricing detected - checking migration')
+        // Check migration ONLY if:
+        // 1. last_pricing_date is in first month (monthsSinceStart === 0)
+        // 2. AND next pricing will be in second month (monthsDiff === 1)
+        // This means: First month pricing done → First month migration needed → Then second month pricing
+        if (monthsSinceStart === 0 && monthsDiff === 1) {
+          console.log('[Pricing] 🔍 Second month pricing detected - checking first month migration')
           
-          // Get previous month from last_pricing_date (migration is always for previous month)
-          // Migration should be for the month of last_pricing_date
-          const lastPricingMonth = new Date(lastDateObj)
-          const migrationMonthStr = `${lastPricingMonth.getUTCFullYear()}-${String(lastPricingMonth.getUTCMonth() + 1).padStart(2, '0')}`
+          // Migration should be for the month of last_pricing_date (first month)
+          const migrationMonthStr = lastPricingMonth
           
-          console.log('[Pricing] 🔍 Checking migration for last pricing month:', migrationMonthStr)
+          console.log('[Pricing] 🔍 Checking migration for first month:', migrationMonthStr)
           
           // Check migration for last_pricing_date month
           const token = Cookies.get('dashboardToken')
