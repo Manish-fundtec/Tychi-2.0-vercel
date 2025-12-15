@@ -2,6 +2,7 @@ import IconifyIcon from '@/components/wrappers/IconifyIcon'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Link from 'next/link'
+import Cookies from 'js-cookie'
 import { Dropdown, DropdownHeader, DropdownItem, DropdownMenu, DropdownToggle } from 'react-bootstrap'
 
 const ProfileDropdown = () => {
@@ -23,6 +24,10 @@ const ProfileDropdown = () => {
       const logoutJson = await res.json().catch(() => ({}))
       console.log('🔒 Logout response:', logoutJson)
 
+      // Clear cookies client-side
+      Cookies.remove('dashboardToken', { path: '/' })
+      Cookies.remove('userToken', { path: '/' })
+      
       // Clear any client-side leftovers (only if you ever set them)
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
@@ -32,6 +37,9 @@ const ProfileDropdown = () => {
       router.replace('/auth/sign-in')
     } catch (e) {
       console.error('Logout failed:', e)
+      // Still clear cookies and redirect even if API call fails
+      Cookies.remove('dashboardToken', { path: '/' })
+      Cookies.remove('userToken', { path: '/' })
       router.replace('/auth/sign-in')
     } finally {
       setLoggingOut(false)

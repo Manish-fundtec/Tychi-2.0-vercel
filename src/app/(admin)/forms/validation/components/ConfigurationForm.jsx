@@ -1591,19 +1591,31 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
   const [exchanges, setExchanges] = useState([])
   const [assetTypes, setAssetTypes] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [contractSizeError, setContractSizeError] = useState('')
 
   useEffect(() => {
     if (symbol) {
+      const contractSize = symbol.contract_size || ''
       setForm({
         symbol_id: symbol.symbol_id || '',
         symbol_name: symbol.symbol_name || '',
         // Set ISIN and CUSIP to empty string for edit (will be sent as null if empty)
         isin: '',
         cusip: '',
-        contract_size: symbol.contract_size || '',
+        contract_size: contractSize,
         exchange_id: symbol.exchange_id || '',
         asset_type_id: symbol.asset_type_id || symbol.assettype_id || '',
       })
+      
+      // Validate contract_size if it exists
+      if (contractSize !== '') {
+        const numValue = parseFloat(contractSize)
+        if (!isNaN(numValue) && numValue < 0) {
+          setContractSizeError('Contract size cannot be negative')
+        } else {
+          setContractSizeError('')
+        }
+      }
     }
   }, [symbol])
 
@@ -1629,6 +1641,16 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
+    
+    // Validate contract_size - should not be negative
+    if (name === 'contract_size') {
+      const numValue = parseFloat(value)
+      if (value !== '' && !isNaN(numValue) && numValue < 0) {
+        setContractSizeError('Contract size cannot be negative')
+      } else {
+        setContractSizeError('')
+      }
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -1638,6 +1660,10 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
     const formEl = e.currentTarget
     if (!formEl.checkValidity()) {
       e.stopPropagation()
+    } else if (contractSizeError) {
+      // Prevent submission if contract size is negative
+      setValidated(true)
+      return
     } else {
       setIsSubmitting(true)
       const token = Cookies.get('dashboardToken')
@@ -1705,7 +1731,16 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
 
       <FormGroup className="col-md-6">
         <FormLabel>Contract Size</FormLabel>
-        <FormControl name="contract_size" type="number" value={form.contract_size} onChange={handleChange} />
+        <FormControl 
+          name="contract_size" 
+          type="number" 
+          value={form.contract_size} 
+          onChange={handleChange}
+          isInvalid={!!contractSizeError}
+        />
+        {contractSizeError && (
+          <Feedback type="invalid">{contractSizeError}</Feedback>
+        )}
       </FormGroup>
 
       <FormGroup className="col-md-6">
@@ -1735,7 +1770,7 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
       </FormGroup>
 
       <Col xs={12} className="mt-3">
-        <Button type="submit" disabled={isSubmitting}>{isEdit ? 'Update Symbol' : 'Add Symbol'}</Button>
+        <Button type="submit" disabled={isSubmitting || !!contractSizeError}>{isEdit ? 'Update Symbol' : 'Add Symbol'}</Button>
       </Col>
     </Form>
   )
