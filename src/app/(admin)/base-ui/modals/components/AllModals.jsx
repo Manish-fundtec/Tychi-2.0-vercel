@@ -696,12 +696,12 @@ export function computePricingWindow(reportingFrequency, reportingStartDate, las
       // For daily pricing:
       // - If lpd is null → no pricing exists → show rsd (first pricing)
       // - If lpd < rsd → invalid state → show rsd
-      // - If lpd >= rsd → pricing was completed → show next day (lpd + 1)
+      // - If lpd === rsd → treat as no pricing exists (backend might return rsd when no pricing)
+      // - If lpd > rsd → pricing was completed → show next day (lpd + 1)
       // 
-      // Note: We use >= instead of > to handle the case where lpd equals rsd.
-      // If backend returns lpd = rsd when no pricing exists, that's a backend issue.
-      // But typically, if lpd exists and >= rsd, pricing was completed.
-      const hasCompletedPricing = lpd !== null && lpd.getTime() >= rsd.getTime()
+      // Important: If lpd equals rsd, treat it as first pricing (not completed)
+      // This handles the case where backend returns reporting_start_date when no pricing exists
+      const hasCompletedPricing = lpd !== null && lpd.getTime() > rsd.getTime()
 
       if (hasCompletedPricing) {
         // Next day window (after completing pricing for lpd)
@@ -711,7 +711,7 @@ export function computePricingWindow(reportingFrequency, reportingStartDate, las
       }
 
       // First day window → reporting_start_date
-      // (when lpd is null or lpd < rsd)
+      // (when lpd is null, lpd < rsd, or lpd === rsd)
       const start = rsd
       const lastDayInclusive = rsd
       return { start, lastDayInclusive }
@@ -1219,7 +1219,7 @@ export const ToggleBetweenModals = ({
           })
         }
       }
-         // Close ALL modals after successful upload
+      // Close ALL modals after successful upload
       setUploadOpen(false)
       setChooserOpen(false)
       setManualOpen(false)
@@ -1228,12 +1228,22 @@ export const ToggleBetweenModals = ({
       setFileError('')
       setUploadButtonClicked(false)
 
+      // refresh last pricing date after upload
+      // For daily frequency, backend needs more time to update last_pricing_date
+      // Use longer delay and multiple refreshes to ensure we get the updated date
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await refreshLastPricingDate()
+      await new Promise(resolve => setTimeout(resolve, 400))
+      await refreshLastPricingDate()
+      await new Promise(resolve => setTimeout(resolve, 300))
+      await refreshLastPricingDate()
+
+      // Refresh reporting pricing data after upload
+      // Call after refreshLastPricingDate to ensure data is ready
       if (typeof onPricingRefresh === 'function') {
+        await new Promise(resolve => setTimeout(resolve, 200))
         onPricingRefresh()
       }
-
-      // refresh last pricing date after upload
-      await refreshLastPricingDate()
     } catch (e) {
       console.error('[Upload Pricing] Error:', e)
       setFileError(e?.message || 'Upload failed.')
@@ -1385,6 +1395,8 @@ export const ToggleBetweenModals = ({
       }
 
       // refresh last pricing date after manual save
+      // Add a small delay to ensure backend has processed the save
+      await new Promise(resolve => setTimeout(resolve, 200))
       await refreshLastPricingDate()
     } catch (e) {
       setManualError(e?.message || 'Failed to save manual pricing.')
@@ -1398,13 +1410,25 @@ export const ToggleBetweenModals = ({
   const refreshLastPricingDate = useCallback(async () => {
     if (!currentFundId) return
     try {
-      const url = `${API_BASE}/api/v1/pricing/lastPricingdate/${encodeURIComponent(currentFundId)}`
-      const resp = await fetch(url, { headers: { Accept: 'application/json' } })
+      // Add cache-busting parameter to ensure we get the latest data
+      const url = `${API_BASE}/api/v1/pricing/lastPricingdate/${encodeURIComponent(currentFundId)}?t=${Date.now()}`
+      const resp = await fetch(url, { 
+        headers: { Accept: 'application/json' },
+        cache: 'no-store'
+      })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const json = await resp.json()
       const last =
         json?.last_pricing_date || json?.meta?.last_pricing_date || json?.data?.last_pricing_date || json?.result?.last_pricing_date || null
-      setLastPricingDate(last || null)
+      
+      console.log('[Pricing] Refreshed last pricing date:', last)
+      setLastPricingDate((prev) => {
+        console.log('[Pricing] Updating lastPricingDate from', prev, 'to', last)
+        return last || null
+      })
+      
+      // Force a small delay to ensure state update propagates
+      await new Promise(resolve => setTimeout(resolve, 50))
     } catch (e) {
       setMetaError('Failed to load last pricing date')
       console.warn('[summary] last pricing date fetch failed:', e)
@@ -1421,7 +1445,21 @@ export const ToggleBetweenModals = ({
   // This ensures the pricing window shows the correct next period
   useEffect(() => {
     if (isChooserOpen && currentFundId) {
-      refreshLastPricingDate()
+      // Reset all button states when chooser modal opens
+      setManualButtonClicked(false)
+      setUploadButtonClicked(false)
+      setAdhocButtonClicked(false)
+      
+      // Add a delay to ensure backend has updated the last pricing date
+      // For daily frequency, refresh multiple times to ensure we get latest data
+      const timer = setTimeout(async () => {
+        await refreshLastPricingDate()
+        await new Promise(resolve => setTimeout(resolve, 400))
+        await refreshLastPricingDate()
+        await new Promise(resolve => setTimeout(resolve, 300))
+        await refreshLastPricingDate()
+      }, 300)
+      return () => clearTimeout(timer)
     }
   }, [isChooserOpen, currentFundId, refreshLastPricingDate])
 
@@ -1621,17 +1659,10 @@ export const ToggleBetweenModals = ({
         onPricingRefresh()
       }
 
-      try {
-        if (currentFundId) {
-          const url = `${API_BASE}/api/v1/pricing/lastPricingdate/${encodeURIComponent(currentFundId)}`
-          const r = await fetch(url, { headers: { Accept: 'application/json' } })
-          if (r.ok) {
-            const j = await r.json()
-            const last = j?.last_pricing_date || j?.meta?.last_pricing_date || j?.data?.last_pricing_date || j?.result?.last_pricing_date || null
-            setLastPricingDate(last || null)
-          }
-        }
-      } catch {}
+      // refresh last pricing date after custom save
+      // Add a small delay to ensure backend has processed the save
+      await new Promise(resolve => setTimeout(resolve, 200))
+      await refreshLastPricingDate()
     } catch (e) {
       setCustomError(e?.message || 'Failed to save custom pricing.')
       setAdhocButtonClicked(false)
@@ -1797,6 +1828,10 @@ export const ToggleBetweenModals = ({
             // Validate migration before opening pricing modal (for existing funds)
             const canOpen = await validateMigrationBeforePricing()
             if (canOpen) {
+              // Reset all button states when opening chooser modal
+              setManualButtonClicked(false)
+              setUploadButtonClicked(false)
+              setAdhocButtonClicked(false)
               setChooserOpen(true)
             }
           }}>
@@ -1812,7 +1847,13 @@ export const ToggleBetweenModals = ({
       </div>
 
       {/* ===== Chooser (Manual + Upload) ===== */}
-      <Modal show={isChooserOpen} onHide={() => setChooserOpen(false)} centered size="lg">
+      <Modal show={isChooserOpen} onHide={() => {
+        setChooserOpen(false)
+        // Reset all button states when chooser modal closes
+        setManualButtonClicked(false)
+        setUploadButtonClicked(false)
+        setAdhocButtonClicked(false)
+      }} centered size="lg">
         <Modal.Header closeButton className="align-items-start">
           <Modal.Title as="h5">Add Valuation</Modal.Title>
         </Modal.Header>
@@ -1950,7 +1991,10 @@ export const ToggleBetweenModals = ({
         </Modal.Body>
 
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setUploadOpen(false)} disabled={isUploading}>
+          <Button variant="secondary" onClick={() => {
+            setUploadOpen(false)
+            setUploadButtonClicked(false)
+          }} disabled={isUploading}>
             Back
           </Button>
           <Button variant="success" onClick={handleUploadSave} disabled={isUploading || uploadButtonClicked || !file || !!fileError}>
