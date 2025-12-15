@@ -1609,11 +1609,11 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         asset_type_id: symbol.asset_type_id || symbol.assettype_id || '',
       })
       
-      // Validate contract_size if it exists
+      // Validate contract_size if it exists - should not be negative or zero
       if (contractSize !== '') {
         const numValue = parseFloat(contractSize)
-        if (!isNaN(numValue) && numValue < 0) {
-          setContractSizeError('Contract size cannot be negative')
+        if (!isNaN(numValue) && numValue <= 0) {
+          setContractSizeError('Contract size must be greater than 0')
         } else {
           setContractSizeError('')
         }
@@ -1692,11 +1692,15 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
     
-    // Validate contract_size - should not be negative
+    // Validate contract_size - should not be negative or zero
     if (name === 'contract_size') {
       const numValue = parseFloat(value)
-      if (value !== '' && !isNaN(numValue) && numValue < 0) {
-        setContractSizeError('Contract size cannot be negative')
+      if (value !== '' && !isNaN(numValue)) {
+        if (numValue <= 0) {
+          setContractSizeError('Contract size must be greater than 0')
+        } else {
+          setContractSizeError('')
+        }
       } else {
         setContractSizeError('')
       }
