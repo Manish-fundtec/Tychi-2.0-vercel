@@ -1062,45 +1062,33 @@ export const ToggleBetweenModals = ({
           return true // Allow to proceed if dates are invalid
         }
         
-        // Calculate months difference between last_pricing_date and reporting_start_date
-        const lastPricingMonth = `${lastDateObj.getUTCFullYear()}-${String(lastDateObj.getUTCMonth() + 1).padStart(2, '0')}`
-        const reportingStartMonth = `${reportingStartObj.getUTCFullYear()}-${String(reportingStartObj.getUTCMonth() + 1).padStart(2, '0')}`
-        
-        // Calculate months difference: how many months have passed since reporting_start_date
-        const monthsSinceStart = (lastDateObj.getUTCFullYear() - reportingStartObj.getUTCFullYear()) * 12 + 
-                                 (lastDateObj.getUTCMonth() - reportingStartObj.getUTCMonth())
-        
         // Calculate next pricing month (month after last_pricing_date)
         const nextPricingMonth = new Date(lastDateObj)
         nextPricingMonth.setUTCMonth(nextPricingMonth.getUTCMonth() + 1)
-        const nextPricingMonthStr = `${nextPricingMonth.getUTCFullYear()}-${String(nextPricingMonth.getUTCMonth() + 1).padStart(2, '0')}`
         
         // Calculate months difference between next pricing month and reporting_start_date
         const monthsDiff = (nextPricingMonth.getUTCFullYear() - reportingStartObj.getUTCFullYear()) * 12 + 
                           (nextPricingMonth.getUTCMonth() - reportingStartObj.getUTCMonth())
         
+        const nextPricingMonthStr = `${nextPricingMonth.getUTCFullYear()}-${String(nextPricingMonth.getUTCMonth() + 1).padStart(2, '0')}`
+        
         console.log('[Pricing] 🎯 Month calculation:', {
           last_pricing_date: lastPricingDate,
           reporting_start_date: reportingStartDate,
-          last_pricing_month: lastPricingMonth,
-          reporting_start_month: reportingStartMonth,
-          months_since_start: monthsSinceStart,
           next_pricing_month: nextPricingMonthStr,
           months_diff: monthsDiff,
-          is_second_month: monthsSinceStart === 0 && monthsDiff === 1
+          is_second_month: monthsDiff === 1
         })
         
-        // Check migration ONLY if:
-        // 1. last_pricing_date is in first month (monthsSinceStart === 0)
-        // 2. AND next pricing will be in second month (monthsDiff === 1)
-        // This means: First month pricing done → First month migration needed → Then second month pricing
-        if (monthsSinceStart === 0 && monthsDiff === 1) {
-          console.log('[Pricing] 🔍 Second month pricing detected - checking first month migration')
+        // Only check migration if next pricing is exactly the 2nd month (monthsDiff === 1)
+        if (monthsDiff === 1) {
+          console.log('[Pricing] 🔍 Second month pricing detected - checking migration')
           
-          // Migration should be for the month of last_pricing_date (first month)
-          const migrationMonthStr = lastPricingMonth
+          // Migration should be for the month of last_pricing_date
+          const lastPricingMonth = new Date(lastDateObj)
+          const migrationMonthStr = `${lastPricingMonth.getUTCFullYear()}-${String(lastPricingMonth.getUTCMonth() + 1).padStart(2, '0')}`
           
-          console.log('[Pricing] 🔍 Checking migration for first month:', migrationMonthStr)
+          console.log('[Pricing] 🔍 Checking migration for last pricing month:', migrationMonthStr)
           
           // Check migration for last_pricing_date month
           const token = Cookies.get('dashboardToken')
