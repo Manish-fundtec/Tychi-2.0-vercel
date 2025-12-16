@@ -59,10 +59,9 @@ export default function LotSummaryModal({
   handleClose,
   fundId,
   date,                 // 'YYYY-MM-DD' (or parseable date)
-  defaultScope = 'MTD', // MTD | QTD | YTD
+  defaultScope = 'MTD', // MTD | QTD | YTD (deprecated - always uses MTD now)
   orgId,                // optional
 }) {
-  const [scope, setScope] = useState(String(defaultScope).toUpperCase());
   const [rows, setRows] = useState([]);
   const [totalsBySymbol, setTotalsBySymbol] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -113,7 +112,7 @@ export default function LotSummaryModal({
 
         const params = new URLSearchParams();
         params.set('date', normDate);
-        params.set('scope', scope);
+        params.set('scope', 'MTD'); // Fixed to MTD as scope selector is removed
         if (orgId) params.set('org_id', String(orgId));
 
         const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/lot-summary?${params.toString()}`;
@@ -134,7 +133,7 @@ export default function LotSummaryModal({
         setLoading(false);
       }
     })();
-  }, [show, fundId, date, scope, orgId]);
+  }, [show, fundId, date, orgId]);
 
   const handleExportCsv = () => {
     if (!rows?.length) {
@@ -300,20 +299,6 @@ export default function LotSummaryModal({
       </Modal.Header>
 
       <Modal.Body>
-        <Form className="mb-3">
-          <div className="d-flex align-items-end gap-3">
-            <div>
-              <Form.Label>Scope</Form.Label>
-              <Form.Select value={scope} onChange={(e) => setScope(e.target.value)}>
-                <option value="MTD">MTD</option>
-                <option value="QTD">QTD</option>
-                <option value="YTD">YTD</option>
-              </Form.Select>
-              <Form.Text muted>Period derived from selected date.</Form.Text>
-            </div>
-          </div>
-        </Form>
-
         {err && <div className="text-danger mb-2">{err}</div>}
 
         {loading ? (

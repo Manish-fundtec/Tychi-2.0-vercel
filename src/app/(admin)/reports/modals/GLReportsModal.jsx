@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import Cookies from 'js-cookie';
 import { Modal, Button, Form, Row, Col, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
@@ -32,17 +32,24 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
   
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
-  const [scope, setScope] = useState('MTD');
   
-  // Set default scope to PTD if frequency is daily when modal opens (only once)
+  // Set default scope based on frequency
+  const getDefaultScope = useCallback(() => {
+    if (reportingFrequency === 'daily') return 'PTD';
+    if (reportingFrequency === 'monthly') return 'MTD';
+    if (reportingFrequency === 'quarterly' || reportingFrequency === 'quarter') return 'QTD';
+    if (reportingFrequency === 'annual' || reportingFrequency === 'annually') return 'YTD';
+    return 'MTD'; // default
+  }, [reportingFrequency]);
+  
+  const [scope, setScope] = useState(() => getDefaultScope());
+  
+  // Update scope when frequency changes
   useEffect(() => {
-    if (show && reportingFrequency === 'daily') {
-      setScope('PTD');
-    } else if (show && reportingFrequency !== 'daily' && scope === 'PTD') {
-      // Reset to MTD if frequency is not daily
-      setScope('MTD');
+    if (show) {
+      setScope(getDefaultScope());
     }
-  }, [show, reportingFrequency]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [show, reportingFrequency, getDefaultScope]);
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -262,8 +269,8 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
               <Form.Label>Select Category</Form.Label>
               <Form.Select value={scope} onChange={(e) => setScope(e.target.value)}>
                 {reportingFrequency === 'daily' && <option value="PTD">PTD</option>}
-                <option value="MTD">MTD</option>
-                <option value="QTD">QTD</option>
+                {(reportingFrequency === 'daily' || reportingFrequency === 'monthly') && <option value="MTD">MTD</option>}
+                {(reportingFrequency === 'daily' || reportingFrequency === 'monthly' || reportingFrequency === 'quarterly' || reportingFrequency === 'quarter') && <option value="QTD">QTD</option>}
                 <option value="YTD">YTD</option>
               </Form.Select>
               <Form.Text muted>Period is computed from the selected date ({scope}).</Form.Text>

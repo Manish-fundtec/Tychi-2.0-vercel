@@ -47,9 +47,15 @@ export default function TrialBalanceModalGrouped({
   const dashboard = useDashboardToken();
   const reportingFrequency = String(dashboard?.fund?.reporting_frequency || dashboard?.reporting_frequency || 'monthly').toLowerCase();
   
-  // Set default scope to PTD if frequency is daily, otherwise use provided defaultScope
-  const initialScope = reportingFrequency === 'daily' && defaultScope === 'MTD' ? 'PTD' : String(defaultScope).toUpperCase();
-  const [scope, setScope] = useState(initialScope);
+  // Set default scope based on frequency
+  const getDefaultScope = () => {
+    if (reportingFrequency === 'daily') return 'PTD';
+    if (reportingFrequency === 'monthly') return 'MTD';
+    if (reportingFrequency === 'quarterly' || reportingFrequency === 'quarter') return 'QTD';
+    if (reportingFrequency === 'annual' || reportingFrequency === 'annually') return 'YTD';
+    return String(defaultScope).toUpperCase(); // fallback to provided defaultScope
+  };
+  const [scope, setScope] = useState(getDefaultScope());
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -232,8 +238,8 @@ export default function TrialBalanceModalGrouped({
               <Form.Label>Scope</Form.Label>
               <Form.Select value={scope} onChange={(e) => setScope(e.target.value)}>
                 {reportingFrequency === 'daily' && <option value="PTD">PTD</option>}
-                <option value="MTD">MTD</option>
-                <option value="QTD">QTD</option>
+                {(reportingFrequency === 'daily' || reportingFrequency === 'monthly') && <option value="MTD">MTD</option>}
+                {(reportingFrequency === 'daily' || reportingFrequency === 'monthly' || reportingFrequency === 'quarterly' || reportingFrequency === 'quarter') && <option value="QTD">QTD</option>}
                 <option value="YTD">YTD</option>
               </Form.Select>
               <Form.Text muted>Period derived from selected date.</Form.Text>
