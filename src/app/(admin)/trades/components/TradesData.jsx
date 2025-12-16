@@ -443,7 +443,15 @@ export default function TradesData() {
         }
       } catch (error) {
         console.error('[Trades] bulk delete failed', error)
-        alert(error?.message || 'Failed to delete selected trades.')
+        
+        // Extract error message from response
+        const errorMessage = 
+          error?.response?.data?.message || 
+          error?.response?.data?.error || 
+          error?.message || 
+          'Failed to delete selected trades.'
+        
+        alert(errorMessage)
       } finally {
         setBulkActionLoading(false)
       }

@@ -57,49 +57,86 @@ export const bulkDeleteTrades = async (tradeIds) => {
   // Get dashboard token from cookies
   const token = Cookies.get('dashboardToken')
   
-  // Axios DELETE with body: use data property in config
-  const res = await api.delete('/api/v1/trade/bulk/delete', {
-    withCredentials: true,
-    headers: {
-      'dashboard': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    data: {
-      trade_ids: tradeIds,
-    },
+  const requestBody = {
+    trade_ids: tradeIds,
+  }
+  
+  console.log('[BulkDelete] Request:', {
+    url: '/api/v1/trade/bulk/delete',
+    method: 'DELETE',
+    body: requestBody,
+    tradeCount: tradeIds.length,
   })
   
-  // Backend response format:
-  // 200: All deleted - { success: true, message: "...", results: { successful: [...], failed: [] } }
-  // 207: Partial - { success: true, message: "...", results: { successful: [...], failed: [...] } }
-  // 400: All failed - { success: false, message: "...", results: { successful: [], failed: [...] } }
-  
-  const responseData = res?.data || {}
-  const results = responseData?.results || {}
-  const successful = results?.successful || []
-  const failed = results?.failed || []
-  
-  if (res.status === 200) {
-    // All deleted successfully
-    return {
-      success: true,
-      message: responseData?.message || 'All trades deleted successfully',
-      successful: successful,
-      failed: failed,
-      partial: false,
+  try {
+    // Use api.request() for DELETE with body (axios.delete sometimes doesn't send body properly)
+    const res = await api.request({
+      method: 'DELETE',
+      url: '/api/v1/trade/bulk/delete',
+      withCredentials: true,
+      headers: {
+        'dashboard': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      data: requestBody,
+    })
+    
+    // Backend response format:
+    // 200: All deleted - { success: true, message: "...", results: { successful: [...], failed: [] } }
+    // 207: Partial - { success: true, message: "...", results: { successful: [...], failed: [...] } }
+    // 400: All failed - { success: false, message: "...", results: { successful: [], failed: [...] } }
+    
+    const responseData = res?.data || {}
+    const results = responseData?.results || {}
+    const successful = results?.successful || []
+    const failed = results?.failed || []
+    
+    if (res.status === 200) {
+      // All deleted successfully
+      return {
+        success: true,
+        message: responseData?.message || 'All trades deleted successfully',
+        successful: successful,
+        failed: failed,
+        partial: false,
+      }
+    } else if (res.status === 207) {
+      // Partial success
+      return {
+        success: true,
+        partial: true,
+        message: responseData?.message || 'Some trades deleted successfully',
+        successful: successful,
+        failed: failed,
+      }
+    } else {
+      // All failed or error - extract error message from response
+      const errorMessage = responseData?.message || responseData?.error || 'Failed to delete trades'
+      const error = new Error(errorMessage)
+      error.response = res
+      error.responseData = responseData
+      throw error
     }
-  } else if (res.status === 207) {
-    // Partial success
-    return {
-      success: true,
-      partial: true,
-      message: responseData?.message || 'Some trades deleted successfully',
-      successful: successful,
-      failed: failed,
+  } catch (error) {
+    // Handle axios errors (400, 500, etc.)
+    console.error('[BulkDelete] Error:', error)
+    
+    // If it's an axios error with response, extract the message
+    if (error?.response) {
+      const responseData = error.response?.data || {}
+      const errorMessage = 
+        responseData?.message || 
+        responseData?.error || 
+        `Request failed with status ${error.response.status}`
+      
+      const customError = new Error(errorMessage)
+      customError.response = error.response
+      customError.responseData = responseData
+      throw customError
     }
-  } else {
-    // All failed or error
-    throw new Error(responseData?.message || 'Failed to delete trades')
+    
+    // Re-throw if it's not an axios error
+    throw error
   }
 }
 
