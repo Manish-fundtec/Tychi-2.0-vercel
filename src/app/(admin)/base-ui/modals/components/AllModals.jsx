@@ -754,25 +754,35 @@ export function computePricingWindow(reportingFrequency, reportingStartDate, las
     }
   }
 
-  // QUARTERLY frequency (existing logic - don't touch)
+  // QUARTERLY frequency
   if (freq === 'quarterly') {
     if (rsd) {
-      const rsdQuarterEnd = asUTC(rsd.getUTCFullYear(), Math.floor(rsd.getUTCMonth() / 3) * 3 + 3, 0)
+      const rsdQuarterStart = startOfQuarterUTC(rsd)
+      const rsdQuarterEnd = asUTC(rsdQuarterStart.getUTCFullYear(), rsdQuarterStart.getUTCMonth() + 3, 0)
       const hasRealLast = lpd && lpd >= rsdQuarterEnd
 
       if (hasRealLast) {
-        const nextQuarterStart = addQuartersUTC(lpd, 1)
+        // Find which calendar quarter lpd falls in
+        const lpdQuarterStart = startOfQuarterUTC(lpd)
+        const lpdQuarterEnd = asUTC(lpdQuarterStart.getUTCFullYear(), lpdQuarterStart.getUTCMonth() + 3, 0)
+        
+        // Calculate next quarter start: if lpd is at or past quarter end, start next quarter
+        // Otherwise, lpd is within a quarter, so next quarter starts after current quarter
+        const nextQuarterStart = addQuartersUTC(lpdQuarterStart, 1)
         const lastDayInclusive = asUTC(nextQuarterStart.getUTCFullYear(), nextQuarterStart.getUTCMonth() + 3, 0)
         return { start: nextQuarterStart, lastDayInclusive }
       }
 
-      const start = startOfQuarterUTC(rsd)
-      const lastDayInclusive = asUTC(start.getUTCFullYear(), start.getUTCMonth() + 3, 0)
+      // First quarter window
+      const start = rsdQuarterStart
+      const lastDayInclusive = rsdQuarterEnd
       return { start, lastDayInclusive }
     }
 
     if (lpd) {
-      const nextQuarterStart = addQuartersUTC(lpd, 1)
+      // Find which calendar quarter lpd falls in, then move to next quarter
+      const lpdQuarterStart = startOfQuarterUTC(lpd)
+      const nextQuarterStart = addQuartersUTC(lpdQuarterStart, 1)
       const lastDayInclusive = asUTC(nextQuarterStart.getUTCFullYear(), nextQuarterStart.getUTCMonth() + 3, 0)
       return { start: nextQuarterStart, lastDayInclusive }
     }
