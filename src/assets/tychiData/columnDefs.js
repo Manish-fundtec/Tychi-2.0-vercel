@@ -299,6 +299,7 @@ export const symbolColDefs = [
     sortable: false,
     filter: false,
     flex: 1,
+    checkboxSelection: true,
   },
   { field: 'symbol_uid', headerName: 'Symbol UID', sortable: true, filter: true, flex: 1 },
   { field: 'symbol_id', headerName: 'Symbol ID', sortable: true, filter: true, flex: 1 },

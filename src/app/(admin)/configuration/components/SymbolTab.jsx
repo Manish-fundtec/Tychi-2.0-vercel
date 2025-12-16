@@ -1,7 +1,7 @@
 'use client'
 
 import { AgGridReact } from 'ag-grid-react'
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useSymbolData } from '@/hooks/useSymbolData'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { UploadSymbolModal } from '@/app/(admin)/base-ui/modals/components/ConfigurationModal'
@@ -22,6 +22,7 @@ import {
 import { symbolColDefs } from '@/assets/tychiData/columnDefs'
 import api from '@/lib/api/axios' // NEW: for history fetch
 import Cookies from 'js-cookie'
+import { bulkDeleteSymbols } from '@/lib/api/symbol'
 
 const normalizeStatusText = (value) => String(value || '')
   .replace(/<[^>]+>/g, '')
@@ -33,11 +34,16 @@ const SymbolTab = () => {
   const { fund_id } = useDashboardToken() || {}
   const { symbols, refetchSymbols, editingSymbol, setEditingSymbol, showModal, setShowModal, handleEdit, handleDelete } = useSymbolData(fund_id)
 
-  // NEW: local state for “Symbol Loader History”
+  // NEW: local state for "Symbol Loader History"
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [announceValidation, setAnnounceValidation] = useState(false)
+
+  // Selection state for bulk delete
+  const [selectedRows, setSelectedRows] = useState([])
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
+  const gridApiRef = useRef(null)
 
   // NEW: grid columns for history
   // ── Columns for history grid
@@ -127,6 +133,101 @@ const SymbolTab = () => {
     fetchHistory()
   }, [fetchHistory])
 
+  // Grid selection handlers
+  const onGridReady = useCallback((params) => {
+    gridApiRef.current = params.api
+  }, [])
+
+  const updateSelectionState = useCallback(() => {
+    if (!gridApiRef.current) return
+    setSelectedRows(gridApiRef.current.getSelectedRows())
+  }, [])
+
+  const onSelectionChanged = useCallback(() => {
+    updateSelectionState()
+  }, [updateSelectionState])
+
+  const handleSelectAll = useCallback(() => {
+    if (!gridApiRef.current) return
+    gridApiRef.current.selectAll()
+    updateSelectionState()
+  }, [updateSelectionState])
+
+  const handleClearSelection = useCallback(() => {
+    if (!gridApiRef.current) return
+    gridApiRef.current.deselectAll()
+    updateSelectionState()
+  }, [updateSelectionState])
+
+  // Bulk delete handler
+  const handleBulkDelete = useCallback(async () => {
+    if (!selectedRows.length) {
+      alert('No symbols selected for deletion.')
+      return
+    }
+
+    if (!confirm(`Delete ${selectedRows.length} symbol(s)? This cannot be undone.`)) {
+      return
+    }
+
+    setBulkActionLoading(true)
+    try {
+      const symbolIds = selectedRows.map((row) => row.symbol_uid).filter(Boolean)
+      if (!symbolIds.length) {
+        alert('No valid symbols to delete.')
+        return
+      }
+
+      const response = await bulkDeleteSymbols(symbolIds)
+      const responseData = response?.data || {}
+      
+      await refetchSymbols()
+      gridApiRef.current?.deselectAll()
+      setSelectedRows([])
+      
+      // Build success message with skipped symbols info
+      let message = responseData.message || 'Symbols deleted successfully.'
+      
+      if (responseData.skipped && responseData.skipped.length > 0) {
+        const skippedCount = responseData.skipped.length
+        const deletedCount = responseData.deleted?.length || 0
+        
+        // Get skipped symbol names for display
+        const skippedNames = selectedRows
+          .filter((row) => responseData.skipped.includes(row.symbol_uid))
+          .map((row) => row.symbol_name || row.symbol_uid)
+          .join(', ')
+        
+        message = `${deletedCount > 0 ? `${deletedCount} symbol(s) deleted successfully.` : ''}\n\n${skippedCount} symbol(s) skipped: ${skippedNames}\n\nReason: ${responseData.skipped_reason || 'Symbols are used in trades or lots and cannot be deleted.'}`
+      } else if (responseData.deleted) {
+        const deletedCount = responseData.deleted.length
+        message = `${deletedCount} symbol(s) deleted successfully.`
+      }
+      
+      alert(message)
+    } catch (error) {
+      console.error('[Symbols] bulk delete failed', error)
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to delete selected symbols.'
+      
+      // Check if response includes skipped symbols info even in error
+      if (error?.response?.data?.skipped && error.response.data.skipped.length > 0) {
+        const skippedCount = error.response.data.skipped.length
+        const skippedNames = selectedRows
+          .filter((row) => error.response.data.skipped.includes(row.symbol_uid))
+          .map((row) => row.symbol_name || row.symbol_uid)
+          .join(', ')
+        
+        alert(`${errorMessage}\n\n${skippedCount} symbol(s) were skipped: ${skippedNames}`)
+      } else {
+        alert(errorMessage)
+      }
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }, [selectedRows, refetchSymbols])
+
+  const selectedCount = selectedRows.length
+
   return (
     <Row>
       <Col xl={12}>
@@ -182,15 +283,33 @@ const SymbolTab = () => {
                     No fund selected. Showing all symbols. Select a fund to filter this list.
                   </Alert>
                 )}
+                <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
+                  <Button variant="outline-secondary" size="sm" onClick={handleSelectAll} disabled={!symbols.length}>
+                    Select All
+                  </Button>
+                  <Button variant="outline-secondary" size="sm" onClick={handleClearSelection} disabled={!selectedRows.length}>
+                    Clear Selection
+                  </Button>
+                  <Button variant="outline-danger" size="sm" onClick={handleBulkDelete} disabled={!selectedRows.length || bulkActionLoading}>
+                    {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
+                  </Button>
+                  <span className="text-muted ms-auto">
+                    Selected: {selectedCount} / {symbols.length}
+                  </span>
+                </div>
                 <div style={{ height: '100%', width: '100%' }}>
                   <AgGridReact
+                    onGridReady={onGridReady}
+                    onSelectionChanged={onSelectionChanged}
                     rowData={symbols}
                     columnDefs={symbolColDefs}
                     pagination={true}
                     paginationPageSize={10}
+                    rowSelection="multiple"
                     defaultColDef={{ sortable: true, filter: true, resizable: true }}
                     domLayout="autoHeight"
                     context={{ handleEdit, handleDelete }}
+                    suppressRowClickSelection={false}
                   />
                 </div>
               </CardBody>
