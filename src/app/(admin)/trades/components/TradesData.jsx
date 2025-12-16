@@ -23,7 +23,7 @@ import {
   Modal,
 } from 'react-bootstrap'
 import { TradeModal, UploadTradeModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
-import { deleteTrade } from '@/lib/api/trades'
+import { deleteTrade, bulkDeleteTrades } from '@/lib/api/trades'
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
 import { getFundDetails } from '@/lib/api/fund'
 
@@ -398,15 +398,46 @@ export default function TradesData() {
         alert('No trades selected for deletion.')
         return
       }
+      
+      const tradeIds = deletable.map((t) => t.trade_id)
+      
       if (!confirm(`Delete ${deletable.length} trade(s)? This cannot be undone.`)) return
+      
       setBulkActionLoading(true)
       try {
-        for (const trade of deletable) {
-          await deleteTrade(trade.trade_id)
+        // Use bulk delete API for multiple trades, single delete for one trade
+        if (tradeIds.length === 1) {
+          // Single delete
+          await deleteTrade(tradeIds[0])
+          await refreshTrades()
+          gridApiRef.current?.deselectAll()
+          setSelectedRows([])
+        } else {
+          // Bulk delete
+          const result = await bulkDeleteTrades(tradeIds)
+          
+          // Show detailed results
+          if (result.partial) {
+            // Partial success
+            const deletedCount = result.deleted?.length || 0
+            const failedCount = result.failed?.length || 0
+            const failedDetails = result.failed?.map((f) => `Trade ${f.trade_id}: ${f.error || 'Failed'}`).join('\n')
+            
+            alert(
+              `Partial Success:\n\n` +
+              `✅ Deleted: ${deletedCount} trade(s)\n` +
+              `❌ Failed: ${failedCount} trade(s)\n\n` +
+              (failedDetails ? `Failed Details:\n${failedDetails}` : '')
+            )
+          } else {
+            // All successful
+            alert(`✅ Successfully deleted ${result.deleted?.length || tradeIds.length} trade(s)`)
+          }
+          
+          await refreshTrades()
+          gridApiRef.current?.deselectAll()
+          setSelectedRows([])
         }
-        await refreshTrades()
-        gridApiRef.current?.deselectAll()
-        setSelectedRows([])
       } catch (error) {
         console.error('[Trades] bulk delete failed', error)
         alert(error?.message || 'Failed to delete selected trades.')

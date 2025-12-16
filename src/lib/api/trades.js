@@ -48,6 +48,53 @@ export const deleteTrade = async (trade_id) => {
   return res.data // { success, message, details }
 }
 
+// Bulk delete trades
+export const bulkDeleteTrades = async (tradeIds) => {
+  if (!Array.isArray(tradeIds) || tradeIds.length === 0) {
+    throw new Error('tradeIds array is required and must not be empty')
+  }
+  
+  // Get dashboard token from cookies
+  const token = Cookies.get('dashboardToken')
+  
+  // Axios DELETE with body: use data property in config
+  const res = await api.delete('/api/v1/trade/bulk/delete', {
+    withCredentials: true,
+    headers: {
+      'dashboard': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    data: {
+      trade_ids: tradeIds,
+    },
+  })
+  
+  // Handle different response statuses
+  // 200: All deleted successfully
+  // 207: Partial success (some deleted, some failed)
+  // 400: All failed
+  if (res.status === 200) {
+    return {
+      success: true,
+      message: res?.data?.message || 'All trades deleted successfully',
+      deleted: res?.data?.deleted || [],
+      failed: [],
+    }
+  } else if (res.status === 207) {
+    // Multi-status: partial success
+    return {
+      success: true,
+      partial: true,
+      message: res?.data?.message || 'Some trades deleted successfully',
+      deleted: res?.data?.deleted || [],
+      failed: res?.data?.failed || [],
+    }
+  } else {
+    // All failed or error
+    throw new Error(res?.data?.message || 'Failed to delete trades')
+  }
+}
+
 // NEW: Add trade (POST /api/v1/trade)
 export async function addTrade(payload) {
   // Ensure org_id exists (backend requires it)
