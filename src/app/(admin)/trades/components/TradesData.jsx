@@ -453,7 +453,22 @@ export default function TradesData() {
         return
       }
 
-      const tradeIds = deletable.map((t) => t.trade_id)
+      // Sort EXACTLY like backend before sending
+      const sortFn = (a, b) => {
+        const dA = new Date(a.trade_date).getTime() || 0
+        const dB = new Date(b.trade_date).getTime() || 0
+        if (dA !== dB) return dB - dA
+
+        const cA = new Date(a.created_at).getTime() || 0
+        const cB = new Date(b.created_at).getTime() || 0
+        if (cA !== cB) return cB - cA
+
+        return String(b.trade_id).localeCompare(String(a.trade_id))
+      }
+
+      // FIX: sort selection before sending to backend
+      const sortedSelection = [...deletable].sort(sortFn)
+      const tradeIds = sortedSelection.map((t) => t.trade_id)
 
       if (!confirm(`Delete ${deletable.length} trade(s)? This cannot be undone.`)) return
 
@@ -626,6 +641,8 @@ export default function TradesData() {
                     rowSelection="multiple"
                     paginationPageSize={10}
                     paginationPageSizeSelector={[10, 25, 50, 100]}
+                    suppressMultiSort={true}
+                    maintainColumnOrder={true}
                     defaultColDef={{
                       sortable: true,
                       filter: true,
