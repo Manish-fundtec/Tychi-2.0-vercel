@@ -395,6 +395,12 @@ export default function TradesData() {
   const validateContinuousSelection = useCallback((allRows, selectedRows) => {
     if (!selectedRows.length) return "No trades selected.";
 
+    console.log('[Validation] Starting validation:', {
+      totalRows: allRows.length,
+      selectedRows: selectedRows.length,
+      selectedTradeIds: selectedRows.map(r => r.trade_id)
+    });
+
     // Group all and selected trades by symbol
     const groupTrades = (rows) => {
       const groups = {};
@@ -408,6 +414,12 @@ export default function TradesData() {
 
     const allGroups = groupTrades(allRows);
     const selectedGroups = groupTrades(selectedRows);
+    
+    console.log('[Validation] Groups:', {
+      allGroupsCount: Object.keys(allGroups).length,
+      selectedGroupsCount: Object.keys(selectedGroups).length,
+      symbols: Object.keys(selectedGroups)
+    });
 
     // Backend sort logic (same as API)
     const sortFn = (a, b) => {
@@ -429,14 +441,39 @@ export default function TradesData() {
 
       if (!all.length || !sel.length) continue;
 
+      console.log(`[Validation] Symbol ${symbol}:`, {
+        allCount: all.length,
+        selCount: sel.length,
+        allTradeIds: all.map(t => t.trade_id),
+        selTradeIds: sel.map(t => t.trade_id),
+        allLatest: all[0],
+        selLatest: sel[0]
+      });
+
+      // Normalize trade_ids to strings for comparison
+      const normalizeId = (id) => String(id || '').trim();
+
       // 1️⃣ Latest trade selection required
-      if (all[0].trade_id !== sel[0].trade_id) {
+      if (normalizeId(all[0].trade_id) !== normalizeId(sel[0].trade_id)) {
+        console.log('[Validation] Latest check failed:', {
+          symbol,
+          allLatest: all[0].trade_id,
+          selLatest: sel[0].trade_id,
+          allLatestNorm: normalizeId(all[0].trade_id),
+          selLatestNorm: normalizeId(sel[0].trade_id)
+        });
         return `Symbol ${symbol}: Please select the LATEST trade first.`;
       }
 
       // 2️⃣ No gaps allowed
       for (let i = 0; i < sel.length; i++) {
-        if (sel[i].trade_id !== all[i].trade_id) {
+        if (normalizeId(sel[i].trade_id) !== normalizeId(all[i].trade_id)) {
+          console.log('[Validation] Gap detected:', {
+            symbol,
+            index: i,
+            selected: sel[i].trade_id,
+            expected: all[i].trade_id
+          });
           return `Symbol ${symbol}: Selection must be continuous from the latest trade.`;
         }
       }
