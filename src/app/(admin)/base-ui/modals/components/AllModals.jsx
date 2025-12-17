@@ -905,9 +905,11 @@ export const ToggleBetweenModals = ({
     }
   }
 
-  const gotoUpload = () => {
+  const gotoUpload = async () => {
     setChooserOpen(false)
     setUploadOpen(true)
+    // Refetch pricing period after revert (ensure we have latest data)
+    await refreshLastPricingDate()
   }
 
   // Grab org_id & fund_id
@@ -1328,6 +1330,8 @@ export const ToggleBetweenModals = ({
   const gotoManual = async () => {
     setChooserOpen(false)
     setManualOpen(true)
+    // Refetch pricing period after revert (ensure we have latest data)
+    await refreshLastPricingDate()
     await fetchManualSymbols()
   }
 
@@ -1579,9 +1583,11 @@ export const ToggleBetweenModals = ({
     }
   }, [isAdhocOpen, startDate, endDate, fetchCustomOpenSymbols, mergeAdhocRows])
 
-  const openAdhoc = () => {
+  const openAdhoc = async () => {
     setEndDate('')
     setAdhocOpen(true)
+    // Refetch pricing period after revert (ensure we have latest data)
+    await refreshLastPricingDate()
   }
 
   const adhocCols = useMemo(
