@@ -371,6 +371,77 @@ const MigrationPage = () => {
       try {
         console.log('[Migration] 🔄 Revert icon clicked for fileId:', fileId)
         
+        // Step 1: Get migration reporting period from current row data
+        const migrationReportingPeriod = data?.reporting_period
+        console.log('[Migration] 📅 Migration reporting period:', migrationReportingPeriod)
+        
+        if (!migrationReportingPeriod) {
+          console.warn('[Migration] ⚠️ No reporting period found for this migration')
+        } else {
+          // Step 2: Check if there's any pricing done after this migration month
+          try {
+            const pricingUrl = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`
+            const pricingResp = await fetch(pricingUrl, { 
+              headers: { 'Accept': 'application/json' },
+              credentials: 'include'
+            })
+            
+            if (pricingResp.ok) {
+              const pricingJson = await pricingResp.json()
+              const pricingRows = pricingJson?.rows || []
+              
+              console.log('[Migration] 📊 Found pricing periods:', pricingRows.length)
+              
+              // Convert migration reporting period to Date for comparison
+              const migrationDate = new Date(migrationReportingPeriod + 'T00:00:00Z')
+              const migrationYearMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+              
+              console.log('[Migration] 📅 Migration year-month:', migrationYearMonth)
+              
+              // Check if any pricing exists after migration month
+              const hasSubsequentPricing = pricingRows.some((period) => {
+                if (!period.end_date) return false
+                
+                const pricingDate = new Date(period.end_date + 'T00:00:00Z')
+                const pricingYearMonth = `${pricingDate.getUTCFullYear()}-${String(pricingDate.getUTCMonth() + 1).padStart(2, '0')}`
+                
+                // Check if pricing is after migration month
+                const isAfter = pricingYearMonth > migrationYearMonth
+                
+                if (isAfter) {
+                  console.log('[Migration] ⚠️ Found subsequent pricing:', {
+                    period_name: period.period_name,
+                    end_date: period.end_date,
+                    pricingYearMonth,
+                    migrationYearMonth
+                  })
+                }
+                
+                return isAfter
+              })
+              
+              if (hasSubsequentPricing) {
+                console.log('[Migration] ❌ Cannot revert: Subsequent pricing exists')
+                alert(
+                  '⚠️ Cannot Revert Migration\n\n' +
+                  'Pricing has been completed for months after this migration.\n' +
+                  'Please revert the subsequent pricing first before reverting this migration.\n\n' +
+                  'Example: If migration was done for January and February pricing exists,\n' +
+                  'you must revert February pricing first.'
+                )
+                return
+              }
+              
+              console.log('[Migration] ✅ No subsequent pricing found, revert allowed')
+            } else {
+              console.warn('[Migration] ⚠️ Could not fetch pricing periods, allowing revert')
+            }
+          } catch (pricingError) {
+            console.error('[Migration] ⚠️ Error checking pricing periods:', pricingError)
+            // Allow revert if pricing check fails (don't block user)
+          }
+        }
+        
         // Check onboarding mode from tokenData (similar to pricing revert handler)
         const onboardingMode = 
           tokenData?.fund?.onboarding_mode || 
