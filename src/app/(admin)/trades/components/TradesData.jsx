@@ -391,6 +391,60 @@ export default function TradesData() {
     [selectedRows, rowData, tradeExportHeaders, formatExportValue],
   )
 
+  // Validate continuous latest trades selection per symbol
+  const validateContinuousSelection = useCallback((allRows, selectedRows) => {
+    if (!selectedRows.length) return "No trades selected.";
+
+    // Group all and selected trades by symbol
+    const groupTrades = (rows) => {
+      const groups = {};
+      rows.forEach((row) => {
+        const symbol = row.symbol_id || "__NOSYMBOL__";
+        if (!groups[symbol]) groups[symbol] = [];
+        groups[symbol].push(row);
+      });
+      return groups;
+    };
+
+    const allGroups = groupTrades(allRows);
+    const selectedGroups = groupTrades(selectedRows);
+
+    // Backend sort logic (same as API)
+    const sortFn = (a, b) => {
+      const dA = new Date(a.trade_date).getTime() || 0;
+      const dB = new Date(b.trade_date).getTime() || 0;
+      if (dA !== dB) return dB - dA;
+
+      const cA = new Date(a.created_at).getTime() || 0;
+      const cB = new Date(b.created_at).getTime() || 0;
+      if (cA !== cB) return cB - cA;
+
+      return String(b.trade_id).localeCompare(String(a.trade_id));
+    };
+
+    // Validate each symbol group
+    for (const symbol of Object.keys(selectedGroups)) {
+      const all = (allGroups[symbol] || []).sort(sortFn);
+      const sel = selectedGroups[symbol].sort(sortFn);
+
+      if (!all.length || !sel.length) continue;
+
+      // 1️⃣ Latest trade selection required
+      if (all[0].trade_id !== sel[0].trade_id) {
+        return `Symbol ${symbol}: Please select the LATEST trade first.`;
+      }
+
+      // 2️⃣ No gaps allowed
+      for (let i = 0; i < sel.length; i++) {
+        if (sel[i].trade_id !== all[i].trade_id) {
+          return `Symbol ${symbol}: Selection must be continuous from the latest trade.`;
+        }
+      }
+    }
+
+    return null; // VALID
+  }, []);
+
   const confirmAndDeleteTrades = useCallback(
     async (trades) => {
       const deletable = trades.filter((t) => t?.trade_id)
@@ -398,65 +452,60 @@ export default function TradesData() {
         alert('No trades selected for deletion.')
         return
       }
-      
+
       const tradeIds = deletable.map((t) => t.trade_id)
-      
+
       if (!confirm(`Delete ${deletable.length} trade(s)? This cannot be undone.`)) return
-      
+
       setBulkActionLoading(true)
       try {
-        // Use bulk delete API for multiple trades, single delete for one trade
         if (tradeIds.length === 1) {
-          // Single delete
+          // single delete
           await deleteTrade(tradeIds[0])
           await refreshTrades()
           gridApiRef.current?.deselectAll()
           setSelectedRows([])
           alert('Trade deleted successfully.')
         } else {
-          // Bulk delete
+          // bulk delete
           const result = await bulkDeleteTrades(tradeIds)
-          
-          // Show detailed results
+
           if (result.partial) {
-            // Partial success
             const successCount = result.successful?.length || 0
             const failedCount = result.failed?.length || 0
-            const failedDetails = result.failed?.map((f) => 
-              `Trade ${f.trade_id}: ${f.message || 'Failed'}`
-            ).join('\n') || 'No details available'
-            
+            const failedDetails = result.failed
+              ?.map((f) => `Trade ${f.trade_id}: ${f.message}`)
+              .join('\n')
+
             alert(
               `Partial Success:\n\n` +
-              `✅ Deleted: ${successCount} trade(s)\n` +
-              `❌ Failed: ${failedCount} trade(s)\n\n` +
-              (failedCount > 0 ? `Failed Details:\n${failedDetails}` : '')
+                `✅ Deleted: ${successCount}\n` +
+                `❌ Failed: ${failedCount}\n\n` +
+                (failedCount > 0 ? `Failed Details:\n${failedDetails}` : '')
             )
           } else {
-            // All successful
-            alert(`✅ Successfully deleted ${result.successful?.length || tradeIds.length} trade(s)`)
+            alert(`Deleted ${result.successful?.length || tradeIds.length} trade(s)`)
           }
-          
+
           await refreshTrades()
           gridApiRef.current?.deselectAll()
           setSelectedRows([])
         }
       } catch (error) {
         console.error('[Trades] bulk delete failed', error)
-        
-        // Extract error message from response
-        const errorMessage = 
-          error?.response?.data?.message || 
-          error?.response?.data?.error || 
-          error?.message || 
+
+        const msg =
+          error?.responseData?.message ||
+          error?.response?.data?.message ||
+          error?.message ||
           'Failed to delete selected trades.'
-        
-        alert(errorMessage)
+
+        alert(msg)
       } finally {
         setBulkActionLoading(false)
       }
     },
-    [refreshTrades],
+    [refreshTrades]
   )
 
   const handleSingleDelete = useCallback(
@@ -467,8 +516,20 @@ export default function TradesData() {
   )
 
   const handleBulkDelete = useCallback(() => {
+    if (!selectedRows.length) {
+      alert('No trades selected.')
+      return
+    }
+
+    const error = validateContinuousSelection(rowData, selectedRows)
+
+    if (error) {
+      alert(error)
+      return
+    }
+
     confirmAndDeleteTrades(selectedRows)
-  }, [confirmAndDeleteTrades, selectedRows])
+  }, [selectedRows, rowData, confirmAndDeleteTrades, validateContinuousSelection])
 
   const handleViewTrade = useCallback((trade) => {
     setViewTrade(trade || null)
