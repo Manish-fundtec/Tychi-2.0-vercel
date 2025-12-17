@@ -67,7 +67,7 @@ export const bulkDeleteTrades = async (tradeIds) => {
   
   const requestBody = {
     trade_ids: tradeIds,
-    fundId: fund_id, // ✅ Backend expects fundId (camelCase)
+    fund_id: fund_id, // ✅ Backend expects fund_id (snake_case)
   }
   
   console.log('[BulkDelete] Request:', {
@@ -75,7 +75,7 @@ export const bulkDeleteTrades = async (tradeIds) => {
     method: 'DELETE',
     body: requestBody,
     tradeCount: tradeIds.length,
-    fundId: fund_id,
+    fund_id: fund_id,
   })
   
   try {
