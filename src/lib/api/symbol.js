@@ -6,4 +6,4 @@ export const getSymbolsByFundId = (fundId) => api.get(`/api/v1/symbols/fund/${fu
 export const getSymbolById = (id) => api.get(`/api/v1/symbols/${id}`);
 export const updateSymbol = (id, payload) => api.put(`/api/v1/symbols/${id}`, payload);
 export const deleteSymbol = (id) => api.delete(`/api/v1/symbols/${id}`);
-export const bulkDeleteSymbols = (symbolIds) => api.delete('/api/v1/symbols/bulkdelete', { data: { symbolIds } });
+export const bulkDeleteSymbols = (symbolIds) => api.delete('/api/v1/symbols/bulk-delete', { data: { symbolIds } });
