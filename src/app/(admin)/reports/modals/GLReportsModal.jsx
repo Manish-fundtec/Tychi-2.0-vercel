@@ -214,7 +214,7 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
     const link = document.createElement('a');
     const timestamp = new Date().toISOString().slice(0, 10);
     link.href = url;
-    link.download = `gl-report-${fundId || 'fund'}-${timestamp}.csv`;
+    link.download = `gl-report-${scope}-${fundId || 'fund'}-${timestamp}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -229,7 +229,7 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
 
     const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
     exportAoaToXlsx({
-      fileName: `gl-report-${fundId || 'fund'}-${date || ''}`,
+      fileName: `gl-report-${scope}-${fundId || 'fund'}-${date || new Date().toISOString().slice(0, 10)}`,
       sheetName: 'GL Report',
       aoa,
     });
