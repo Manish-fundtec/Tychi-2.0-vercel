@@ -445,32 +445,13 @@ export default function TradesData() {
         console.error('[Trades] bulk delete failed', error)
         
         // Extract error message from response
-        // Check for detailed validation message first (includes issues breakdown)
         const errorMessage = 
-          error?.detailedMessage || 
           error?.response?.data?.message || 
           error?.response?.data?.error || 
           error?.message || 
           'Failed to delete selected trades.'
         
-        // If there are validation issues, show them in a more detailed alert
-        if (error?.validationIssues && error.validationIssues.length > 0) {
-          const issues = error.validationIssues
-          const issueDetails = issues.map(issue => 
-            `Symbol: ${issue.symbol_id || 'Unknown'}\n` +
-            `Problem: ${issue.message}\n` +
-            `Trades: ${issue.selected} of ${issue.total_trades} selected\n` +
-            `Hint: ${issue.hint || 'Select trades continuously from latest'}`
-          ).join('\n\n')
-          
-          alert(
-            `⚠️ Cannot Delete Trades\n\n` +
-            `${error?.response?.data?.message || 'Validation failed'}\n\n` +
-            `Details:\n${issueDetails}`
-          )
-        } else {
-          alert(errorMessage)
-        }
+        alert(errorMessage)
       } finally {
         setBulkActionLoading(false)
       }
