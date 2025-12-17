@@ -507,6 +507,14 @@ export default function TradesData() {
       const sortedSelection = [...deletable].sort(sortFn)
       const tradeIds = sortedSelection.map((t) => t.trade_id)
 
+      console.log('[Delete] Sorted selection before sending to backend:', {
+        count: sortedSelection.length,
+        firstTrade: sortedSelection[0],
+        lastTrade: sortedSelection[sortedSelection.length - 1],
+        tradeIds: tradeIds,
+        symbols: [...new Set(sortedSelection.map(t => t.symbol_id))]
+      })
+
       if (!confirm(`Delete ${deletable.length} trade(s)? This cannot be undone.`)) return
 
       setBulkActionLoading(true)
@@ -545,14 +553,30 @@ export default function TradesData() {
         }
       } catch (error) {
         console.error('[Trades] bulk delete failed', error)
+        console.error('[Trades] Full error response:', error?.response?.data)
 
-        const msg =
-          error?.responseData?.message ||
-          error?.response?.data?.message ||
-          error?.message ||
-          'Failed to delete selected trades.'
-
-        alert(msg)
+        // Try to get detailed backend error message
+        const backendError = error?.response?.data
+        let msg = error?.message || 'Failed to delete selected trades.'
+        
+        // Check if backend sent validation issues
+        if (backendError?.issues && Array.isArray(backendError.issues)) {
+          const issueDetails = backendError.issues.map(issue => 
+            `Symbol: ${issue.symbol_id || 'Unknown'}\n` +
+            `Problem: ${issue.message || 'Validation failed'}\n` +
+            `Trades: ${issue.selected} selected out of ${issue.total_trades} total`
+          ).join('\n\n')
+          
+          alert(
+            `⚠️ Backend Validation Failed\n\n` +
+            `${backendError.message || 'Cannot delete trades'}\n\n` +
+            `Details:\n${issueDetails}`
+          )
+        } else {
+          // Use regular error message
+          msg = backendError?.message || backendError?.error || msg
+          alert(msg)
+        }
       } finally {
         setBulkActionLoading(false)
       }
