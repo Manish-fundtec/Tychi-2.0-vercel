@@ -57,32 +57,22 @@ export const bulkDeleteTrades = async (tradeIds) => {
   // Get dashboard token from cookies
   const token = Cookies.get('dashboardToken')
   
-  // Decode fund_id from token (same pattern as getAllTrades)
-  const payload = decodeJwtPayload(token)
-  const fund_id = payload?.fund_id
-  
-  if (!fund_id) {
-    throw new Error('fund_id not found in token')
-  }
-  
   const requestBody = {
-    trade_ids: tradeIds,
-    fund_id: fund_id, // ✅ ADD fund_id for backend validations
+    tradeIds: tradeIds, // Changed from trade_ids to tradeIds for consistency
   }
   
   console.log('[BulkDelete] Request:', {
-    url: '/api/v1/trade/bulk/delete',
-    method: 'DELETE',
+    url: '/api/trades/bulk/delete',
+    method: 'POST',
     body: requestBody,
     tradeCount: tradeIds.length,
-    fund_id: fund_id,
   })
   
   try {
-    // Use api.request() for DELETE with body (axios.delete sometimes doesn't send body properly)
+    // Call Next.js API endpoint
     const res = await api.request({
-      method: 'DELETE',
-      url: '/api/v1/trade/bulk/delete',
+      method: 'POST',
+      url: '/api/trades/bulk/delete',
       withCredentials: true,
       headers: {
         'dashboard': `Bearer ${token}`,
@@ -91,40 +81,34 @@ export const bulkDeleteTrades = async (tradeIds) => {
       data: requestBody,
     })
     
-    // Backend response format:
-    // 200: All deleted - { success: true, message: "...", results: { successful: [...], failed: [] } }
-    // 207: Partial - { success: true, message: "...", results: { successful: [...], failed: [...] } }
-    // 400: All failed - { success: false, message: "...", results: { successful: [], failed: [...] } }
+    // New API response format:
+    // 200: { success: true, message: "...", data: { deleted_count: N, requested_count: M } }
+    // 400: { success: false, message: "...", issues: [...] }
+    // 500: { success: false, message: "...", error: "..." }
     
     const responseData = res?.data || {}
-    const results = responseData?.results || {}
-    const successful = results?.successful || []
-    const failed = results?.failed || []
     
-    if (res.status === 200) {
+    if (res.status === 200 && responseData?.success) {
       // All deleted successfully
+      const deletedCount = responseData?.data?.deleted_count || 0
+      const requestedCount = responseData?.data?.requested_count || tradeIds.length
+      
       return {
         success: true,
-        message: responseData?.message || 'All trades deleted successfully',
-        successful: successful,
-        failed: failed,
+        message: responseData?.message || `Successfully deleted ${deletedCount} trade(s)`,
+        deleted_count: deletedCount,
+        requested_count: requestedCount,
         partial: false,
       }
-    } else if (res.status === 207) {
-      // Partial success
-      return {
-        success: true,
-        partial: true,
-        message: responseData?.message || 'Some trades deleted successfully',
-        successful: successful,
-        failed: failed,
-      }
     } else {
-      // All failed or error - extract error message from response
+      // Error - extract error message and validation issues
       const errorMessage = responseData?.message || responseData?.error || 'Failed to delete trades'
+      const issues = responseData?.issues || []
+      
       const error = new Error(errorMessage)
       error.response = res
       error.responseData = responseData
+      error.validationIssues = issues
       throw error
     }
   } catch (error) {
@@ -142,6 +126,21 @@ export const bulkDeleteTrades = async (tradeIds) => {
       const customError = new Error(errorMessage)
       customError.response = error.response
       customError.responseData = responseData
+      
+      // Include validation issues if present (for continuous delete validation)
+      if (responseData?.issues && Array.isArray(responseData.issues)) {
+        customError.validationIssues = responseData.issues
+        
+        // Format validation issues for display
+        const issueMessages = responseData.issues.map(issue => 
+          `• Symbol: ${issue.symbol_id}\n  ${issue.message}\n  (Total: ${issue.total_trades}, Selected: ${issue.selected})\n  ${issue.hint}`
+        ).join('\n\n')
+        
+        if (issueMessages) {
+          customError.detailedMessage = `${errorMessage}\n\n${issueMessages}`
+        }
+      }
+      
       throw customError
     }
     
