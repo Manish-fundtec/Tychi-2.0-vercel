@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, Fragment } from 'react';
+import { useEffect, useMemo, useState, useCallback, Fragment } from 'react';
 import Cookies from 'js-cookie';
 import { Button, Modal, Table, Form, Row, Col, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
@@ -48,14 +48,23 @@ export default function TrialBalanceModalGrouped({
   const reportingFrequency = String(dashboard?.fund?.reporting_frequency || dashboard?.reporting_frequency || 'monthly').toLowerCase();
   
   // Set default scope based on frequency
-  const getDefaultScope = () => {
+  const getDefaultScope = useCallback(() => {
     if (reportingFrequency === 'daily') return 'PTD';
     if (reportingFrequency === 'monthly') return 'MTD';
     if (reportingFrequency === 'quarterly' || reportingFrequency === 'quarter') return 'QTD';
     if (reportingFrequency === 'annual' || reportingFrequency === 'annually') return 'YTD';
     return String(defaultScope).toUpperCase(); // fallback to provided defaultScope
-  };
-  const [scope, setScope] = useState(getDefaultScope());
+  }, [reportingFrequency, defaultScope]);
+  
+  const [scope, setScope] = useState(() => getDefaultScope());
+  
+  // Update scope when modal opens or frequency changes (like GL Reports)
+  useEffect(() => {
+    if (show) {
+      setScope(getDefaultScope());
+    }
+  }, [show, reportingFrequency, getDefaultScope]);
+  
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
