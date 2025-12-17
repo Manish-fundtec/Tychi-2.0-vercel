@@ -1584,10 +1584,145 @@ export const ToggleBetweenModals = ({
   }, [isAdhocOpen, startDate, endDate, fetchCustomOpenSymbols, mergeAdhocRows])
 
   const openAdhoc = async () => {
-    setEndDate('')
-    setAdhocOpen(true)
-    // Refetch pricing period after revert (ensure we have latest data)
-    await refreshLastPricingDate()
+    // Step 1: Validate migration before opening adhoc modal (same as Add Valuation button)
+    console.log('[Adhoc Pricing] 🔍 openAdhoc called - starting migration validation')
+    
+    const canOpen = await validateMigrationBeforePricing()
+    if (!canOpen) {
+      console.log('[Adhoc Pricing] ❌ Migration validation failed')
+      return false
+    }
+    
+    console.log('[Adhoc Pricing] ✅ Migration validation passed')
+    
+    // Step 2: Validate pricing before opening adhoc modal
+    console.log('[Adhoc Pricing] 🔍 Starting pricing validation')
+    
+    // Check if fundId exists
+    if (!currentFundId) {
+      console.log('[Adhoc Pricing] ❌ Fund ID missing')
+      alert('Fund ID is required')
+      return false
+    }
+
+    console.log('[Adhoc Pricing] 📊 Starting pricing date validation for fundId:', currentFundId)
+
+    try {
+      // Fetch last pricing date
+      const url = `${API_BASE}/api/v1/pricing/lastPricingdate/${encodeURIComponent(currentFundId)}`
+      console.log('[Adhoc Pricing] 🌐 Fetching pricing from:', url)
+      
+      const resp = await fetch(url, { 
+        headers: { 'Accept': 'application/json' }, 
+        credentials: 'include' 
+      })
+      
+      console.log('[Adhoc Pricing] 📡 Response status:', resp.status)
+      
+      if (!resp.ok) {
+        console.log('[Adhoc Pricing] ❌ API call failed:', resp.status)
+        alert('Please complete pricing first before using adhoc pricing.')
+        return false
+      }
+      
+      const json = await resp.json()
+      console.log('[Adhoc Pricing] 📦 Full API response:', json)
+      
+      const lastDate =
+        json?.last_pricing_date ||
+        json?.meta?.last_pricing_date ||
+        json?.data?.last_pricing_date ||
+        json?.result?.last_pricing_date ||
+        null
+      
+      // Get reporting_start_date from dashboard token
+      const reportingStartDate = 
+        dashboard?.fund?.reporting_start_date || 
+        dashboard?.reporting_start_date ||
+        dashboard?.fund?.reportingStartDate ||
+        dashboard?.reportingStartDate ||
+        null
+      
+      console.log('[Adhoc Pricing] ✅ Pricing check result:', {
+        last_pricing_date: lastDate,
+        reporting_start_date: reportingStartDate,
+        fund_id: currentFundId,
+        dashboard_fund: dashboard?.fund
+      })
+      
+      // If no last_pricing_date, pricing is not done
+      if (!lastDate || lastDate === null || lastDate === 'null' || lastDate === '') {
+        console.log('[Adhoc Pricing] ❌ No last_pricing_date found')
+        alert('Please complete pricing first before using adhoc pricing.')
+        return false
+      }
+      
+      // If reporting_start_date exists, compare with last_pricing_date
+      // Pricing is done ONLY if last_pricing_date > reporting_start_date
+      // If they are equal, pricing is NOT done
+      if (reportingStartDate) {
+        console.log('[Adhoc Pricing] 🔄 Comparing dates:', {
+          last_pricing_date: lastDate,
+          reporting_start_date: reportingStartDate
+        })
+        
+        const lastDateObj = new Date(lastDate + 'T00:00:00Z')
+        const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
+        
+        console.log('[Adhoc Pricing] 📅 Parsed dates:', {
+          lastDateObj: lastDateObj.toISOString(),
+          reportingStartObj: reportingStartObj.toISOString(),
+          lastDateTimestamp: lastDateObj.getTime(),
+          reportingStartTimestamp: reportingStartObj.getTime()
+        })
+        
+        if (isNaN(lastDateObj.getTime()) || isNaN(reportingStartObj.getTime())) {
+          console.warn('[Adhoc Pricing] ⚠️ Invalid date format:', { lastDate, reportingStartDate })
+          // If dates are invalid, just check if lastDate exists
+          console.log('[Adhoc Pricing] ✅ Allowing adhoc (invalid date format, but lastDate exists)')
+          setEndDate('')
+          setAdhocOpen(true)
+          await refreshLastPricingDate()
+          return true
+        }
+        
+        // Pricing is done ONLY if last_pricing_date > reporting_start_date
+        // If equal, pricing is NOT done
+        const isPricingDone = lastDateObj > reportingStartObj
+        console.log('[Adhoc Pricing] 🎯 Comparison result:', {
+          last_pricing_date: lastDate,
+          reporting_start_date: reportingStartDate,
+          isPricingDone: isPricingDone,
+          comparison: `${lastDate} > ${reportingStartDate} = ${isPricingDone}`,
+          areEqual: lastDateObj.getTime() === reportingStartObj.getTime()
+        })
+        
+        if (!isPricingDone) {
+          if (lastDateObj.getTime() === reportingStartObj.getTime()) {
+            console.log('[Adhoc Pricing] ❌ Pricing not done (last_pricing_date === reporting_start_date)')
+            alert('Please complete pricing first before using adhoc pricing.')
+          } else {
+            console.log('[Adhoc Pricing] ❌ Pricing not done (last_pricing_date < reporting_start_date)')
+            alert('Please complete pricing first before using adhoc pricing.')
+          }
+          return false
+        }
+      } else {
+        console.log('[Adhoc Pricing] ⚠️ No reporting_start_date found in dashboard, allowing adhoc if lastDate exists')
+      }
+      
+      // Pricing exists and is valid, allow adhoc
+      console.log('[Adhoc Pricing] ✅ Pricing validation passed, allowing adhoc')
+      setEndDate('')
+      setAdhocOpen(true)
+      // Refetch pricing period after validation (ensure we have latest data)
+      await refreshLastPricingDate()
+      return true
+    } catch (e) {
+      console.error('[Adhoc Pricing] Failed to check pricing:', e)
+      alert('Please complete pricing first before using adhoc pricing.')
+      return false
+    }
   }
 
   const adhocCols = useMemo(
