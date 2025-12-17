@@ -57,8 +57,17 @@ export const bulkDeleteTrades = async (tradeIds) => {
   // Get dashboard token from cookies
   const token = Cookies.get('dashboardToken')
   
+  // Decode fund_id from token (same pattern as getAllTrades)
+  const payload = decodeJwtPayload(token)
+  const fund_id = payload?.fund_id
+  
+  if (!fund_id) {
+    throw new Error('fund_id not found in token')
+  }
+  
   const requestBody = {
     trade_ids: tradeIds,
+    fund_id: fund_id, // ✅ ADD fund_id for backend validations
   }
   
   console.log('[BulkDelete] Request:', {
@@ -66,6 +75,7 @@ export const bulkDeleteTrades = async (tradeIds) => {
     method: 'DELETE',
     body: requestBody,
     tradeCount: tradeIds.length,
+    fund_id: fund_id,
   })
   
   try {
