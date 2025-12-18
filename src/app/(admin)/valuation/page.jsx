@@ -364,22 +364,29 @@ export default function ReviewsPage() {
                 const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
                                  Array.isArray(migrationData) ? migrationData : []
                 
-                // Check if migration exists for this specific date
-                const hasMigration = migrations.some((m) => {
+                // Check if migration exists and is reconciled for this specific date
+                // Only block revert if migration exists AND is reconciled
+                // If migration doesn't exist, allow revert
+                const migrationForDate = migrations.find((m) => {
                   if (!m.reporting_period) return false
                   const migrationDateNormalized = normalizeDate(m.reporting_period)
                   return migrationDateNormalized === normalizedPricingDate
                 })
                 
-                if (!hasMigration) {
-                  const formattedDate = formatYmd(normalizedPricingDate, dateFormat)
-                  alert(
-                    `⚠️ Cannot Revert First Date Pricing\n\n` +
-                    `For existing funds, migration must be completed for the first date (${formattedDate}) before first date pricing can be reverted.\n\n` +
-                    `Please complete migration first, then you can revert the pricing.`
-                  )
-                  return
+                if (migrationForDate) {
+                  const reconcileStatus = String(migrationForDate.reconcile_status || '').toLowerCase()
+                  if (reconcileStatus === 'reconciled') {
+                    const formattedDate = formatYmd(normalizedPricingDate, dateFormat)
+                    alert(
+                      `⚠️ Cannot Revert First Date Pricing\n\n` +
+                      `Pricing for ${formattedDate} cannot be reverted because migration is already reconciled for this date.\n\n` +
+                      `Revert is only allowed before migration reconciliation.`
+                    )
+                    return
+                  }
+                  // If migration exists but not reconciled, allow revert
                 }
+                // If migration doesn't exist, allow revert (no blocking)
               }
             } catch (migrationCheckError) {
               console.error('[Pricing Revert] ⚠️ Error checking migration:', migrationCheckError)
