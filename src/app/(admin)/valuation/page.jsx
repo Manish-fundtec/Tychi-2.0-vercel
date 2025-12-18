@@ -332,7 +332,7 @@ export default function ReviewsPage() {
                           normalizedMode.includes('existing')
     
     if (isExistingFund) {
-      // Get reporting_start_date and reporting frequency
+      // Get reporting_start_date to identify first month
       const reportingStartDate = 
         dashboard?.fund?.reporting_start_date || 
         dashboard?.reporting_start_date ||
@@ -340,36 +340,16 @@ export default function ReviewsPage() {
         dashboard?.reportingStartDate ||
         null
       
-      const reportingFrequency = String(
-        dashboard?.fund?.reporting_frequency || 
-        dashboard?.reporting_frequency || 
-        'monthly'
-      ).toLowerCase()
-      
       if (reportingStartDate) {
         const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
         const pricingDateObj = new Date(row.date + 'T00:00:00Z')
         
         if (!isNaN(reportingStartObj.getTime()) && !isNaN(pricingDateObj.getTime())) {
-          let shouldCheckMigration = false
-          let periodLabel = ''
+          const reportingStartMonth = `${reportingStartObj.getUTCFullYear()}-${String(reportingStartObj.getUTCMonth() + 1).padStart(2, '0')}`
+          const pricingMonth = `${pricingDateObj.getUTCFullYear()}-${String(pricingDateObj.getUTCMonth() + 1).padStart(2, '0')}`
           
-          // For daily frequency: Check exact date match (first day pricing)
-          if (reportingFrequency === 'daily') {
-            const reportingStartDateStr = reportingStartDate.slice(0, 10) // YYYY-MM-DD
-            const pricingDateStr = row.date.slice(0, 10) // YYYY-MM-DD
-            shouldCheckMigration = reportingStartDateStr === pricingDateStr
-            periodLabel = pricingDateStr
-          } else {
-            // For monthly/quarterly/annual: Check month match (first month pricing)
-            const reportingStartMonth = `${reportingStartObj.getUTCFullYear()}-${String(reportingStartObj.getUTCMonth() + 1).padStart(2, '0')}`
-            const pricingMonth = `${pricingDateObj.getUTCFullYear()}-${String(pricingDateObj.getUTCMonth() + 1).padStart(2, '0')}`
-            shouldCheckMigration = reportingStartMonth === pricingMonth
-            periodLabel = pricingMonth
-          }
-          
-          // If this is first period pricing, check if migration exists
-          if (shouldCheckMigration) {
+          // If this is first month pricing, check if migration exists
+          if (reportingStartMonth === pricingMonth) {
             try {
               const token = Cookies.get('dashboardToken')
               const migrationUrl = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/migration`
@@ -386,30 +366,19 @@ export default function ReviewsPage() {
                 const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
                                  Array.isArray(migrationData) ? migrationData : []
                 
-                // Check if migration exists for first period
+                // Check if migration exists for first month
                 const hasMigration = migrations.some((m) => {
                   if (!m.reporting_period) return false
                   const migrationDate = new Date(m.reporting_period + 'T00:00:00Z')
                   if (isNaN(migrationDate.getTime())) return false
-                  
-                  if (reportingFrequency === 'daily') {
-                    // For daily: Check exact date match
-                    const migrationDateStr = m.reporting_period.slice(0, 10) // YYYY-MM-DD
-                    const pricingDateStr = row.date.slice(0, 10) // YYYY-MM-DD
-                    return migrationDateStr === pricingDateStr
-                  } else {
-                    // For other frequencies: Check month match
-                    const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
-                    const pricingMonth = `${pricingDateObj.getUTCFullYear()}-${String(pricingDateObj.getUTCMonth() + 1).padStart(2, '0')}`
-                    return migrationMonth === pricingMonth
-                  }
+                  const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+                  return migrationMonth === pricingMonth
                 })
                 
                 if (!hasMigration) {
-                  const periodType = reportingFrequency === 'daily' ? 'first day' : 'first month'
                   alert(
-                    `⚠️ Cannot Revert First Period Pricing\n\n` +
-                    `For existing funds, migration must be completed for the ${periodType} (${periodLabel}) before first period pricing can be reverted.\n\n` +
+                    `⚠️ Cannot Revert First Month Pricing\n\n` +
+                    `For existing funds, migration must be completed for the first month (${pricingMonth}) before first month pricing can be reverted.\n\n` +
                     `Please complete migration first, then you can revert the pricing.`
                   )
                   return
