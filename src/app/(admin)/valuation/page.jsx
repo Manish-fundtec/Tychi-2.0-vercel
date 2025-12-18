@@ -77,6 +77,9 @@ export default function ReviewsPage() {
   // latest completed period (YYYY-MM-DD) for showing revert icon
   const latestCompletedDateRef = useRef(null);
 
+  // Get dashboard token for onboarding mode and reporting start date
+  const dashboard = useDashboardToken();
+
   // symbols modal
   const [showModal, setShowModal] = useState(false);
   const [selectedLabel, setSelectedLabel] = useState('');
@@ -294,7 +297,7 @@ export default function ReviewsPage() {
   async function handleRevert(row) {
     if (!row || !fundId) return;
 
-    // safety: only allow revert for the latest completed period
+    // Validation 1: Only allow revert for the latest completed period
     const isAllowed =
       (row.status || '').toLowerCase() === 'completed' &&
       latestCompletedDateRef.current &&
@@ -303,6 +306,91 @@ export default function ReviewsPage() {
     if (!isAllowed) {
       alert('Only the latest completed period can be reverted.');
       return;
+    }
+
+    // Validation 2: Check if bookclosed (from backend response or row data)
+    // This will be handled by backend, but we can add frontend check if bookclosed status is available
+    const isBookclosed = (row.status || '').toLowerCase() === 'bookclosed' ||
+                         (row.raw?.bookclose_status || '').toLowerCase() === 'bookclosed'
+    if (isBookclosed) {
+      alert('Cannot revert pricing that has been bookclosed.');
+      return;
+    }
+
+    // Validation 3: For existing fund, check if first month pricing revert requires migration check
+    const onboardingMode = 
+      dashboard?.fund?.onboarding_mode || 
+      dashboard?.onboarding_mode || 
+      dashboard?.fund?.onboardingMode ||
+      dashboard?.onboardingMode ||
+      ''
+    
+    const normalizedMode = String(onboardingMode || '').trim().toLowerCase()
+    const isExistingFund = normalizedMode === 'existing fund' || 
+                          normalizedMode === 'existing' || 
+                          normalizedMode === 'existingfund' ||
+                          normalizedMode.includes('existing')
+    
+    if (isExistingFund) {
+      // Get reporting_start_date to identify first month
+      const reportingStartDate = 
+        dashboard?.fund?.reporting_start_date || 
+        dashboard?.reporting_start_date ||
+        dashboard?.fund?.reportingStartDate ||
+        dashboard?.reportingStartDate ||
+        null
+      
+      if (reportingStartDate) {
+        const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
+        const pricingDateObj = new Date(row.date + 'T00:00:00Z')
+        
+        if (!isNaN(reportingStartObj.getTime()) && !isNaN(pricingDateObj.getTime())) {
+          const reportingStartMonth = `${reportingStartObj.getUTCFullYear()}-${String(reportingStartObj.getUTCMonth() + 1).padStart(2, '0')}`
+          const pricingMonth = `${pricingDateObj.getUTCFullYear()}-${String(pricingDateObj.getUTCMonth() + 1).padStart(2, '0')}`
+          
+          // If this is first month pricing, check if migration exists
+          if (reportingStartMonth === pricingMonth) {
+            try {
+              const token = Cookies.get('dashboardToken')
+              const migrationUrl = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/migration`
+              const migrationResp = await fetch(migrationUrl, {
+                headers: {
+                  'Accept': 'application/json',
+                  'dashboard': token ? `Bearer ${token}` : '',
+                },
+                credentials: 'include'
+              })
+              
+              if (migrationResp.ok) {
+                const migrationData = await migrationResp.json()
+                const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
+                                 Array.isArray(migrationData) ? migrationData : []
+                
+                // Check if migration exists for first month
+                const hasMigration = migrations.some((m) => {
+                  if (!m.reporting_period) return false
+                  const migrationDate = new Date(m.reporting_period + 'T00:00:00Z')
+                  if (isNaN(migrationDate.getTime())) return false
+                  const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+                  return migrationMonth === pricingMonth
+                })
+                
+                if (!hasMigration) {
+                  alert(
+                    `⚠️ Cannot Revert First Month Pricing\n\n` +
+                    `For existing funds, migration must be completed for the first month (${pricingMonth}) before first month pricing can be reverted.\n\n` +
+                    `Please complete migration first, then you can revert the pricing.`
+                  )
+                  return
+                }
+              }
+            } catch (migrationCheckError) {
+              console.error('[Pricing Revert] ⚠️ Error checking migration:', migrationCheckError)
+              // Continue with revert if migration check fails (don't block user)
+            }
+          }
+        }
+      }
     }
 
     const formattedDate = formatYmd(row.date, dateFormat);
