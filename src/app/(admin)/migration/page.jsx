@@ -143,53 +143,41 @@ const MigrationPage = () => {
       if (pricingCount === 1) {
         console.log('[Migration] 🔍 Second pricing (count = 1) - checking first month migration')
         
-        // Get FIRST pricing period (oldest) from reporting periods, not last pricing date
-        // This handles cases where same month has multiple pricing dates
-        const pricingRows = periodsJson?.rows || []
-        if (!pricingRows.length) {
-          console.warn('[Migration] ⚠️ No pricing periods found')
-          return true // Allow to proceed if no periods
-        }
-        
-        // Find FIRST pricing period (oldest date)
-        // Sort by end_date (pricing date) ascending to get oldest first
-        const sortedPeriods = [...pricingRows].sort((a, b) => {
-          const dateA = new Date(a.end_date || a.pricing_date || 0).getTime()
-          const dateB = new Date(b.end_date || b.pricing_date || 0).getTime()
-          return dateA - dateB // Ascending: oldest first
+        // Get last pricing date to determine which month's migration to check
+        const lastPricingUrl = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
+        const lastPricingResp = await fetch(lastPricingUrl, { 
+          headers: { Accept: 'application/json' },
+          credentials: 'include'
         })
         
-        const firstPricingPeriod = sortedPeriods[0]
-        const firstPricingDate = firstPricingPeriod?.end_date || firstPricingPeriod?.pricing_date || null
+        if (!lastPricingResp.ok) {
+          console.warn('[Migration] ⚠️ Failed to fetch last pricing date')
+          return true // Allow to proceed if API fails
+        }
         
-        if (!firstPricingDate) {
-          console.warn('[Migration] ⚠️ No first pricing date found in periods')
+        const lastPricingJson = await lastPricingResp.json()
+        const lastPricingDate = 
+          lastPricingJson?.last_pricing_date ||
+          lastPricingJson?.meta?.last_pricing_date ||
+          lastPricingJson?.data?.last_pricing_date ||
+          lastPricingJson?.result?.last_pricing_date ||
+          null
+        
+        if (!lastPricingDate) {
+          console.warn('[Migration] ⚠️ No last pricing date found')
           return true // Allow to proceed if date is missing
         }
         
-        console.log('[Migration] 📅 First pricing period:', {
-          period: firstPricingPeriod,
-          date: firstPricingDate,
-          allPeriods: sortedPeriods.map(p => ({
-            date: p.end_date || p.pricing_date,
-            period_name: p.period_name
-          }))
-        })
-        
-        // Get month of FIRST pricing date (first month)
-        const firstDateObj = new Date(firstPricingDate + 'T00:00:00Z')
-        if (isNaN(firstDateObj.getTime())) {
-          console.warn('[Migration] ⚠️ Invalid first pricing date format')
+        // Get month of last pricing date (first month)
+        const lastDateObj = new Date(lastPricingDate + 'T00:00:00Z')
+        if (isNaN(lastDateObj.getTime())) {
+          console.warn('[Migration] ⚠️ Invalid last pricing date format')
           return true
         }
         
-        const migrationMonthStr = `${firstDateObj.getUTCFullYear()}-${String(firstDateObj.getUTCMonth() + 1).padStart(2, '0')}`
+        const migrationMonthStr = `${lastDateObj.getUTCFullYear()}-${String(lastDateObj.getUTCMonth() + 1).padStart(2, '0')}`
         
-        console.log('[Migration] 🔍 Checking migration for first month:', {
-          firstPricingDate,
-          migrationMonthStr,
-          note: 'Using FIRST pricing date, not last (handles multiple dates in same month)'
-        })
+        console.log('[Migration] 🔍 Checking migration for first month:', migrationMonthStr)
         
         // Check migration for first month
         const token = Cookies.get('dashboardToken')
