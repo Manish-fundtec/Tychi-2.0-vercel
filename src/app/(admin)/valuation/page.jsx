@@ -345,11 +345,25 @@ export default function ReviewsPage() {
         const pricingDateObj = new Date(row.date + 'T00:00:00Z')
         
         if (!isNaN(reportingStartObj.getTime()) && !isNaN(pricingDateObj.getTime())) {
-          const reportingStartMonth = `${reportingStartObj.getUTCFullYear()}-${String(reportingStartObj.getUTCMonth() + 1).padStart(2, '0')}`
-          const pricingMonth = `${pricingDateObj.getUTCFullYear()}-${String(pricingDateObj.getUTCMonth() + 1).padStart(2, '0')}`
+          let shouldCheckMigration = false
+          let periodLabel = ''
           
-          // If this is first month pricing, check if migration exists
-          if (reportingStartMonth === pricingMonth) {
+          // For daily frequency: Check exact date match (first day pricing)
+          if (reportingFrequency === 'daily') {
+            const reportingStartDateStr = reportingStartDate.slice(0, 10) // YYYY-MM-DD
+            const pricingDateStr = row.date.slice(0, 10) // YYYY-MM-DD
+            shouldCheckMigration = reportingStartDateStr === pricingDateStr
+            periodLabel = pricingDateStr
+          } else {
+            // For monthly/quarterly/annual: Check month match (first month pricing)
+            const reportingStartMonth = `${reportingStartObj.getUTCFullYear()}-${String(reportingStartObj.getUTCMonth() + 1).padStart(2, '0')}`
+            const pricingMonth = `${pricingDateObj.getUTCFullYear()}-${String(pricingDateObj.getUTCMonth() + 1).padStart(2, '0')}`
+            shouldCheckMigration = reportingStartMonth === pricingMonth
+            periodLabel = pricingMonth
+          }
+          
+          // If this is first period pricing, check if migration exists
+          if (shouldCheckMigration) {
             try {
               const token = Cookies.get('dashboardToken')
               const migrationUrl = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/migration`
@@ -366,20 +380,46 @@ export default function ReviewsPage() {
                 const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
                                  Array.isArray(migrationData) ? migrationData : []
                 
-                // Check if migration exists for first month
-                const hasMigration = migrations.some((m) => {
+                // Check if migration exists for first period AND if it's reconciled
+                const migrationForPeriod = migrations.find((m) => {
                   if (!m.reporting_period) return false
                   const migrationDate = new Date(m.reporting_period + 'T00:00:00Z')
                   if (isNaN(migrationDate.getTime())) return false
-                  const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
-                  return migrationMonth === pricingMonth
+                  
+                  if (reportingFrequency === 'daily') {
+                    // For daily: Check exact date match
+                    const migrationDateStr = m.reporting_period.slice(0, 10) // YYYY-MM-DD
+                    const pricingDateStr = row.date.slice(0, 10) // YYYY-MM-DD
+                    return migrationDateStr === pricingDateStr
+                  } else {
+                    // For other frequencies: Check month match
+                    const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+                    const pricingMonth = `${pricingDateObj.getUTCFullYear()}-${String(pricingDateObj.getUTCMonth() + 1).padStart(2, '0')}`
+                    return migrationMonth === pricingMonth
+                  }
                 })
                 
-                if (!hasMigration) {
+                if (!migrationForPeriod) {
+                  const periodType = reportingFrequency === 'daily' ? 'first day' : 'first month'
                   alert(
-                    `⚠️ Cannot Revert First Month Pricing\n\n` +
-                    `For existing funds, migration must be completed for the first month (${pricingMonth}) before first month pricing can be reverted.\n\n` +
+                    `⚠️ Cannot Revert First Period Pricing\n\n` +
+                    `For existing funds, migration must be completed for the ${periodType} (${periodLabel}) before first period pricing can be reverted.\n\n` +
                     `Please complete migration first, then you can revert the pricing.`
+                  )
+                  return
+                }
+                
+                // Check if migration is reconciled (backend also checks this, but show error early)
+                const reconcileStatus = String(migrationForPeriod.reconcile_status || migrationForPeriod.reconcileStatus || '').toLowerCase()
+                const isReconciled = reconcileStatus === 'reconciled' || reconcileStatus === 'bookclosed'
+                
+                if (isReconciled) {
+                  const periodType = reportingFrequency === 'daily' ? 'first day' : 'first month'
+                  alert(
+                    `⚠️ Cannot Revert Pricing\n\n` +
+                    `Cannot revert pricing for ${periodLabel} because migration is already reconciled.\n\n` +
+                    `Revert is only allowed before migration reconciliation.\n\n` +
+                    `Please revert the migration first, then you can revert the pricing.`
                   )
                   return
                 }
