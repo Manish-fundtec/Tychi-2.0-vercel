@@ -341,15 +341,13 @@ export default function ReviewsPage() {
         null
       
       if (reportingStartDate) {
-        const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
-        const pricingDateObj = new Date(row.date + 'T00:00:00Z')
+        // Normalize dates to YYYY-MM-DD format for comparison
+        const normalizedReportingStart = normalizeDate(reportingStartDate)
+        const normalizedPricingDate = normalizeDate(row.date)
         
-        if (!isNaN(reportingStartObj.getTime()) && !isNaN(pricingDateObj.getTime())) {
-          const reportingStartMonth = `${reportingStartObj.getUTCFullYear()}-${String(reportingStartObj.getUTCMonth() + 1).padStart(2, '0')}`
-          const pricingMonth = `${pricingDateObj.getUTCFullYear()}-${String(pricingDateObj.getUTCMonth() + 1).padStart(2, '0')}`
-          
-          // If this is first month pricing, check if migration exists
-          if (reportingStartMonth === pricingMonth) {
+        if (normalizedReportingStart && normalizedPricingDate) {
+          // Check if this is the first date pricing (date-level comparison)
+          if (normalizedReportingStart === normalizedPricingDate) {
             try {
               const token = Cookies.get('dashboardToken')
               const migrationUrl = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/migration`
@@ -366,19 +364,18 @@ export default function ReviewsPage() {
                 const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
                                  Array.isArray(migrationData) ? migrationData : []
                 
-                // Check if migration exists for first month
+                // Check if migration exists for this specific date
                 const hasMigration = migrations.some((m) => {
                   if (!m.reporting_period) return false
-                  const migrationDate = new Date(m.reporting_period + 'T00:00:00Z')
-                  if (isNaN(migrationDate.getTime())) return false
-                  const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
-                  return migrationMonth === pricingMonth
+                  const migrationDateNormalized = normalizeDate(m.reporting_period)
+                  return migrationDateNormalized === normalizedPricingDate
                 })
                 
                 if (!hasMigration) {
+                  const formattedDate = formatYmd(normalizedPricingDate, dateFormat)
                   alert(
-                    `⚠️ Cannot Revert First Month Pricing\n\n` +
-                    `For existing funds, migration must be completed for the first month (${pricingMonth}) before first month pricing can be reverted.\n\n` +
+                    `⚠️ Cannot Revert First Date Pricing\n\n` +
+                    `For existing funds, migration must be completed for the first date (${formattedDate}) before first date pricing can be reverted.\n\n` +
                     `Please complete migration first, then you can revert the pricing.`
                   )
                   return
