@@ -88,7 +88,7 @@ export default function ReviewsPage() {
   const [symbolErr, setSymbolErr] = useState('');
 
   // Get date format from dashboard token
-  const dashboard = useDashboardToken();
+  // const dashboard = useDashboardToken();
   const dateFormat = dashboard?.date_format || 'MM/DD/YYYY';
 
   // set up columns with date formatting
