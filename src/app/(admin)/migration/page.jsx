@@ -89,7 +89,7 @@ const MigrationPage = () => {
     gridApiRef.current = params.api
   }, [])
 
-  // Handle upload button click - validate pricing first
+  // Handle upload button click - validate pricing first (using pricing count logic)
   const handleUploadClick = async () => {
     console.log('[Migration] 🔍 handleUploadClick called')
     
@@ -107,120 +107,119 @@ const MigrationPage = () => {
       return false
     }
 
-    console.log('[Migration] 📊 Starting pricing validation for fundId:', fundId)
-    console.log('[Migration] 📊 tokenData:', tokenData)
+    console.log('[Migration] 📊 Starting pricing count validation for fundId:', fundId)
 
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
       
-      // Fetch last pricing date
-      const url = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
-      console.log('[Migration] 🌐 Fetching pricing from:', url)
-      
-      const resp = await fetch(url, { 
-        headers: { 'Accept': 'application/json' }, 
-        credentials: 'include' 
+      // Step 1: Get pricing count from reporting periods API
+      const reportingPeriodsUrl = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`
+      const periodsResp = await fetch(reportingPeriodsUrl, { 
+        headers: { Accept: 'application/json' },
+        credentials: 'include'
       })
       
-      console.log('[Migration] 📡 Response status:', resp.status)
-      
-      if (!resp.ok) {
-        console.log('[Migration] ❌ API call failed:', resp.status)
-        alert('Please complete pricing first before uploading migration data.')
-        return false
+      if (!periodsResp.ok) {
+        console.warn('[Migration] ⚠️ Failed to fetch reporting periods')
+        // Allow to proceed if API fails (don't block user)
+        return true
       }
       
-      const json = await resp.json()
-      console.log('[Migration] 📦 Full API response:', json)
+      const periodsJson = await periodsResp.json()
+      const pricingCount = periodsJson?.count || (Array.isArray(periodsJson?.rows) ? periodsJson.rows.length : 0)
       
-      const lastDate =
-        json?.last_pricing_date ||
-        json?.meta?.last_pricing_date ||
-        json?.data?.last_pricing_date ||
-        json?.result?.last_pricing_date ||
-        null
-      
-      // Get reporting_start_date from tokenData (dashboard token)
-      const reportingStartDate = 
-        tokenData?.fund?.reporting_start_date || 
-        tokenData?.reporting_start_date ||
-        tokenData?.fund?.reportingStartDate ||
-        tokenData?.reportingStartDate ||
-        null
-      
-      console.log('[Migration] ✅ Pricing check result:', {
-        last_pricing_date: lastDate,
-        reporting_start_date: reportingStartDate,
-        fund_id: fundId,
-        tokenData_fund: tokenData?.fund,
-        full_response: json
+      console.log('[Migration] 📊 Pricing count:', {
+        pricing_count: pricingCount,
+        fund_id: fundId
       })
       
-      // If no last_pricing_date, pricing is not done
-      if (!lastDate || lastDate === null || lastDate === 'null' || lastDate === '') {
-        console.log('[Migration] ❌ No last_pricing_date found')
-        alert('Please complete pricing first before uploading migration data.')
-        return false
+      // Step 2: If pricing count is 0, this is first pricing - no migration check needed
+      if (pricingCount === 0) {
+        console.log('[Migration] ✅ First pricing (count = 0) - no migration check needed')
+        return true
       }
       
-      // If reporting_start_date exists, compare with last_pricing_date
-      // Pricing is done ONLY if last_pricing_date > reporting_start_date
-      // If they are equal, pricing is NOT done (pricing hasn't been completed yet)
-      if (reportingStartDate) {
-        console.log('[Migration] 🔄 Comparing dates:', {
-          last_pricing_date: lastDate,
-          reporting_start_date: reportingStartDate
+      // Step 3: If pricing count is 1, this is second pricing - check first month migration
+      if (pricingCount === 1) {
+        console.log('[Migration] 🔍 Second pricing (count = 1) - checking first month migration')
+        
+        // Get last pricing date to determine which month's migration to check
+        const lastPricingUrl = `${apiBase}/api/v1/pricing/lastPricingdate/${encodeURIComponent(fundId)}`
+        const lastPricingResp = await fetch(lastPricingUrl, { 
+          headers: { Accept: 'application/json' },
+          credentials: 'include'
         })
         
-        const lastDateObj = new Date(lastDate + 'T00:00:00Z')
-        const reportingStartObj = new Date(reportingStartDate + 'T00:00:00Z')
+        if (!lastPricingResp.ok) {
+          console.warn('[Migration] ⚠️ Failed to fetch last pricing date')
+          return true // Allow to proceed if API fails
+        }
         
-        console.log('[Migration] 📅 Parsed dates:', {
-          lastDateObj: lastDateObj.toISOString(),
-          reportingStartObj: reportingStartObj.toISOString(),
-          lastDateTimestamp: lastDateObj.getTime(),
-          reportingStartTimestamp: reportingStartObj.getTime()
-        })
+        const lastPricingJson = await lastPricingResp.json()
+        const lastPricingDate = 
+          lastPricingJson?.last_pricing_date ||
+          lastPricingJson?.meta?.last_pricing_date ||
+          lastPricingJson?.data?.last_pricing_date ||
+          lastPricingJson?.result?.last_pricing_date ||
+          null
         
-        if (isNaN(lastDateObj.getTime()) || isNaN(reportingStartObj.getTime())) {
-          console.warn('[Migration] ⚠️ Invalid date format:', { lastDate, reportingStartDate })
-          // If dates are invalid, just check if lastDate exists
-          console.log('[Migration] ✅ Allowing upload (invalid date format, but lastDate exists)')
+        if (!lastPricingDate) {
+          console.warn('[Migration] ⚠️ No last pricing date found')
+          return true // Allow to proceed if date is missing
+        }
+        
+        // Get month of last pricing date (first month)
+        const lastDateObj = new Date(lastPricingDate + 'T00:00:00Z')
+        if (isNaN(lastDateObj.getTime())) {
+          console.warn('[Migration] ⚠️ Invalid last pricing date format')
           return true
         }
         
-        // Pricing is done ONLY if last_pricing_date > reporting_start_date
-        // If equal, pricing is NOT done
-        const isPricingDone = lastDateObj > reportingStartObj
-        console.log('[Migration] 🎯 Comparison result:', {
-          last_pricing_date: lastDate,
-          reporting_start_date: reportingStartDate,
-          isPricingDone: isPricingDone,
-          comparison: `${lastDate} > ${reportingStartDate} = ${isPricingDone}`,
-          areEqual: lastDateObj.getTime() === reportingStartObj.getTime()
+        const migrationMonthStr = `${lastDateObj.getUTCFullYear()}-${String(lastDateObj.getUTCMonth() + 1).padStart(2, '0')}`
+        
+        console.log('[Migration] 🔍 Checking migration for first month:', migrationMonthStr)
+        
+        // Check migration for first month
+        const token = Cookies.get('dashboardToken')
+        const migrationUrl = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/migration`
+        const migrationResp = await fetch(migrationUrl, {
+          headers: {
+            'Accept': 'application/json',
+            'dashboard': `Bearer ${token}`,
+          },
+          credentials: 'include'
         })
         
-        if (!isPricingDone) {
-          if (lastDateObj.getTime() === reportingStartObj.getTime()) {
-            console.log('[Migration] ❌ Pricing not done (last_pricing_date === reporting_start_date)')
-            alert('Please complete pricing first before uploading migration data.')
-          } else {
-            console.log('[Migration] ❌ Pricing not done (last_pricing_date < reporting_start_date)')
-            alert('Please complete pricing first before uploading migration data.')
+        if (migrationResp.ok) {
+          const migrationData = await migrationResp.json()
+          const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
+                           Array.isArray(migrationData) ? migrationData : []
+          
+          // Check if migration exists for first month
+          const hasMigration = migrations.some((m) => {
+            if (!m.reporting_period) return false
+            const migrationDate = new Date(m.reporting_period + 'T00:00:00Z')
+            const migrationMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+            return migrationMonth === migrationMonthStr
+          })
+          
+          if (!hasMigration) {
+            alert(`⚠️ Migration Required\n\nFor existing funds, migration must be completed for the first month (${migrationMonthStr}) before second month pricing can be done.\n\nPlease complete migration first.`)
+            return false
           }
-          return false
+          
+          console.log('[Migration] ✅ Migration found for first month')
         }
       } else {
-        console.log('[Migration] ⚠️ No reporting_start_date found in tokenData, allowing upload if lastDate exists')
+        // If pricing count >= 2, this is third month or later - no migration check needed
+        console.log('[Migration] ✅ Third month or later pricing (count >= 2) - no migration check needed')
       }
       
-      // Pricing exists and is valid, allow upload
-      console.log('[Migration] ✅ Pricing validation passed, allowing upload')
       return true
-    } catch (e) {
-      console.error('[Migration] Failed to check pricing:', e)
-      alert('Please complete pricing first before uploading migration data.')
-      return false
+    } catch (error) {
+      console.error('[Migration] ❌ Migration validation error:', error)
+      // On error, allow to proceed (don't block user)
+      return true
     }
   }
 
