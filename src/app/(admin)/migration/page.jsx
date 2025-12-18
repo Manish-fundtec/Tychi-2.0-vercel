@@ -112,6 +112,15 @@ const MigrationPage = () => {
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
       
+      // Get reporting frequency from tokenData
+      const reportingFrequency = String(
+        tokenData?.fund?.reporting_frequency || 
+        tokenData?.reporting_frequency || 
+        'monthly'
+      ).toLowerCase()
+      
+      console.log('[Migration] 📊 Reporting frequency:', reportingFrequency)
+      
       // Step 1: Get pricing count from reporting periods API
       const reportingPeriodsUrl = `${apiBase}/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`
       const periodsResp = await fetch(reportingPeriodsUrl, { 
@@ -130,10 +139,13 @@ const MigrationPage = () => {
       
       console.log('[Migration] 📊 Pricing count:', {
         pricing_count: pricingCount,
-        fund_id: fundId
+        fund_id: fundId,
+        reporting_frequency: reportingFrequency
       })
       
-      // Step 2: If pricing count is 0, this is first pricing - no migration check needed
+      // Step 2: Use count-based logic for ALL frequencies (daily, monthly, quarterly, annual)
+      // Simple and consistent approach
+      // If pricing count is 0, this is first pricing - no migration check needed
       if (pricingCount === 0) {
         console.log('[Migration] ✅ First pricing (count = 0) - no migration check needed')
         return true
