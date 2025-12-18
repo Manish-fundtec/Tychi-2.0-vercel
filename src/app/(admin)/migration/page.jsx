@@ -321,45 +321,64 @@ const MigrationPage = () => {
               
               // Convert migration reporting period to Date for comparison
               const migrationDate = new Date(migrationReportingPeriod + 'T00:00:00Z')
-              const migrationYearMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+              if (isNaN(migrationDate.getTime())) {
+                console.warn('[Migration] ⚠️ Invalid migration date format')
+              } else {
+                const migrationTimestamp = migrationDate.getTime()
+                const migrationYearMonth = `${migrationDate.getUTCFullYear()}-${String(migrationDate.getUTCMonth() + 1).padStart(2, '0')}`
+                
+                console.log('[Migration] 📅 Migration date:', {
+                  date: migrationReportingPeriod,
+                  timestamp: migrationTimestamp,
+                  yearMonth: migrationYearMonth
+                })
+                
+                // Check if any pricing exists after migration date (date-based comparison for daily pricing support)
+                // Compare actual dates (not just months) to handle daily pricing correctly
+                // For daily pricing: 2025-01-15 > 2025-01-01 = true (should block)
+                // For monthly pricing: 2025-02-28 > 2025-01-01 = true (should block)
+                const hasSubsequentPricing = pricingRows.some((period) => {
+                  if (!period.end_date) return false
+                  
+                  const pricingDate = new Date(period.end_date + 'T00:00:00Z')
+                  if (isNaN(pricingDate.getTime())) return false
+                  
+                  const pricingTimestamp = pricingDate.getTime()
+                  const pricingYearMonth = `${pricingDate.getUTCFullYear()}-${String(pricingDate.getUTCMonth() + 1).padStart(2, '0')}`
+                  
+                  // Compare actual dates (not just months)
+                  const isAfter = pricingTimestamp > migrationTimestamp
+                  
+                  if (isAfter) {
+                    console.log('[Migration] ⚠️ Found subsequent pricing:', {
+                      period_name: period.period_name,
+                      end_date: period.end_date,
+                      pricingTimestamp,
+                      pricingYearMonth,
+                      migrationTimestamp,
+                      migrationYearMonth,
+                      isAfter,
+                      note: 'Date-based comparison (handles daily pricing)'
+                    })
+                  }
+                  
+                  return isAfter
+                })
               
-              console.log('[Migration] 📅 Migration year-month:', migrationYearMonth)
-              
-              // Check if any pricing exists after migration month
-              const hasSubsequentPricing = pricingRows.some((period) => {
-                if (!period.end_date) return false
-                
-                const pricingDate = new Date(period.end_date + 'T00:00:00Z')
-                const pricingYearMonth = `${pricingDate.getUTCFullYear()}-${String(pricingDate.getUTCMonth() + 1).padStart(2, '0')}`
-                
-                // Check if pricing is after migration month
-                const isAfter = pricingYearMonth > migrationYearMonth
-                
-                if (isAfter) {
-                  console.log('[Migration] ⚠️ Found subsequent pricing:', {
-                    period_name: period.period_name,
-                    end_date: period.end_date,
-                    pricingYearMonth,
-                    migrationYearMonth
-                  })
+                if (hasSubsequentPricing) {
+                  console.log('[Migration] ❌ Cannot revert: Subsequent pricing exists')
+                  alert(
+                    '⚠️ Cannot Revert Migration\n\n' +
+                    'Pricing has been completed after this migration date.\n' +
+                    'Please revert the subsequent pricing first before reverting this migration.\n\n' +
+                    'Example: If migration was done for January 1st and January 15th pricing exists,\n' +
+                    'you must revert January 15th pricing first.'
+                  )
+                  return
                 }
-                
-                return isAfter
-              })
               
-              if (hasSubsequentPricing) {
-                console.log('[Migration] ❌ Cannot revert: Subsequent pricing exists')
-                alert(
-                  '⚠️ Cannot Revert Migration\n\n' +
-                  'Pricing has been completed for months after this migration.\n' +
-                  'Please revert the subsequent pricing first before reverting this migration.\n\n' +
-                  'Example: If migration was done for January and February pricing exists,\n' +
-                  'you must revert February pricing first.'
-                )
-                return
+                console.log('[Migration] ✅ No subsequent pricing found, revert allowed')
               }
-              
-              console.log('[Migration] ✅ No subsequent pricing found, revert allowed')
             } else {
               console.warn('[Migration] ⚠️ Could not fetch pricing periods, allowing revert')
             }
