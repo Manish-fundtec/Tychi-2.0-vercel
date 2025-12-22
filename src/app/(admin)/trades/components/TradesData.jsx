@@ -403,17 +403,26 @@ export default function TradesData() {
     
     const fetchLastPricingDate = async () => {
       try {
-        const res = await api.get(`/api/v1/pricing/${encodeURIComponent(currentFundId)}/reporting-periods?limit=1`)
+        const res = await api.get(`/api/v1/pricing/${encodeURIComponent(currentFundId)}/reporting-periods?limit=200`)
         const rows = res?.data?.rows || []
         if (rows.length > 0) {
-          const lastDate = rows[0]?.end_date ? String(rows[0].end_date).slice(0, 10) : null
+          // Get the latest pricing date (sort by end_date descending)
+          const sortedRows = [...rows].sort((a, b) => {
+            const dateA = new Date(a.end_date || 0).getTime()
+            const dateB = new Date(b.end_date || 0).getTime()
+            return dateB - dateA // Descending order
+          })
+          
+          const lastDate = sortedRows[0]?.end_date ? String(sortedRows[0].end_date).slice(0, 10) : null
           setLastPricingDate(lastDate)
-          console.log('[Trades] Last pricing date:', lastDate)
+          console.log('[Trades] Last pricing date fetched:', lastDate, 'from', rows.length, 'periods')
         } else {
           setLastPricingDate(null)
+          console.log('[Trades] No pricing periods found')
         }
       } catch (error) {
         console.error('[Trades] Failed to fetch last pricing date:', error)
+        console.error('[Trades] Error details:', error?.response?.data)
         setLastPricingDate(null)
       }
     }
@@ -524,17 +533,35 @@ export default function TradesData() {
           trade.relation_type || 
           trade.relationType || 
           trade.relation_type_name ||
-          trade.relation_type_name ||
           ''
         ).trim();
         
+        console.log(`[Validation] Checking trade ${trade.trade_id}:`, {
+          relationType: relationType,
+          tradeKeys: Object.keys(trade).filter(k => k.toLowerCase().includes('relation') || k.toLowerCase().includes('lot')),
+          tradeSample: {
+            trade_id: trade.trade_id,
+            relation_type: trade.relation_type,
+            relationType: trade.relationType,
+            lot_id: trade.lot_id,
+            lotId: trade.lotId
+          }
+        });
+        
         if (relationType.toLowerCase() === 'created') {
           // Check if there are any 'Realized' trades for the same lot_id
-          const lotId = trade.lot_id || trade.lotId || trade.lot_id_name;
+          const lotId = trade.lot_id || trade.lotId;
+          
+          console.log(`[Validation] Found Created trade:`, {
+            trade_id: trade.trade_id,
+            lotId: lotId,
+            relationType: relationType
+          });
           
           if (lotId) {
-            const hasRealized = allRows.some((t) => {
-              const tLotId = t.lot_id || t.lotId || t.lot_id_name;
+            // Find all realized trades for this lot
+            const realizedTrades = allRows.filter((t) => {
+              const tLotId = t.lot_id || t.lotId;
               const tRelationType = String(
                 t.relation_type || 
                 t.relationType || 
@@ -547,16 +574,15 @@ export default function TradesData() {
                      normalizeId(t.trade_id) !== normalizeId(trade.trade_id);
             });
             
-            if (hasRealized) {
-              console.log('[Validation] Found Realized trade for Created trade:', {
-                createdTrade: trade.trade_id,
-                lotId: lotId,
-                relationType: relationType
-              });
-              
+            console.log(`[Validation] Realized trades for lot ${lotId}:`, {
+              count: realizedTrades.length,
+              realizedTradeIds: realizedTrades.map(t => t.trade_id)
+            });
+            
+            if (realizedTrades.length > 0) {
               return {
                 valid: false,
-                error: `Trade ${trade.trade_id} (Created) cannot be deleted because 'Realized' entries exist for the same lot. Please delete 'Realized' entries first.`
+                error: `Trade ${trade.trade_id} (Created) cannot be deleted because ${realizedTrades.length} 'Realized' entry/entries exist for the same lot. Please delete 'Realized' entries first.`
               };
             }
           }
