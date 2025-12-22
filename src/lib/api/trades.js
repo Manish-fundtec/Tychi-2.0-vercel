@@ -35,17 +35,40 @@ export const deleteTrade = async (trade_id) => {
   // Get dashboard token from cookies
   const token = Cookies.get('dashboardToken')
   
-  const res = await api.delete(`/api/v1/trade/${trade_id}`, {
-    withCredentials: true, // keep if your backend checks cookies/JWT
-    headers: {
-      'dashboard': `Bearer ${token}`, // manually attach token in headers
-      'Content-Type': 'application/json',
-    },
-  })
-  if (!res?.data?.success) {
-    throw new Error(res?.data?.message || 'Failed to delete trade')
+  try {
+    const res = await api.delete(`/api/v1/trade/${trade_id}`, {
+      withCredentials: true, // keep if your backend checks cookies/JWT
+      headers: {
+        'dashboard': `Bearer ${token}`, // manually attach token in headers
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!res?.data?.success) {
+      throw new Error(res?.data?.message || 'Failed to delete trade')
+    }
+    return res.data // { success, message, details }
+  } catch (error) {
+    // Handle axios errors (400, 500, etc.)
+    console.error('[DeleteTrade] Error:', error)
+    
+    // If it's an axios error with response, extract the message
+    if (error?.response) {
+      const responseData = error.response?.data || {}
+      const errorMessage = 
+        responseData?.message || 
+        responseData?.error || 
+        `Request failed with status ${error.response.status}`
+      
+      const customError = new Error(errorMessage)
+      customError.response = error.response
+      customError.responseData = responseData
+      throw customError
+    }
+    
+    // Re-throw if it's not an axios error
+    throw error
   }
-  return res.data // { success, message, details }
 }
 
 // Bulk delete trades

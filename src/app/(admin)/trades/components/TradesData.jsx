@@ -747,18 +747,37 @@ export default function TradesData() {
           setSelectedRows([])
         }
       } catch (error) {
-        console.error('[Trades] bulk delete failed', error)
+        console.error('[Trades] Delete failed', error)
         console.error('[Trades] Full error response:', error?.response?.data)
         console.error('[Trades] Error responseData:', error?.responseData)
+        console.error('[Trades] Error message:', error?.message)
 
-        // Check if error has responseData (from bulkDeleteTrades)
+        // Check if error has responseData (from bulkDeleteTrades or deleteTrade)
         const responseData = error?.responseData || error?.response?.data
         const results = responseData?.results || {}
         const failed = results?.failed || []
         const successful = results?.successful || []
 
-        if (failed.length > 0) {
-          // Show detailed failed errors
+        // For single delete, check if we have a direct error message
+        if (tradeIds.length === 1) {
+          // Single delete error
+          const errorMessage = 
+            error?.message || 
+            responseData?.message || 
+            responseData?.error || 
+            'Failed to delete trade.'
+          
+          alert(
+            `❌ Cannot Delete Trade\n\n` +
+            `${errorMessage}\n\n` +
+            `Common Reasons:\n` +
+            `• Trade is not the latest for this symbol\n` +
+            `• Trade is on or before the last pricing date\n` +
+            `• 'Created' trade has 'Realized' entries\n\n` +
+            `Please check and try again.`
+          )
+        } else if (failed.length > 0) {
+          // Bulk delete with failed results
           const failedDetails = failed
             .slice(0, 10) // Show first 10 to avoid huge alert
             .map((f) => `Trade ${f.trade_id}: ${f.message}`)
@@ -807,9 +826,22 @@ export default function TradesData() {
 
   const handleSingleDelete = useCallback(
     (trade) => {
+      if (!trade || !trade.trade_id) {
+        alert('Invalid trade selected.')
+        return
+      }
+
+      // Validate single trade before deletion
+      const validation = validateTradesForDeletion(rowData, [trade], lastPricingDate);
+
+      if (!validation.valid) {
+        alert(`⚠️ Cannot Delete Trade\n\n${validation.error}\n\nPlease check and try again.`)
+        return
+      }
+
       confirmAndDeleteTrades([trade])
     },
-    [confirmAndDeleteTrades],
+    [rowData, lastPricingDate, validateTradesForDeletion, confirmAndDeleteTrades],
   )
 
   // Check if selected trades are valid for deletion (for UI feedback)
