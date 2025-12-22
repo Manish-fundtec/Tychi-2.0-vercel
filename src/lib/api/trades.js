@@ -143,9 +143,26 @@ export const bulkDeleteTrades = async (tradeIds) => {
     // Handle axios errors (400, 500, etc.)
     console.error('[BulkDelete] Error:', error)
     
-    // If it's an axios error with response, extract the message
+    // If it's an axios error with response, check if it has results
     if (error?.response) {
       const responseData = error.response?.data || {}
+      const results = responseData?.results || {}
+      const successful = results?.successful || []
+      const failed = results?.failed || []
+      
+      // If backend returned results (even with 400 status), return them instead of throwing
+      // This happens when all trades fail but backend still provides detailed error info
+      if (failed.length > 0 || successful.length > 0 || responseData?.results) {
+        return {
+          success: false,
+          partial: false,
+          message: responseData?.message || 'All trades failed to delete',
+          successful: successful,
+          failed: failed,
+        }
+      }
+      
+      // No results available, throw error
       const errorMessage = 
         responseData?.message || 
         responseData?.error || 
