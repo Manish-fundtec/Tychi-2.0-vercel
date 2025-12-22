@@ -165,6 +165,8 @@ export const bulkDeleteTrades = async (tradeIds) => {
   } catch (error) {
     // Handle axios errors (400, 500, etc.)
     console.error('[BulkDelete] Error:', error)
+    console.error('[BulkDelete] Error response:', error?.response)
+    console.error('[BulkDelete] Error response.data:', error?.response?.data)
     
     // If it's an axios error with response, check if it has results
     if (error?.response) {
@@ -173,9 +175,24 @@ export const bulkDeleteTrades = async (tradeIds) => {
       const successful = results?.successful || []
       const failed = results?.failed || []
       
+      console.log('[BulkDelete] Checking response data:', {
+        hasResponseData: !!responseData,
+        hasResults: !!responseData?.results,
+        failedCount: failed.length,
+        successfulCount: successful.length,
+        responseDataKeys: Object.keys(responseData),
+        resultsKeys: Object.keys(results)
+      })
+      
       // If backend returned results (even with 400 status), return them instead of throwing
       // This happens when all trades fail but backend still provides detailed error info
-      if (failed.length > 0 || successful.length > 0 || responseData?.results) {
+      // Check if results object exists (even if arrays are empty)
+      if (responseData?.results !== undefined) {
+        console.log('[BulkDelete] Returning results instead of throwing error', {
+          message: responseData?.message,
+          failedCount: failed.length,
+          successfulCount: successful.length
+        })
         return {
           success: false,
           partial: false,
