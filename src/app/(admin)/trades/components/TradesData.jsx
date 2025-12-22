@@ -699,11 +699,28 @@ export default function TradesData() {
           // bulk delete
           const result = await bulkDeleteTrades(tradeIds)
 
+          console.log('[Trades] Bulk delete result:', {
+            success: result.success,
+            partial: result.partial,
+            successful: result.successful?.length || 0,
+            failed: result.failed?.length || 0,
+            message: result.message
+          })
+
           const successCount = result.successful?.length || 0
           const failedCount = result.failed?.length || 0
-          const isSuccess = result.success !== false
+          const isSuccess = result.success === true
 
-          if (!isSuccess && failedCount > 0 && successCount === 0) {
+          console.log('[Trades] Processing result:', {
+            successCount,
+            failedCount,
+            isSuccess,
+            resultSuccess: result.success,
+            willShowAllFailed: (result.success === false && failedCount > 0 && successCount === 0)
+          })
+
+          // Check if all trades failed (success is false and we have failed trades)
+          if (result.success === false && failedCount > 0 && successCount === 0) {
             // All trades failed - show detailed errors
             const failedDetails = result.failed
               ?.slice(0, 10) // Show first 10 errors to avoid huge alert
