@@ -119,8 +119,53 @@ export default function TradesData() {
     const url = `/api/v1/trade/fund/${encodeURIComponent(currentFundId)}`
     try {
       const res = await api.get(url)
-      const rows = Array.isArray(res?.data?.data) ? res.data.data : []
-      setRowData(rows)
+      const rawRows = Array.isArray(res?.data?.data) ? res.data.data : []
+      
+      // Normalize trade data to ensure relation_type and lot_id fields are populated
+      const normalizedRows = rawRows.map((trade) => {
+        // Normalize relation_type field (check multiple possible field names)
+        const relationType = 
+          trade.relation_type || 
+          trade.relationType || 
+          trade.relation_type_name ||
+          trade.relationTypeName ||
+          trade.type ||
+          trade.relation_type_id?.name ||
+          trade.relationTypeId?.name ||
+          ''
+        
+        // Normalize lot_id field (check multiple possible field names)
+        const lotId = 
+          trade.lot_id || 
+          trade.lotId || 
+          trade.lot_id_name ||
+          trade.lotIdName ||
+          trade.lot_id_id ||
+          trade.lotIdId ||
+          ''
+        
+        // Return normalized trade with guaranteed relation_type and lot_id fields
+        return {
+          ...trade,
+          relation_type: relationType, // Always set relation_type (even if empty)
+          lot_id: lotId, // Always set lot_id (even if empty)
+          // Also keep original fields for backward compatibility
+          relationType: relationType,
+          lotId: lotId,
+        }
+      })
+      
+      console.log('[Trades] Fetched and normalized trades:', {
+        total: normalizedRows.length,
+        sampleTrade: normalizedRows[0] ? {
+          trade_id: normalizedRows[0].trade_id,
+          relation_type: normalizedRows[0].relation_type,
+          lot_id: normalizedRows[0].lot_id,
+          allKeys: Object.keys(normalizedRows[0])
+        } : null
+      })
+      
+      setRowData(normalizedRows)
     } catch (e) {
       console.error('fetch trades failed', url, e?.response?.status, e?.response?.data)
       setRowData([])
@@ -528,64 +573,56 @@ export default function TradesData() {
 
       // 4️⃣ Realized trade check - 'Created' trade can't be deleted if 'Realized' entries exist
       for (const trade of sel) {
-        // Check multiple possible field names for relation_type
-        const relationType = String(
-          trade.relation_type || 
-          trade.relationType || 
-          trade.relation_type_name ||
-          ''
-        ).trim();
+        // Use normalized relation_type field (should be populated by refreshTrades)
+        const relationType = String(trade.relation_type || trade.relationType || '').trim();
         
-        console.log(`[Validation] Checking trade ${trade.trade_id}:`, {
-          relationType: relationType,
-          tradeKeys: Object.keys(trade).filter(k => k.toLowerCase().includes('relation') || k.toLowerCase().includes('lot')),
-          tradeSample: {
+        // Log first trade for debugging
+        if (sel.indexOf(trade) === 0) {
+          console.log(`[Validation] First trade (normalized):`, {
             trade_id: trade.trade_id,
             relation_type: trade.relation_type,
-            relationType: trade.relationType,
             lot_id: trade.lot_id,
-            lotId: trade.lotId
-          }
-        });
-        
-        if (relationType.toLowerCase() === 'created') {
-          // Check if there are any 'Realized' trades for the same lot_id
-          const lotId = trade.lot_id || trade.lotId;
-          
-          console.log(`[Validation] Found Created trade:`, {
-            trade_id: trade.trade_id,
-            lotId: lotId,
-            relationType: relationType
+            hasRelationType: !!trade.relation_type,
+            hasLotId: !!trade.lot_id
           });
+        }
+        
+        // Validate if relation_type is 'Created'
+        if (relationType && relationType.toLowerCase() === 'created') {
+          // Use normalized lot_id field
+          const lotId = trade.lot_id || trade.lotId;
           
           if (lotId) {
             // Find all realized trades for this lot
             const realizedTrades = allRows.filter((t) => {
               const tLotId = t.lot_id || t.lotId;
-              const tRelationType = String(
-                t.relation_type || 
-                t.relationType || 
-                t.relation_type_name ||
-                ''
-              ).trim().toLowerCase();
+              const tRelationType = String(t.relation_type || t.relationType || '').trim().toLowerCase();
               
               return tLotId === lotId && 
                      tRelationType === 'realized' && 
                      normalizeId(t.trade_id) !== normalizeId(trade.trade_id);
             });
             
-            console.log(`[Validation] Realized trades for lot ${lotId}:`, {
-              count: realizedTrades.length,
-              realizedTradeIds: realizedTrades.map(t => t.trade_id)
-            });
-            
             if (realizedTrades.length > 0) {
+              console.log(`[Validation] ⚠️ Found Realized trades for Created trade:`, {
+                createdTrade: trade.trade_id,
+                lotId: lotId,
+                realizedCount: realizedTrades.length,
+                realizedIds: realizedTrades.map(t => t.trade_id)
+              });
+              
               return {
                 valid: false,
                 error: `Trade ${trade.trade_id} (Created) cannot be deleted because ${realizedTrades.length} 'Realized' entry/entries exist for the same lot. Please delete 'Realized' entries first.`
               };
             }
           }
+        } else if (!relationType && sel.indexOf(trade) === 0) {
+          // Warn if relation_type is still empty after normalization
+          console.warn(`[Validation] ⚠️ relation_type is empty after normalization. Backend will validate this.`, {
+            trade_id: trade.trade_id,
+            tradeObject: trade
+          });
         }
       }
 
