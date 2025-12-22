@@ -120,7 +120,19 @@ export const bulkDeleteTrades = async (tradeIds) => {
         failed: failed,
       }
     } else {
-      // All failed or error - extract error message from response
+      // All failed or error - but still return results if available
+      // This allows frontend to show detailed error messages
+      if (failed.length > 0 || successful.length > 0) {
+        return {
+          success: false,
+          partial: false,
+          message: responseData?.message || 'All trades failed to delete',
+          successful: successful,
+          failed: failed,
+        }
+      }
+      
+      // No results available, throw error
       const errorMessage = responseData?.message || responseData?.error || 'Failed to delete trades'
       const error = new Error(errorMessage)
       error.response = res

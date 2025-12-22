@@ -468,11 +468,25 @@ export default function TradesData() {
 
       if (!all.length || !sel.length) continue;
 
+      console.log(`[Validation] Symbol ${symbol} validation:`, {
+        allCount: all.length,
+        selCount: sel.length,
+        allLatestTradeId: all[0]?.trade_id,
+        selLatestTradeId: sel[0]?.trade_id,
+        allLatestTrade: all[0],
+        selLatestTrade: sel[0]
+      });
+
       // 1️⃣ Latest trade selection required
       if (normalizeId(all[0].trade_id) !== normalizeId(sel[0].trade_id)) {
+        console.log('[Validation] Latest trade mismatch:', {
+          symbol,
+          expectedLatest: all[0].trade_id,
+          selectedLatest: sel[0].trade_id
+        });
         return {
           valid: false,
-          error: `Symbol ${symbol}: Please select the LATEST trade first.`
+          error: `Symbol ${symbol}: Please select the LATEST trade first. Latest trade ID: ${all[0].trade_id}`
         };
       }
 
@@ -505,24 +519,62 @@ export default function TradesData() {
 
       // 4️⃣ Realized trade check - 'Created' trade can't be deleted if 'Realized' entries exist
       for (const trade of sel) {
-        const relationType = String(trade.relation_type || trade.relationType || '').trim();
+        // Check multiple possible field names for relation_type
+        const relationType = String(
+          trade.relation_type || 
+          trade.relationType || 
+          trade.relation_type_name ||
+          trade.relation_type_name ||
+          ''
+        ).trim();
+        
         if (relationType.toLowerCase() === 'created') {
           // Check if there are any 'Realized' trades for the same lot_id
-          const lotId = trade.lot_id || trade.lotId;
+          const lotId = trade.lot_id || trade.lotId || trade.lot_id_name;
+          
           if (lotId) {
             const hasRealized = allRows.some((t) => {
-              const tLotId = t.lot_id || t.lotId;
-              const tRelationType = String(t.relation_type || t.relationType || '').trim().toLowerCase();
-              return tLotId === lotId && tRelationType === 'realized' && normalizeId(t.trade_id) !== normalizeId(trade.trade_id);
+              const tLotId = t.lot_id || t.lotId || t.lot_id_name;
+              const tRelationType = String(
+                t.relation_type || 
+                t.relationType || 
+                t.relation_type_name ||
+                ''
+              ).trim().toLowerCase();
+              
+              return tLotId === lotId && 
+                     tRelationType === 'realized' && 
+                     normalizeId(t.trade_id) !== normalizeId(trade.trade_id);
             });
             
             if (hasRealized) {
+              console.log('[Validation] Found Realized trade for Created trade:', {
+                createdTrade: trade.trade_id,
+                lotId: lotId,
+                relationType: relationType
+              });
+              
               return {
                 valid: false,
                 error: `Trade ${trade.trade_id} (Created) cannot be deleted because 'Realized' entries exist for the same lot. Please delete 'Realized' entries first.`
               };
             }
           }
+        }
+      }
+
+      // 5️⃣ Additional check: Verify each selected trade is actually in the correct position
+      // This ensures we're not selecting trades that are not the latest
+      for (let i = 0; i < sel.length; i++) {
+        const selectedTrade = sel[i];
+        const expectedTrade = all[i];
+        
+        // Double-check that selected trade matches expected position
+        if (normalizeId(selectedTrade.trade_id) !== normalizeId(expectedTrade.trade_id)) {
+          return {
+            valid: false,
+            error: `Trade ${selectedTrade.trade_id} is not in the correct position. Please select trades starting from the latest.`
+          };
         }
       }
     }
@@ -584,21 +636,47 @@ export default function TradesData() {
           // bulk delete
           const result = await bulkDeleteTrades(tradeIds)
 
-          if (result.partial) {
-            const successCount = result.successful?.length || 0
-            const failedCount = result.failed?.length || 0
+          const successCount = result.successful?.length || 0
+          const failedCount = result.failed?.length || 0
+          const isSuccess = result.success !== false
+
+          if (!isSuccess && failedCount > 0 && successCount === 0) {
+            // All trades failed - show detailed errors
             const failedDetails = result.failed
-              ?.map((f) => `Trade ${f.trade_id}: ${f.message}`)
+              ?.slice(0, 10) // Show first 10 errors to avoid huge alert
+              .map((f) => `Trade ${f.trade_id}: ${f.message}`)
               .join('\n')
+            
+            const moreErrors = failedCount > 10 ? `\n\n... and ${failedCount - 10} more errors` : ''
+
+            alert(
+              `❌ All Trades Failed to Delete\n\n` +
+                `Failed: ${failedCount} of ${tradeIds.length}\n\n` +
+                `Error Details:\n${failedDetails}${moreErrors}\n\n` +
+                `Common Issues:\n` +
+                `1. Not selecting latest trades for each symbol\n` +
+                `2. Trades on or before last pricing date\n` +
+                `3. 'Created' trades with 'Realized' entries\n\n` +
+                `Please fix selection and try again.`
+            )
+          } else if (result.partial || (failedCount > 0 && successCount > 0)) {
+            // Partial success - some deleted, some failed
+            const failedDetails = result.failed
+              ?.slice(0, 10)
+              .map((f) => `Trade ${f.trade_id}: ${f.message}`)
+              .join('\n')
+            
+            const moreErrors = failedCount > 10 ? `\n\n... and ${failedCount - 10} more errors` : ''
 
             alert(
               `Partial Success:\n\n` +
                 `✅ Deleted: ${successCount}\n` +
                 `❌ Failed: ${failedCount}\n\n` +
-                (failedCount > 0 ? `Failed Details:\n${failedDetails}` : '')
+                (failedCount > 0 ? `Failed Details:\n${failedDetails}${moreErrors}` : '')
             )
           } else {
-            alert(`Deleted ${result.successful?.length || tradeIds.length} trade(s)`)
+            // All succeeded
+            alert(`✅ Deleted ${successCount || tradeIds.length} trade(s) successfully`)
           }
 
           await refreshTrades()
@@ -608,28 +686,54 @@ export default function TradesData() {
       } catch (error) {
         console.error('[Trades] bulk delete failed', error)
         console.error('[Trades] Full error response:', error?.response?.data)
+        console.error('[Trades] Error responseData:', error?.responseData)
 
-        // Try to get detailed backend error message
-        const backendError = error?.response?.data
-        let msg = error?.message || 'Failed to delete selected trades.'
-        
-        // Check if backend sent validation issues
-        if (backendError?.issues && Array.isArray(backendError.issues)) {
-          const issueDetails = backendError.issues.map(issue => 
-            `Symbol: ${issue.symbol_id || 'Unknown'}\n` +
-            `Problem: ${issue.message || 'Validation failed'}\n` +
-            `Trades: ${issue.selected} selected out of ${issue.total_trades} total`
-          ).join('\n\n')
+        // Check if error has responseData (from bulkDeleteTrades)
+        const responseData = error?.responseData || error?.response?.data
+        const results = responseData?.results || {}
+        const failed = results?.failed || []
+        const successful = results?.successful || []
+
+        if (failed.length > 0) {
+          // Show detailed failed errors
+          const failedDetails = failed
+            .slice(0, 10) // Show first 10 to avoid huge alert
+            .map((f) => `Trade ${f.trade_id}: ${f.message}`)
+            .join('\n')
           
+          const moreErrors = failed.length > 10 ? `\n\n... and ${failed.length - 10} more errors` : ''
+          const successMsg = successful.length > 0 ? `\n\n✅ Deleted: ${successful.length}` : ''
+
           alert(
-            `⚠️ Backend Validation Failed\n\n` +
-            `${backendError.message || 'Cannot delete trades'}\n\n` +
-            `Details:\n${issueDetails}`
+            `❌ Delete Failed\n\n` +
+            `Failed: ${failed.length} of ${tradeIds.length}${successMsg}\n\n` +
+            `Error Details:\n${failedDetails}${moreErrors}\n\n` +
+            `Common Issues:\n` +
+            `• Not selecting latest trades for each symbol\n` +
+            `• Trades on or before last pricing date\n` +
+            `• 'Created' trades with 'Realized' entries`
           )
         } else {
-          // Use regular error message
-          msg = backendError?.message || backendError?.error || msg
-          alert(msg)
+          // Generic error message
+          const backendError = error?.response?.data || error?.responseData
+          let msg = backendError?.message || backendError?.error || error?.message || 'Failed to delete selected trades.'
+          
+          // Check if backend sent validation issues
+          if (backendError?.issues && Array.isArray(backendError.issues)) {
+            const issueDetails = backendError.issues.map(issue => 
+              `Symbol: ${issue.symbol_id || 'Unknown'}\n` +
+              `Problem: ${issue.message || 'Validation failed'}\n` +
+              `Trades: ${issue.selected} selected out of ${issue.total_trades} total`
+            ).join('\n\n')
+            
+            alert(
+              `⚠️ Backend Validation Failed\n\n` +
+              `${backendError.message || 'Cannot delete trades'}\n\n` +
+              `Details:\n${issueDetails}`
+            )
+          } else {
+            alert(msg)
+          }
         }
       } finally {
         setBulkActionLoading(false)
