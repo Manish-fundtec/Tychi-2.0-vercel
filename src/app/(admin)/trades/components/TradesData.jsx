@@ -391,14 +391,45 @@ export default function TradesData() {
     [selectedRows, rowData, tradeExportHeaders, formatExportValue],
   )
 
-  // Validate continuous latest trades selection per symbol
-  const validateContinuousSelection = useCallback((allRows, selectedRows) => {
-    if (!selectedRows.length) return "No trades selected.";
+  // Fetch last pricing date for validation
+  const [lastPricingDate, setLastPricingDate] = useState(null)
+  
+  useEffect(() => {
+    const currentFundId = fund_id || fundId
+    if (!currentFundId) {
+      setLastPricingDate(null)
+      return
+    }
+    
+    const fetchLastPricingDate = async () => {
+      try {
+        const res = await api.get(`/api/v1/pricing/${encodeURIComponent(currentFundId)}/reporting-periods?limit=1`)
+        const rows = res?.data?.rows || []
+        if (rows.length > 0) {
+          const lastDate = rows[0]?.end_date ? String(rows[0].end_date).slice(0, 10) : null
+          setLastPricingDate(lastDate)
+          console.log('[Trades] Last pricing date:', lastDate)
+        } else {
+          setLastPricingDate(null)
+        }
+      } catch (error) {
+        console.error('[Trades] Failed to fetch last pricing date:', error)
+        setLastPricingDate(null)
+      }
+    }
+    
+    fetchLastPricingDate()
+  }, [fund_id, fundId])
 
-    console.log('[Validation] Starting validation:', {
+  // Comprehensive validation function - checks all conditions
+  const validateTradesForDeletion = useCallback((allRows, selectedRows, lastPricingDateStr) => {
+    if (!selectedRows.length) return { valid: false, error: "No trades selected." };
+
+    console.log('[Validation] Starting comprehensive validation:', {
       totalRows: allRows.length,
       selectedRows: selectedRows.length,
-      selectedTradeIds: selectedRows.map(r => r.trade_id)
+      selectedTradeIds: selectedRows.map(r => r.trade_id),
+      lastPricingDate: lastPricingDateStr
     });
 
     // Group all and selected trades by symbol
@@ -414,12 +445,6 @@ export default function TradesData() {
 
     const allGroups = groupTrades(allRows);
     const selectedGroups = groupTrades(selectedRows);
-    
-    console.log('[Validation] Groups:', {
-      allGroupsCount: Object.keys(allGroups).length,
-      selectedGroupsCount: Object.keys(selectedGroups).length,
-      symbols: Object.keys(selectedGroups)
-    });
 
     // Backend sort logic (same as API)
     const sortFn = (a, b) => {
@@ -434,6 +459,8 @@ export default function TradesData() {
       return String(b.trade_id).localeCompare(String(a.trade_id));
     };
 
+    const normalizeId = (id) => String(id || '').trim();
+
     // Validate each symbol group
     for (const symbol of Object.keys(selectedGroups)) {
       const all = (allGroups[symbol] || []).sort(sortFn);
@@ -441,46 +468,73 @@ export default function TradesData() {
 
       if (!all.length || !sel.length) continue;
 
-      console.log(`[Validation] Symbol ${symbol}:`, {
-        allCount: all.length,
-        selCount: sel.length,
-        allTradeIds: all.map(t => t.trade_id),
-        selTradeIds: sel.map(t => t.trade_id),
-        allLatest: all[0],
-        selLatest: sel[0]
-      });
-
-      // Normalize trade_ids to strings for comparison
-      const normalizeId = (id) => String(id || '').trim();
-
       // 1️⃣ Latest trade selection required
       if (normalizeId(all[0].trade_id) !== normalizeId(sel[0].trade_id)) {
-        console.log('[Validation] Latest check failed:', {
-          symbol,
-          allLatest: all[0].trade_id,
-          selLatest: sel[0].trade_id,
-          allLatestNorm: normalizeId(all[0].trade_id),
-          selLatestNorm: normalizeId(sel[0].trade_id)
-        });
-        return `Symbol ${symbol}: Please select the LATEST trade first.`;
+        return {
+          valid: false,
+          error: `Symbol ${symbol}: Please select the LATEST trade first.`
+        };
       }
 
-      // 2️⃣ No gaps allowed
+      // 2️⃣ No gaps allowed - continuity check
       for (let i = 0; i < sel.length; i++) {
         if (normalizeId(sel[i].trade_id) !== normalizeId(all[i].trade_id)) {
-          console.log('[Validation] Gap detected:', {
-            symbol,
-            index: i,
-            selected: sel[i].trade_id,
-            expected: all[i].trade_id
-          });
-          return `Symbol ${symbol}: Selection must be continuous from the latest trade.`;
+          return {
+            valid: false,
+            error: `Symbol ${symbol}: Selection must be continuous from the latest trade.`
+          };
+        }
+      }
+
+      // 3️⃣ Pricing date check - trade date must be after last pricing date
+      if (lastPricingDateStr) {
+        const lastPricingTimestamp = new Date(lastPricingDateStr + 'T00:00:00Z').getTime();
+        for (const trade of sel) {
+          if (!trade.trade_date) continue;
+          const tradeDateStr = String(trade.trade_date).slice(0, 10);
+          const tradeTimestamp = new Date(tradeDateStr + 'T00:00:00Z').getTime();
+          
+          if (tradeTimestamp <= lastPricingTimestamp) {
+            return {
+              valid: false,
+              error: `Trade ${trade.trade_id} (${tradeDateStr}) cannot be deleted because it is on or before the last pricing date (${lastPricingDateStr}).`
+            };
+          }
+        }
+      }
+
+      // 4️⃣ Realized trade check - 'Created' trade can't be deleted if 'Realized' entries exist
+      for (const trade of sel) {
+        const relationType = String(trade.relation_type || trade.relationType || '').trim();
+        if (relationType.toLowerCase() === 'created') {
+          // Check if there are any 'Realized' trades for the same lot_id
+          const lotId = trade.lot_id || trade.lotId;
+          if (lotId) {
+            const hasRealized = allRows.some((t) => {
+              const tLotId = t.lot_id || t.lotId;
+              const tRelationType = String(t.relation_type || t.relationType || '').trim().toLowerCase();
+              return tLotId === lotId && tRelationType === 'realized' && normalizeId(t.trade_id) !== normalizeId(trade.trade_id);
+            });
+            
+            if (hasRealized) {
+              return {
+                valid: false,
+                error: `Trade ${trade.trade_id} (Created) cannot be deleted because 'Realized' entries exist for the same lot. Please delete 'Realized' entries first.`
+              };
+            }
+          }
         }
       }
     }
 
-    return null; // VALID
+    return { valid: true, error: null };
   }, []);
+
+  // Validate continuous latest trades selection per symbol (kept for backward compatibility)
+  const validateContinuousSelection = useCallback((allRows, selectedRows) => {
+    const result = validateTradesForDeletion(allRows, selectedRows, lastPricingDate);
+    return result.valid ? null : result.error;
+  }, [validateTradesForDeletion, lastPricingDate]);
 
   const confirmAndDeleteTrades = useCallback(
     async (trades) => {
@@ -591,21 +645,30 @@ export default function TradesData() {
     [confirmAndDeleteTrades],
   )
 
+  // Check if selected trades are valid for deletion (for UI feedback)
+  const validationResult = useMemo(() => {
+    if (!selectedRows.length) return { valid: false, error: null };
+    return validateTradesForDeletion(rowData, selectedRows, lastPricingDate);
+  }, [selectedRows, rowData, lastPricingDate, validateTradesForDeletion]);
+
+  const areSelectedTradesValid = validationResult.valid;
+
   const handleBulkDelete = useCallback(() => {
     if (!selectedRows.length) {
       alert('No trades selected.')
       return
     }
 
-    const error = validateContinuousSelection(rowData, selectedRows)
+    // Use comprehensive validation
+    const validation = validateTradesForDeletion(rowData, selectedRows, lastPricingDate);
 
-    if (error) {
-      alert(error)
+    if (!validation.valid) {
+      alert(`⚠️ Cannot Delete Trades\n\n${validation.error}\n\nPlease fix the selection and try again.`)
       return
     }
 
     confirmAndDeleteTrades(selectedRows)
-  }, [selectedRows, rowData, confirmAndDeleteTrades, validateContinuousSelection])
+  }, [selectedRows, rowData, lastPricingDate, validateTradesForDeletion, confirmAndDeleteTrades])
 
   const handleViewTrade = useCallback((trade) => {
     setViewTrade(trade || null)
@@ -679,7 +742,13 @@ export default function TradesData() {
                   <Button variant="outline-secondary" size="sm" onClick={handleClearSelection} disabled={!selectedRows.length}>
                     Clear Selection
                   </Button>
-                  <Button variant="outline-danger" size="sm" onClick={handleBulkDelete} disabled={!selectedRows.length || bulkActionLoading}>
+                  <Button 
+                    variant="outline-danger" 
+                    size="sm" 
+                    onClick={handleBulkDelete} 
+                    disabled={!selectedRows.length || bulkActionLoading || !areSelectedTradesValid}
+                    title={!areSelectedTradesValid && selectedRows.length > 0 ? 'Selected trades cannot be deleted. Check validation errors.' : ''}
+                  >
                     {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
                   </Button>
                   <Button variant="outline-success" size="sm" onClick={() => handleExport('csv')} disabled={!rowData.length || loading}>
@@ -692,6 +761,12 @@ export default function TradesData() {
                     Selected: {selectedCount} / {rowData.length}
                   </span>
                 </div>
+                {!areSelectedTradesValid && selectedRows.length > 0 && validationResult.error && (
+                  <Alert variant="danger" className="mb-3">
+                    <strong>⚠️ Cannot Delete Selected Trades:</strong><br />
+                    {validationResult.error}
+                  </Alert>
+                )}
                 <div className="ag-theme-alpine" style={{ width: '100%', height: 600 }}>
                   <AgGridReact
                     onGridReady={onGridReady}
