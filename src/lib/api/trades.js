@@ -72,7 +72,7 @@ export const deleteTrade = async (trade_id) => {
 }
 
 // Bulk delete trades
-export const bulkDeleteTrades = async (tradeIds) => {
+export const bulkDeleteTrades = async (tradeIds, skipValidation = false) => {
   if (!Array.isArray(tradeIds) || tradeIds.length === 0) {
     throw new Error('tradeIds array is required and must not be empty')
   }
@@ -91,6 +91,7 @@ export const bulkDeleteTrades = async (tradeIds) => {
   const requestBody = {
     trade_ids: tradeIds,
     fund_id: fund_id, // ✅ Backend expects fund_id (snake_case)
+    skip_validation: skipValidation, // ✅ ADDED: Send skip_validation flag
   }
   
   console.log('[BulkDelete] Request:', {
@@ -99,6 +100,7 @@ export const bulkDeleteTrades = async (tradeIds) => {
     body: requestBody,
     tradeCount: tradeIds.length,
     fund_id: fund_id,
+    skipValidation: skipValidation,
   })
   
   try {
