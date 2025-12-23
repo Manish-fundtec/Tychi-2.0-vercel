@@ -155,17 +155,34 @@ export default function TradesData() {
         }
       })
       
+      // Sort trades: latest first (by trade_date, then created_at, then trade_id)
+      const sortedRows = [...normalizedRows].sort((a, b) => {
+        // 1. Sort by trade_date (descending - latest first)
+        const dA = new Date(a.trade_date).getTime() || 0
+        const dB = new Date(b.trade_date).getTime() || 0
+        if (dA !== dB) return dB - dA
+
+        // 2. If same date, sort by created_at (descending - latest first)
+        const cA = new Date(a.created_at).getTime() || 0
+        const cB = new Date(b.created_at).getTime() || 0
+        if (cA !== cB) return cB - cA
+
+        // 3. If same, sort by trade_id (descending - highest first)
+        return String(b.trade_id).localeCompare(String(a.trade_id))
+      })
+      
       console.log('[Trades] Fetched and normalized trades:', {
-        total: normalizedRows.length,
-        sampleTrade: normalizedRows[0] ? {
-          trade_id: normalizedRows[0].trade_id,
-          relation_type: normalizedRows[0].relation_type,
-          lot_id: normalizedRows[0].lot_id,
-          allKeys: Object.keys(normalizedRows[0])
+        total: sortedRows.length,
+        sampleTrade: sortedRows[0] ? {
+          trade_id: sortedRows[0].trade_id,
+          trade_date: sortedRows[0].trade_date,
+          relation_type: sortedRows[0].relation_type,
+          lot_id: sortedRows[0].lot_id,
+          allKeys: Object.keys(sortedRows[0])
         } : null
       })
       
-      setRowData(normalizedRows)
+      setRowData(sortedRows)
     } catch (e) {
       console.error('fetch trades failed', url, e?.response?.status, e?.response?.data)
       setRowData([])
