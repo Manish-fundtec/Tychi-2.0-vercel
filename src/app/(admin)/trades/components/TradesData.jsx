@@ -437,493 +437,70 @@ export default function TradesData() {
   )
 
   // Fetch last pricing date for validation
-  const [lastPricingDate, setLastPricingDate] = useState(null)
-  
-  useEffect(() => {
-    const currentFundId = fund_id || fundId
-    if (!currentFundId) {
-      setLastPricingDate(null)
-      return
-    }
-    
-    const fetchLastPricingDate = async () => {
-      try {
-        const res = await api.get(`/api/v1/pricing/${encodeURIComponent(currentFundId)}/reporting-periods?limit=200`)
-        const rows = res?.data?.rows || []
-        if (rows.length > 0) {
-          // Get the latest pricing date (sort by end_date descending)
-          const sortedRows = [...rows].sort((a, b) => {
-            const dateA = new Date(a.end_date || 0).getTime()
-            const dateB = new Date(b.end_date || 0).getTime()
-            return dateB - dateA // Descending order
-          })
-          
-          const lastDate = sortedRows[0]?.end_date ? String(sortedRows[0].end_date).slice(0, 10) : null
-          setLastPricingDate(lastDate)
-          console.log('[Trades] Last pricing date fetched:', lastDate, 'from', rows.length, 'periods')
-        } else {
-          setLastPricingDate(null)
-          console.log('[Trades] No pricing periods found')
-        }
-      } catch (error) {
-        console.error('[Trades] Failed to fetch last pricing date:', error)
-        console.error('[Trades] Error details:', error?.response?.data)
-        setLastPricingDate(null)
-      }
-    }
-    
-    fetchLastPricingDate()
-  }, [fund_id, fundId])
 
-  // Comprehensive validation function - checks all conditions
-  const validateTradesForDeletion = useCallback((allRows, selectedRows, lastPricingDateStr, isSelectAllMode = false) => {
-    if (!selectedRows.length) return { valid: false, error: "No trades selected." };
-
-    console.log('[Validation] Starting comprehensive validation:', {
-      totalRows: allRows.length,
-      selectedRows: selectedRows.length,
-      selectedTradeIds: selectedRows.map(r => r.trade_id),
-      lastPricingDate: lastPricingDateStr,
-      isSelectAllMode: isSelectAllMode
-    });
-
-    // ✅ If select all mode, only check pricing date
-    if (isSelectAllMode) {
-      console.log('[Validation] Select All Mode: Only checking pricing date');
-      
-      // Only pricing date validation
-      if (lastPricingDateStr) {
-        const lastPricingTimestamp = new Date(lastPricingDateStr + 'T00:00:00Z').getTime();
-        for (const trade of selectedRows) {
-          if (!trade.trade_date) continue;
-          const tradeDateStr = String(trade.trade_date).slice(0, 10);
-          const tradeTimestamp = new Date(tradeDateStr + 'T00:00:00Z').getTime();
-          
-          if (tradeTimestamp <= lastPricingTimestamp) {
-            return {
-              valid: false,
-              error: `Trade ${trade.trade_id} (${tradeDateStr}) cannot be deleted because it is on or before the last pricing date (${lastPricingDateStr}).`
-            };
-          }
-        }
-      }
-      // If no pricing date, allow deletion
-      return { valid: true, error: null };
-    }
-
-    // Group all and selected trades by symbol
-    const groupTrades = (rows) => {
-      const groups = {};
-      rows.forEach((row) => {
-        const symbol = row.symbol_id || "__NOSYMBOL__";
-        if (!groups[symbol]) groups[symbol] = [];
-        groups[symbol].push(row);
-      });
-      return groups;
-    };
-
-    const allGroups = groupTrades(allRows);
-    const selectedGroups = groupTrades(selectedRows);
-
-    // Backend sort logic (same as API)
-    const sortFn = (a, b) => {
-      const dA = new Date(a.trade_date).getTime() || 0;
-      const dB = new Date(b.trade_date).getTime() || 0;
-      if (dA !== dB) return dB - dA;
-
-      const cA = new Date(a.created_at).getTime() || 0;
-      const cB = new Date(b.created_at).getTime() || 0;
-      if (cA !== cB) return cB - cA;
-
-      return String(b.trade_id).localeCompare(String(a.trade_id));
-    };
-
-    const normalizeId = (id) => String(id || '').trim();
-
-    // Validate each symbol group
-    for (const symbol of Object.keys(selectedGroups)) {
-      const all = (allGroups[symbol] || []).sort(sortFn);
-      const sel = selectedGroups[symbol].sort(sortFn);
-
-      if (!all.length || !sel.length) continue;
-
-      console.log(`[Validation] Symbol ${symbol} validation:`, {
-        allCount: all.length,
-        selCount: sel.length,
-        allLatestTradeId: all[0]?.trade_id,
-        selLatestTradeId: sel[0]?.trade_id,
-        allLatestTrade: all[0],
-        selLatestTrade: sel[0]
-      });
-
-      // 1️⃣ Latest trade selection required
-      if (normalizeId(all[0].trade_id) !== normalizeId(sel[0].trade_id)) {
-        console.log('[Validation] Latest trade mismatch:', {
-          symbol,
-          expectedLatest: all[0].trade_id,
-          selectedLatest: sel[0].trade_id
-        });
-        return {
-          valid: false,
-          error: `Symbol ${symbol}: Please select the LATEST trade first. Latest trade ID: ${all[0].trade_id}`
-        };
-      }
-
-      // 2️⃣ No gaps allowed - continuity check
-      for (let i = 0; i < sel.length; i++) {
-        if (normalizeId(sel[i].trade_id) !== normalizeId(all[i].trade_id)) {
-          return {
-            valid: false,
-            error: `Symbol ${symbol}: Selection must be continuous from the latest trade.`
-          };
-        }
-      }
-
-      // 3️⃣ Pricing date check - trade date must be after last pricing date
-      if (lastPricingDateStr) {
-        const lastPricingTimestamp = new Date(lastPricingDateStr + 'T00:00:00Z').getTime();
-        for (const trade of sel) {
-          if (!trade.trade_date) continue;
-          const tradeDateStr = String(trade.trade_date).slice(0, 10);
-          const tradeTimestamp = new Date(tradeDateStr + 'T00:00:00Z').getTime();
-          
-          if (tradeTimestamp <= lastPricingTimestamp) {
-            return {
-              valid: false,
-              error: `Trade ${trade.trade_id} (${tradeDateStr}) cannot be deleted because it is on or before the last pricing date (${lastPricingDateStr}).`
-            };
-          }
-        }
-      }
-
-      // 4️⃣ Realized trade check - 'Created' trade can't be deleted if 'Realized' entries exist
-      for (const trade of sel) {
-        // Use normalized relation_type field (should be populated by refreshTrades)
-        const relationType = String(trade.relation_type || trade.relationType || '').trim();
-        
-        // Log first trade for debugging
-        if (sel.indexOf(trade) === 0) {
-          console.log(`[Validation] First trade (normalized):`, {
-            trade_id: trade.trade_id,
-            relation_type: trade.relation_type,
-            lot_id: trade.lot_id,
-            hasRelationType: !!trade.relation_type,
-            hasLotId: !!trade.lot_id
-          });
-        }
-        
-        // Validate if relation_type is 'Created'
-        if (relationType && relationType.toLowerCase() === 'created') {
-          // Use normalized lot_id field
-          const lotId = trade.lot_id || trade.lotId;
-          
-          if (lotId) {
-            // Find all realized trades for this lot
-            const realizedTrades = allRows.filter((t) => {
-              const tLotId = t.lot_id || t.lotId;
-              const tRelationType = String(t.relation_type || t.relationType || '').trim().toLowerCase();
-              
-              return tLotId === lotId && 
-                     tRelationType === 'realized' && 
-                     normalizeId(t.trade_id) !== normalizeId(trade.trade_id);
-            });
-            
-            if (realizedTrades.length > 0) {
-              console.log(`[Validation] ⚠️ Found Realized trades for Created trade:`, {
-                createdTrade: trade.trade_id,
-                lotId: lotId,
-                realizedCount: realizedTrades.length,
-                realizedIds: realizedTrades.map(t => t.trade_id)
-              });
-              
-              return {
-                valid: false,
-                error: `Trade ${trade.trade_id} (Created) cannot be deleted because ${realizedTrades.length} 'Realized' entry/entries exist for the same lot. Please delete 'Realized' entries first.`
-              };
-            }
-          }
-        } else if (!relationType && sel.indexOf(trade) === 0) {
-          // Warn if relation_type is still empty after normalization
-          console.warn(`[Validation] ⚠️ relation_type is empty after normalization. Backend will validate this.`, {
-            trade_id: trade.trade_id,
-            tradeObject: trade
-          });
-        }
-      }
-
-      // 5️⃣ Additional check: Verify each selected trade is actually in the correct position
-      // This ensures we're not selecting trades that are not the latest
-      for (let i = 0; i < sel.length; i++) {
-        const selectedTrade = sel[i];
-        const expectedTrade = all[i];
-        
-        // Double-check that selected trade matches expected position
-        if (normalizeId(selectedTrade.trade_id) !== normalizeId(expectedTrade.trade_id)) {
-          return {
-            valid: false,
-            error: `Trade ${selectedTrade.trade_id} is not in the correct position. Please select trades starting from the latest.`
-          };
-        }
-      }
-    }
-
-    return { valid: true, error: null };
-  }, []);
-
-  // Validate continuous latest trades selection per symbol (kept for backward compatibility)
-  const validateContinuousSelection = useCallback((allRows, selectedRows, isSelectAllMode = false) => {
-    const result = validateTradesForDeletion(allRows, selectedRows, lastPricingDate, isSelectAllMode);
-    return result.valid ? null : result.error;
-  }, [validateTradesForDeletion, lastPricingDate]);
-
-  const confirmAndDeleteTrades = useCallback(
-    async (trades, isSelectAll = false) => {
-      const deletable = trades.filter((t) => t?.trade_id)
-      if (!deletable.length) {
-        alert('No trades selected for deletion.')
+  // 🔹 Single Delete (FINAL)
+  const handleSingleDelete = useCallback(
+    async (trade) => {
+      if (!trade?.trade_id) {
+        alert('Invalid trade')
         return
       }
 
-      // Sort EXACTLY like backend before sending
-      const sortFn = (a, b) => {
-        const dA = new Date(a.trade_date).getTime() || 0
-        const dB = new Date(b.trade_date).getTime() || 0
-        if (dA !== dB) return dB - dA
+      if (!confirm(`Delete trade ${trade.trade_id}?`)) return
 
-        const cA = new Date(a.created_at).getTime() || 0
-        const cB = new Date(b.created_at).getTime() || 0
-        if (cA !== cB) return cB - cA
-
-        return String(b.trade_id).localeCompare(String(a.trade_id))
-      }
-
-      // FIX: sort selection before sending to backend
-      const sortedSelection = [...deletable].sort(sortFn)
-      const tradeIds = sortedSelection.map((t) => t.trade_id)
-
-      console.log('[Delete] Sorted selection before sending to backend:', {
-        count: sortedSelection.length,
-        firstTrade: sortedSelection[0],
-        lastTrade: sortedSelection[sortedSelection.length - 1],
-        tradeIds: tradeIds,
-        symbols: [...new Set(sortedSelection.map(t => t.symbol_id))]
-      })
-
-      if (!confirm(`Delete ${deletable.length} trade(s)? This cannot be undone.`)) return
-
-      setBulkActionLoading(true)
       try {
-        if (tradeIds.length === 1) {
-          // single delete
-          await deleteTrade(tradeIds[0])
-          await refreshTrades()
-          gridApiRef.current?.deselectAll()
-          setSelectedRows([])
-          alert('Trade deleted successfully.')
-        } else {
-          // bulk delete - pass skip_validation flag if select all mode
-          const result = await bulkDeleteTrades(tradeIds, isSelectAll)
-
-          console.log('[Trades] Bulk delete result:', {
-            success: result.success,
-            partial: result.partial,
-            successful: result.successful?.length || 0,
-            failed: result.failed?.length || 0,
-            message: result.message
-          })
-
-          const successCount = result.successful?.length || 0
-          const failedCount = result.failed?.length || 0
-          const isSuccess = result.success === true
-
-          console.log('[Trades] Processing result:', {
-            successCount,
-            failedCount,
-            isSuccess,
-            resultSuccess: result.success,
-            willShowAllFailed: (result.success === false && failedCount > 0 && successCount === 0)
-          })
-
-          // Check if all trades failed (success is false and we have failed trades)
-          if (result.success === false && failedCount > 0 && successCount === 0) {
-            // All trades failed - show detailed errors
-            const failedDetails = result.failed
-              ?.slice(0, 10) // Show first 10 errors to avoid huge alert
-              .map((f) => `Trade ${f.trade_id}: ${f.message}`)
-              .join('\n')
-            
-            const moreErrors = failedCount > 10 ? `\n\n... and ${failedCount - 10} more errors` : ''
-
-            alert(
-              `❌ All Trades Failed to Delete\n\n` +
-                `Failed: ${failedCount} of ${tradeIds.length}\n\n` +
-                `Error Details:\n${failedDetails}${moreErrors}\n\n` +
-                `Common Issues:\n` +
-                `1. Not selecting latest trades for each symbol\n` +
-                `2. Trades on or before last pricing date\n` +
-                `3. 'Created' trades with 'Realized' entries\n\n` +
-                `Please fix selection and try again.`
-            )
-          } else if (result.partial || (failedCount > 0 && successCount > 0)) {
-            // Partial success - some deleted, some failed
-            const failedDetails = result.failed
-              ?.slice(0, 10)
-              .map((f) => `Trade ${f.trade_id}: ${f.message}`)
-              .join('\n')
-            
-            const moreErrors = failedCount > 10 ? `\n\n... and ${failedCount - 10} more errors` : ''
-
-            alert(
-              `Partial Success:\n\n` +
-                `✅ Deleted: ${successCount}\n` +
-                `❌ Failed: ${failedCount}\n\n` +
-                (failedCount > 0 ? `Failed Details:\n${failedDetails}${moreErrors}` : '')
-            )
-          } else {
-            // All succeeded
-            alert(`✅ Deleted ${successCount || tradeIds.length} trade(s) successfully`)
-          }
-
-          await refreshTrades()
-          gridApiRef.current?.deselectAll()
-          setSelectedRows([])
-        }
-      } catch (error) {
-        console.error('[Trades] Delete failed', error)
-        console.error('[Trades] Full error response:', error?.response?.data)
-        console.error('[Trades] Error responseData:', error?.responseData)
-        console.error('[Trades] Error message:', error?.message)
-
-        // Check if error has responseData (from bulkDeleteTrades or deleteTrade)
-        const responseData = error?.responseData || error?.response?.data
-        const results = responseData?.results || {}
-        const failed = results?.failed || []
-        const successful = results?.successful || []
-
-        // For single delete, check if we have a direct error message
-        if (tradeIds.length === 1) {
-          // Single delete error
-          const errorMessage = 
-            error?.message || 
-            responseData?.message || 
-            responseData?.error || 
-            'Failed to delete trade.'
-          
-          alert(
-            `❌ Cannot Delete Trade\n\n` +
-            `${errorMessage}\n\n` +
-            `Common Reasons:\n` +
-            `• Trade is not the latest for this symbol\n` +
-            `• Trade is on or before the last pricing date\n` +
-            `• 'Created' trade has 'Realized' entries\n\n` +
-            `Please check and try again.`
-          )
-        } else if (failed.length > 0) {
-          // Bulk delete with failed results
-          const failedDetails = failed
-            .slice(0, 10) // Show first 10 to avoid huge alert
-            .map((f) => `Trade ${f.trade_id}: ${f.message}`)
-            .join('\n')
-          
-          const moreErrors = failed.length > 10 ? `\n\n... and ${failed.length - 10} more errors` : ''
-          const successMsg = successful.length > 0 ? `\n\n✅ Deleted: ${successful.length}` : ''
-
-          alert(
-            `❌ Delete Failed\n\n` +
-            `Failed: ${failed.length} of ${tradeIds.length}${successMsg}\n\n` +
-            `Error Details:\n${failedDetails}${moreErrors}\n\n` +
-            `Common Issues:\n` +
-            `• Not selecting latest trades for each symbol\n` +
-            `• Trades on or before last pricing date\n` +
-            `• 'Created' trades with 'Realized' entries`
-          )
-        } else {
-          // Generic error message
-          const backendError = error?.response?.data || error?.responseData
-          let msg = backendError?.message || backendError?.error || error?.message || 'Failed to delete selected trades.'
-          
-          // Check if backend sent validation issues
-          if (backendError?.issues && Array.isArray(backendError.issues)) {
-            const issueDetails = backendError.issues.map(issue => 
-              `Symbol: ${issue.symbol_id || 'Unknown'}\n` +
-              `Problem: ${issue.message || 'Validation failed'}\n` +
-              `Trades: ${issue.selected} selected out of ${issue.total_trades} total`
-            ).join('\n\n')
-            
-            alert(
-              `⚠️ Backend Validation Failed\n\n` +
-              `${backendError.message || 'Cannot delete trades'}\n\n` +
-              `Details:\n${issueDetails}`
-            )
-          } else {
-            alert(msg)
-          }
-        }
-      } finally {
-        setBulkActionLoading(false)
+        await deleteTrade(trade.trade_id)
+        await refreshTrades()
+        gridApiRef.current?.deselectAll()
+        alert('Trade deleted successfully')
+      } catch (err) {
+        const msg =
+          err?.response?.data?.message ||
+          err?.message ||
+          'Failed to delete trade'
+        alert(msg)
       }
     },
     [refreshTrades]
   )
 
-  const handleSingleDelete = useCallback(
-    (trade) => {
-      if (!trade || !trade.trade_id) {
-        alert('Invalid trade selected.')
-        return
-      }
-
-      // Validate single trade before deletion (never select all mode for single delete)
-      const validation = validateTradesForDeletion(rowData, [trade], lastPricingDate, false);
-
-      if (!validation.valid) {
-        alert(`⚠️ Cannot Delete Trade\n\n${validation.error}\n\nPlease check and try again.`)
-        return
-      }
-
-      confirmAndDeleteTrades([trade], false) // Single delete is never select all mode
-    },
-    [rowData, lastPricingDate, validateTradesForDeletion, confirmAndDeleteTrades],
-  )
-
-  // Check if selected trades are valid for deletion (for UI feedback)
-  const validationResult = useMemo(() => {
-    if (!selectedRows.length) return { valid: false, error: null };
-    // ✅ Check if select all mode
-    const isSelectAll = selectedRows.length === rowData.length && rowData.length > 0;
-    return validateTradesForDeletion(rowData, selectedRows, lastPricingDate, isSelectAll);
-  }, [selectedRows, rowData, lastPricingDate, validateTradesForDeletion]);
-
-  const areSelectedTradesValid = validationResult.valid;
-
-  const handleBulkDelete = useCallback(() => {
+  // 🔹 Bulk Delete (FINAL)
+  const handleBulkDelete = useCallback(async () => {
     if (!selectedRows.length) {
-      alert('No trades selected.')
+      alert('No trades selected')
       return
     }
 
-    // ✅ Check if select all mode
-    const isSelectAll = selectedRows.length === rowData.length && rowData.length > 0;
+    const tradeIds = selectedRows.map(t => t.trade_id)
+    const isSelectAll = selectedRows.length === rowData.length
 
-    // ✅ Only validate if not select all mode
-    if (!isSelectAll) {
-      // Normal mode: full validation
-      const validation = validateTradesForDeletion(rowData, selectedRows, lastPricingDate, false);
-      if (!validation.valid) {
-        alert(`⚠️ Cannot Delete Trades\n\n${validation.error}\n\nPlease fix the selection and try again.`)
-        return
+    if (!confirm(`Delete ${tradeIds.length} trade(s)?`)) return
+
+    setBulkActionLoading(true)
+    try {
+      const result = await bulkDeleteTrades(tradeIds, isSelectAll)
+
+      const successCount = result.results?.successful?.length || 0
+      const failed = result.results?.failed || []
+
+      if (failed.length) {
+        alert(
+          `Deleted ${successCount} trades.\n\nFailed:\n` +
+          failed.slice(0, 10).map(f => `${f.trade_id}: ${f.message}`).join('\n')
+        )
+      } else {
+        alert(`Deleted ${successCount} trades successfully`)
       }
-    } else {
-      // Select all mode: only check pricing date
-      const validation = validateTradesForDeletion(rowData, selectedRows, lastPricingDate, true);
-      if (!validation.valid) {
-        alert(`⚠️ Cannot Delete Trades\n\n${validation.error}\n\nSome trades are on or before the last pricing date.`)
-        return
-      }
+
+      await refreshTrades()
+      gridApiRef.current?.deselectAll()
+      setSelectedRows([])
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Bulk delete failed')
+    } finally {
+      setBulkActionLoading(false)
     }
-
-    confirmAndDeleteTrades(selectedRows, isSelectAll) // ✅ Pass isSelectAll flag
-  }, [selectedRows, rowData, lastPricingDate, validateTradesForDeletion, confirmAndDeleteTrades])
+  }, [selectedRows, rowData, refreshTrades])
 
   const handleViewTrade = useCallback((trade) => {
     setViewTrade(trade || null)
@@ -1001,8 +578,7 @@ export default function TradesData() {
                     variant="outline-danger" 
                     size="sm" 
                     onClick={handleBulkDelete} 
-                    disabled={!selectedRows.length || bulkActionLoading || !areSelectedTradesValid}
-                    title={!areSelectedTradesValid && selectedRows.length > 0 ? 'Selected trades cannot be deleted. Check validation errors.' : ''}
+                    disabled={!selectedRows.length || bulkActionLoading}
                   >
                     {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
                   </Button>
@@ -1016,12 +592,6 @@ export default function TradesData() {
                     Selected: {selectedCount} / {rowData.length}
                   </span>
                 </div>
-                {!areSelectedTradesValid && selectedRows.length > 0 && validationResult.error && (
-                  <Alert variant="danger" className="mb-3">
-                    <strong>⚠️ Cannot Delete Selected Trades:</strong><br />
-                    {validationResult.error}
-                  </Alert>
-                )}
                 <div className="ag-theme-alpine" style={{ width: '100%', height: 600 }}>
                   <AgGridReact
                     onGridReady={onGridReady}
