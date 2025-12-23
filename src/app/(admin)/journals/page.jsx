@@ -92,7 +92,27 @@ const JournalsPage = () => {
         }
 
         const { data } = await api.get(url) // api baseURL should be :5000 or proxied
-        if (!ignore) setRowData(Array.isArray(data?.data) ? data.data : [])
+        const rawRows = Array.isArray(data?.data) ? data.data : []
+        
+        // Sort journals: latest first (by journal_date, then created_at, then id)
+        const sortedRows = [...rawRows].sort((a, b) => {
+          // 1. Sort by journal_date (descending - latest first)
+          const dA = new Date(a.journal_date).getTime() || 0
+          const dB = new Date(b.journal_date).getTime() || 0
+          if (dA !== dB) return dB - dA
+
+          // 2. If same date, sort by created_at (descending - latest first)
+          const cA = new Date(a.created_at).getTime() || 0
+          const cB = new Date(b.created_at).getTime() || 0
+          if (cA !== cB) return cB - cA
+
+          // 3. If same, sort by id/journal_id (descending - highest first)
+          const idA = a.id || a.journal_id || 0
+          const idB = b.id || b.journal_id || 0
+          return String(idB).localeCompare(String(idA))
+        })
+        
+        if (!ignore) setRowData(sortedRows)
       } catch (err) {
         console.error('GET journals failed:', err?.message, err?.response?.status, err?.response?.data)
         if (!ignore) setErrMsg(err?.response?.data?.message || err?.message || 'Failed to load journals')
