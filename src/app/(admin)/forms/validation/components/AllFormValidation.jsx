@@ -334,6 +334,7 @@ export const AddTrade = ({ onClose, onCreated }) => {
   const [orgId, setOrgId] = useState('')
   const [amountLocked, setAmountLocked] = useState(true)
   const [reportingStartDate, setReportingStartDate] = useState('')
+  const [reportingPeriods, setReportingPeriods] = useState([])
 
   const [calc, setCalc] = useState({
     commissionMethod: '',
@@ -382,15 +383,16 @@ export const AddTrade = ({ onClose, onCreated }) => {
     }
   }, [])
 
-  // 2) Fetch dropdowns when fundId present
+  // 2) Fetch dropdowns and reporting periods when fundId present
   useEffect(() => {
     if (!fundId) return
     ;(async () => {
       try {
-        const [b, s, e] = await Promise.allSettled([
+        const [b, s, e, periods] = await Promise.allSettled([
           api.get(`/api/v1/broker/fund/${fundId}`),
           api.get(`/api/v1/symbols/fund/${fundId}`),
           getExchangesByFundId(fundId),
+          api.get(`/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`),
         ])
         setBrokers(b.status === 'fulfilled' ? unwrap(b.value) : [])
         setSymbols(s.status === 'fulfilled' ? unwrap(s.value) : [])
@@ -407,9 +409,18 @@ export const AddTrade = ({ onClose, onCreated }) => {
         } else {
           setExchangeLookup({})
         }
+
+        // Store reporting periods for validation
+        if (periods.status === 'fulfilled') {
+          const periodsData = periods.value?.data?.rows || periods.value?.data?.data || []
+          setReportingPeriods(periodsData)
+        } else {
+          setReportingPeriods([])
+        }
       } catch (err) {
         console.error('Dropdown fetch error', err)
         setExchangeLookup({})
+        setReportingPeriods([])
       }
     })()
   }, [fundId])
@@ -519,6 +530,44 @@ export const AddTrade = ({ onClose, onCreated }) => {
       setFormData((p) => ({ ...p, amount: '' }))
     }
   }, [calc.finalAmount, amountLocked])
+
+  // Helper function to check if trade date is in a priced/bookclosed period
+  const validateTradeDateAgainstPricing = (tradeDate) => {
+    if (!tradeDate || !reportingPeriods.length) return null
+
+    const tradeDateStr = String(tradeDate).slice(0, 10) // YYYY-MM-DD
+    const tradeTimestamp = new Date(tradeDateStr + 'T00:00:00Z').getTime()
+
+    for (const period of reportingPeriods) {
+      const startDate = period.start_date ? String(period.start_date).slice(0, 10) : null
+      const endDate = period.end_date ? String(period.end_date).slice(0, 10) : null
+      const status = String(period.status || '').toLowerCase()
+      const bookcloseStatus = String(period.bookclose_status || period.book_close_status || '').toLowerCase()
+
+      // Check if trade date falls within this period
+      if (startDate && endDate) {
+        const startTimestamp = new Date(startDate + 'T00:00:00Z').getTime()
+        const endTimestamp = new Date(endDate + 'T00:00:00Z').getTime()
+
+        if (tradeTimestamp >= startTimestamp && tradeTimestamp <= endTimestamp) {
+          // Trade date is in this period
+          // Check if period is book closed
+          if (bookcloseStatus === 'bookclosed' || status === 'bookclosed') {
+            const periodName = period.period_name || `${startDate} to ${endDate}`
+            return `Cannot add trade. The period ${periodName} is book closed.`
+          }
+          // Check if pricing is completed
+          if (status === 'completed') {
+            const periodName = period.period_name || `${startDate} to ${endDate}`
+            return `Cannot add trade. Pricing has already been completed for period ${periodName}.`
+          }
+        }
+      }
+    }
+
+    return null // No validation error
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -539,6 +588,14 @@ export const AddTrade = ({ onClose, onCreated }) => {
 
     if (tradeBeforeRsd) {
       alert(`Trade date cannot be earlier than Reporting Start Date (${reportingStartDate}).`)
+      setValidated(true)
+      return
+    }
+
+    // Validate against pricing/bookclosed periods
+    const pricingError = validateTradeDateAgainstPricing(formData.trade_date)
+    if (pricingError) {
+      alert(pricingError)
       setValidated(true)
       return
     }
