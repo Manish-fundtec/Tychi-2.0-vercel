@@ -335,6 +335,7 @@ export const AddTrade = ({ onClose, onCreated }) => {
   const [amountLocked, setAmountLocked] = useState(true)
   const [reportingStartDate, setReportingStartDate] = useState('')
   const [reportingPeriods, setReportingPeriods] = useState([])
+  const [existingTrades, setExistingTrades] = useState([])
 
   const [calc, setCalc] = useState({
     commissionMethod: '',
@@ -383,16 +384,17 @@ export const AddTrade = ({ onClose, onCreated }) => {
     }
   }, [])
 
-  // 2) Fetch dropdowns and reporting periods when fundId present
+  // 2) Fetch dropdowns, reporting periods, and existing trades when fundId present
   useEffect(() => {
     if (!fundId) return
     ;(async () => {
       try {
-        const [b, s, e, periods] = await Promise.allSettled([
+        const [b, s, e, periods, trades] = await Promise.allSettled([
           api.get(`/api/v1/broker/fund/${fundId}`),
           api.get(`/api/v1/symbols/fund/${fundId}`),
           getExchangesByFundId(fundId),
           api.get(`/api/v1/pricing/${encodeURIComponent(fundId)}/reporting-periods?limit=200`),
+          api.get(`/api/v1/trade/fund/${encodeURIComponent(fundId)}`),
         ])
         setBrokers(b.status === 'fulfilled' ? unwrap(b.value) : [])
         setSymbols(s.status === 'fulfilled' ? unwrap(s.value) : [])
@@ -417,10 +419,19 @@ export const AddTrade = ({ onClose, onCreated }) => {
         } else {
           setReportingPeriods([])
         }
+
+        // Store existing trades for chronological validation
+        if (trades.status === 'fulfilled') {
+          const tradesData = trades.value?.data?.data || trades.value?.data || []
+          setExistingTrades(Array.isArray(tradesData) ? tradesData : [])
+        } else {
+          setExistingTrades([])
+        }
       } catch (err) {
         console.error('Dropdown fetch error', err)
         setExchangeLookup({})
         setReportingPeriods([])
+        setExistingTrades([])
       }
     })()
   }, [fundId])
@@ -568,6 +579,29 @@ export const AddTrade = ({ onClose, onCreated }) => {
     return null // No validation error
   }
 
+  // Helper function to check if trade date is before any existing trade (chronological validation)
+  const validateTradeDateChronological = (tradeDate) => {
+    if (!tradeDate || !existingTrades.length) return null
+
+    const tradeDateStr = String(tradeDate).slice(0, 10) // YYYY-MM-DD
+    const tradeTimestamp = new Date(tradeDateStr + 'T00:00:00Z').getTime()
+
+    // Find the earliest existing trade date that is after the new trade date
+    for (const trade of existingTrades) {
+      if (!trade.trade_date) continue
+      
+      const existingDateStr = String(trade.trade_date).slice(0, 10)
+      const existingTimestamp = new Date(existingDateStr + 'T00:00:00Z').getTime()
+
+      // If existing trade is after the new trade date, it's a violation
+      if (existingTimestamp > tradeTimestamp) {
+        return `Cannot add trade for ${tradeDateStr}. A trade already exists for ${existingDateStr}. Trades must be added in chronological order.`
+      }
+    }
+
+    return null // No validation error
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -596,6 +630,14 @@ export const AddTrade = ({ onClose, onCreated }) => {
     const pricingError = validateTradeDateAgainstPricing(formData.trade_date)
     if (pricingError) {
       alert(pricingError)
+      setValidated(true)
+      return
+    }
+
+    // Validate chronological order (cannot add trade before existing trades)
+    const chronologicalError = validateTradeDateChronological(formData.trade_date)
+    if (chronologicalError) {
+      alert(chronologicalError)
       setValidated(true)
       return
     }
