@@ -77,6 +77,9 @@ export default function ReviewsPage() {
   // latest completed period (YYYY-MM-DD) for showing revert icon
   const latestCompletedDateRef = useRef(null);
 
+  // Get dashboard token for onboarding mode and reporting start date
+  const dashboard = useDashboardToken();
+
   // symbols modal
   const [showModal, setShowModal] = useState(false);
   const [selectedLabel, setSelectedLabel] = useState('');
@@ -85,7 +88,7 @@ export default function ReviewsPage() {
   const [symbolErr, setSymbolErr] = useState('');
 
   // Get date format from dashboard token
-  const dashboard = useDashboardToken();
+  // const dashboard = useDashboardToken();
   const dateFormat = dashboard?.date_format || 'MM/DD/YYYY';
 
   // set up columns with date formatting
@@ -294,7 +297,7 @@ export default function ReviewsPage() {
   async function handleRevert(row) {
     if (!row || !fundId) return;
 
-    // safety: only allow revert for the latest completed period
+    // Validation 1: Only allow revert for the latest completed period
     const isAllowed =
       (row.status || '').toLowerCase() === 'completed' &&
       latestCompletedDateRef.current &&
@@ -303,6 +306,95 @@ export default function ReviewsPage() {
     if (!isAllowed) {
       alert('Only the latest completed period can be reverted.');
       return;
+    }
+
+    // Validation 2: Check if bookclosed (from backend response or row data)
+    // This will be handled by backend, but we can add frontend check if bookclosed status is available
+    const isBookclosed = (row.status || '').toLowerCase() === 'bookclosed' ||
+                         (row.raw?.bookclose_status || '').toLowerCase() === 'bookclosed'
+    if (isBookclosed) {
+      alert('Cannot revert pricing that has been bookclosed.');
+      return;
+    }
+
+    // Validation 3: For existing fund, check if first month pricing revert requires migration check
+    const onboardingMode = 
+      dashboard?.fund?.onboarding_mode || 
+      dashboard?.onboarding_mode || 
+      dashboard?.fund?.onboardingMode ||
+      dashboard?.onboardingMode ||
+      ''
+    
+    const normalizedMode = String(onboardingMode || '').trim().toLowerCase()
+    const isExistingFund = normalizedMode === 'existing fund' || 
+                          normalizedMode === 'existing' || 
+                          normalizedMode === 'existingfund' ||
+                          normalizedMode.includes('existing')
+    
+    if (isExistingFund) {
+      // Get reporting_start_date to identify first month
+      const reportingStartDate = 
+        dashboard?.fund?.reporting_start_date || 
+        dashboard?.reporting_start_date ||
+        dashboard?.fund?.reportingStartDate ||
+        dashboard?.reportingStartDate ||
+        null
+      
+      if (reportingStartDate) {
+        // Normalize dates to YYYY-MM-DD format for comparison
+        const normalizedReportingStart = normalizeDate(reportingStartDate)
+        const normalizedPricingDate = normalizeDate(row.date)
+        
+        if (normalizedReportingStart && normalizedPricingDate) {
+          // Check if this is the first date pricing (date-level comparison)
+          if (normalizedReportingStart === normalizedPricingDate) {
+            try {
+              const token = Cookies.get('dashboardToken')
+              const migrationUrl = `${apiBase}/api/v1/migration/trialbalance/${encodeURIComponent(fundId)}/migration`
+              const migrationResp = await fetch(migrationUrl, {
+                headers: {
+                  'Accept': 'application/json',
+                  'dashboard': token ? `Bearer ${token}` : '',
+                },
+                credentials: 'include'
+              })
+              
+              if (migrationResp.ok) {
+                const migrationData = await migrationResp.json()
+                const migrations = Array.isArray(migrationData?.data) ? migrationData.data : 
+                                 Array.isArray(migrationData) ? migrationData : []
+                
+                // Check if migration exists and is reconciled for this specific date
+                // Only block revert if migration exists AND is reconciled
+                // If migration doesn't exist, allow revert
+                const migrationForDate = migrations.find((m) => {
+                  if (!m.reporting_period) return false
+                  const migrationDateNormalized = normalizeDate(m.reporting_period)
+                  return migrationDateNormalized === normalizedPricingDate
+                })
+                
+                if (migrationForDate) {
+                  const reconcileStatus = String(migrationForDate.reconcile_status || '').toLowerCase()
+                  if (reconcileStatus === 'reconciled') {
+                    const formattedDate = formatYmd(normalizedPricingDate, dateFormat)
+                    alert(
+                      `⚠️ Cannot Revert First Date Pricing\n\n` +
+                      `Pricing for ${formattedDate} cannot be reverted because migration is already reconciled for this date.\n\n` +
+                      `Revert is only allowed before migration reconciliation.`
+                    )
+                    return
+                  }
+                  // If migration exists but not reconciled, allow revert
+                }
+                // If migration doesn't exist, allow revert (no blocking)
+              }
+            } catch (migrationCheckError) {
+              console.error('[Pricing Revert] ⚠️ Error checking migration:', migrationCheckError)
+              // Continue with revert if migration check fails (don't block user)
+            }
+          }
+        }
+      }
     }
 
     const formattedDate = formatYmd(row.date, dateFormat);

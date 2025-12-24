@@ -68,6 +68,22 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   const [showReconcileModal, setShowReconcileModal] = useState(showReviewOnly) // If showReviewOnly, start with reconcile modal open
   const tokenData = useDashboardToken()
   
+  // Get reporting frequency and calculate default scope
+  const reportingFrequency = String(
+    tokenData?.fund?.reporting_frequency || 
+    tokenData?.reporting_frequency || 
+    'monthly'
+  ).toLowerCase()
+  
+  // Helper function to get scope based on reporting frequency
+  const getDefaultScope = useMemo(() => {
+    if (reportingFrequency === 'daily') return 'PTD'
+    if (reportingFrequency === 'monthly') return 'MTD'
+    if (reportingFrequency === 'quarterly' || reportingFrequency === 'quarter') return 'QTD'
+    if (reportingFrequency === 'annual' || reportingFrequency === 'annually') return 'YTD'
+    return 'MTD' // default
+  }, [reportingFrequency])
+  
   // Helper function to get last day of month from a date
   const getLastDayOfMonth = (dateString) => {
     if (!dateString) return null
@@ -172,7 +188,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
     fetchLastPricingDate()
   }, [show, fundId])
 
-  // Fetch Trial Balance MTD for last pricing date or reporting start date month end
+  // Fetch Trial Balance (frequency-based scope: daily→PTD, monthly→MTD, quarterly→QTD, annual→YTD) for last pricing date or reporting start date
   useEffect(() => {
     if (!show || !fundId || !dateToUse) return
 
@@ -182,7 +198,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
         setError('')
         const params = new URLSearchParams()
         params.set('date', dateToUse)
-        params.set('scope', 'MTD')
+        params.set('scope', getDefaultScope) // Frequency-based scope: daily→PTD, monthly→MTD, quarterly→QTD, annual→YTD
         const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl-trial?${params.toString()}`
         const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' })
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
@@ -432,7 +448,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
                   <th rowSpan={2}>GL Code</th>
                   <th rowSpan={2}>GL Name</th>
                   <th colSpan={2} className="text-center">
-                    Trial Balance MTD (Last Pricing)
+                    Trial Balance {getDefaultScope} (Last Pricing)
                   </th>
                   <th colSpan={2} className="text-center">
                     Uploaded Migration Data
@@ -551,6 +567,7 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPublishReviewModal, setShowPublishReviewModal] = useState(showReviewOnly) // If showReviewOnly, directly open review modal
+  const tokenData = useDashboardToken() // Get tokenData for reporting frequency
   const [refreshedTrialBalanceData, setRefreshedTrialBalanceData] = useState([])
   
   // When showReviewOnly is true and modal is shown, immediately open PublishReviewModal
@@ -569,7 +586,17 @@ function ReconcileModal({ show, onClose, onCloseAll, onPublish, trialBalanceData
       setError('')
       const params = new URLSearchParams()
       params.set('date', date)
-      params.set('scope', 'MTD')
+      // Get reporting frequency from tokenData and calculate scope
+      const reportingFreq = String(
+        tokenData?.fund?.reporting_frequency || 
+        tokenData?.reporting_frequency || 
+        'monthly'
+      ).toLowerCase()
+      const scope = reportingFreq === 'daily' ? 'PTD' :
+                   reportingFreq === 'monthly' ? 'MTD' :
+                   (reportingFreq === 'quarterly' || reportingFreq === 'quarter') ? 'QTD' :
+                   (reportingFreq === 'annual' || reportingFreq === 'annually') ? 'YTD' : 'MTD'
+      params.set('scope', scope) // Frequency-based scope: daily→PTD, monthly→MTD, quarterly→QTD, annual→YTD
       const url = `${apiBase}/api/v1/reports/${encodeURIComponent(fundId)}/gl-trial?${params.toString()}`
       const resp = await fetch(url, { headers: getAuthHeaders(), credentials: 'include' })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
