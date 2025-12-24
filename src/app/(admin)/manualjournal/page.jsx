@@ -1,7 +1,8 @@
 'use client' // ✅ Ensures this is a Client Component
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { Card, CardBody, CardHeader, CardTitle, Col, Row, Button, Modal, Tabs, Tab, Alert } from 'react-bootstrap'
+import './manualjournal.css'
+import { Card, CardBody, CardHeader, CardTitle, Col, Row, Button, Modal, ModalHeader, ModalBody, Tabs, Tab, Alert } from 'react-bootstrap'
 import { UploadManualJournalModal } from '../base-ui/modals/components/AllModals'
 import { AgGridReact } from 'ag-grid-react'
 import Cookies from 'js-cookie'
@@ -437,10 +438,10 @@ const ManualJournalPage = () => {
       </Col>
 
       <Modal show={showFormModal} onHide={closeFormModal} size="lg" centered>
-        <Modal.Header closeButton>
-          <Modal.Title>{editingRow ? 'Edit Manual Journal' : 'Add Manual Journal'}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
+        <ModalHeader closeButton>
+          <h5 className="modal-title">{editingRow ? 'Edit Manual Journal' : 'Add Manual Journal'}</h5>
+        </ModalHeader>
+        <ModalBody>
           <AddManualJournal
             key={editingRow?.journal_id || editingRow?._id || editingRow?.id || 'new'}
             onClose={closeFormModal}
@@ -448,7 +449,7 @@ const ManualJournalPage = () => {
             initialData={editingRow}
             mode={editingRow ? 'edit' : 'create'}
           />
-        </Modal.Body>
+        </ModalBody>
       </Modal>
     </Row>
   )
