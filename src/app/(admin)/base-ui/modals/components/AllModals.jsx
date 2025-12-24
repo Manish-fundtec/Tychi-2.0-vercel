@@ -1,5 +1,6 @@
 'use client'
 
+import './AllModals.css'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import IconifyIcon from '@/components/wrappers/IconifyIcon'
 import useModal from '@/hooks/useModal'
@@ -8,7 +9,7 @@ import { AgGridReact } from 'ag-grid-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols, UploadMigration } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { AddManualJournal } from '@/app/(admin)/forms/validation/components/AllFormValidation'
-import { Button, Modal, Dropdown, } from 'react-bootstrap'
+import { Button, Modal, ModalHeader, ModalBody, Dropdown, } from 'react-bootstrap'
 import Cookies from 'js-cookie'
 import jwt from 'jsonwebtoken'
 import { formatYmd } from '@/lib/dateFormat'
@@ -454,28 +455,26 @@ export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload 
 
       {/* The Modal itself */}
       <Modal size="md" show={isTrue} onHide={handleModalClose} className="fade" centered>
-        <Modal.Header closeButton>
-          {' '}
-          {/* Use closeButton prop here to trigger modal close */}
+        <ModalHeader closeButton>
           <h5 className="modal-title" id="exampleModalCenterTitle">
             {modalTitle}
           </h5>
-        </Modal.Header>
-        <Modal.Body>
+        </ModalHeader>
+        <ModalBody>
           {/* Passing the onClose and onSuccess handlers to your form (UploadTradeForm) */}
           <UploadTrade onClose={handleModalClose} onSuccess={handleSuccess} />
-        </Modal.Body>
+        </ModalBody>
         {/* Modal Footer for Close and Save actions */}
       </Modal>
 
       {/* Error Modal */}
       <Modal show={showErrorModal} centered backdrop="static" keyboard={false} onHide={handleErrorModalClose}>
-        <Modal.Header closeButton>
-          <Modal.Title>Validation Errors</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
+        <ModalHeader closeButton>
+          <h5 className="modal-title">Validation Errors</h5>
+        </ModalHeader>
+        <ModalBody>
           <p>Your file contains validation errors. Please download the error file for details, correct them, and re-upload.</p>
-        </Modal.Body>
+        </ModalBody>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleErrorModalClose}>
             Close
@@ -2132,17 +2131,17 @@ export const TradeModal = ({ onSuccess }) => {
       </Button>
 
       <Modal className="fade" show={isOpen} onHide={toggleModal} dialogClassName={className} size={size} centered>
-        <Modal.Header onHide={toggleModal} closeButton>
+        <ModalHeader closeButton>
           <h5 className="modal-title h4">Add Trades</h5>
-        </Modal.Header>
-        <Modal.Body>
+        </ModalHeader>
+        <ModalBody>
           <AddTrade
             onClose={toggleModal}
             onCreated={() => {
               if (typeof onSuccess === 'function') onSuccess()
             }}
           />
-        </Modal.Body>
+        </ModalBody>
       </Modal>
     </>
   )
