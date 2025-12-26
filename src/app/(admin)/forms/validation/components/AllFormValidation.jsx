@@ -625,21 +625,41 @@ export const AddTrade = ({ onClose, onCreated }) => {
     try {
       setIsSaving(true)
       const res = await addTrade(payload)
-      if (res?.success) {
+      
+      // ✅ FIX: Check for success response
+      if (res?.data?.success || res?.success) {
         onClose?.()
-        alert(res?.message || 'Trade added successfully')
-        onCreated?.(res?.trade || null)
+        alert(res?.data?.message || res?.message || 'Trade added successfully')
+        onCreated?.(res?.data?.trade || res?.trade || null)
         setValidated(false)
-      } else {
-        const errMsg = res?.message || 'Failed to add trade.'
-        alert(errMsg)
         return
       }
+      
+      // ✅ FIX: Check if response has error (even with 200 status)
+      if (res?.data?.error || res?.error) {
+        const errMsg = res?.data?.error || res?.error || 'Failed to add trade.'
+        alert(errMsg)
+        setValidated(true)
+        return
+      }
+      
+      // ✅ FIX: If no success or error, show generic message
+      alert('Unexpected response from server')
+      setValidated(true)
     } catch (err) {
       console.error('Create trade failed:', err)
-      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Server error'
+      
+      // ✅ FIX: Better error extraction - check multiple possible error formats
+      const errorData = err?.response?.data || {}
+      const errMsg = 
+        errorData.error ||           // Backend returns { error: "..." }
+        errorData.message ||          // Some APIs return { message: "..." }
+        err?.response?.data?.error || // Fallback
+        err?.message ||               // Network errors
+        'Server error. Please try again.'
+      
       alert(errMsg)
-      return
+      setValidated(true)
     } finally {
       setIsSaving(false)
     }
