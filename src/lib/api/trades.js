@@ -223,27 +223,61 @@ export const bulkDeleteTrades = async (tradeIds, skipValidation = false) => {
 
 // NEW: Add trade (POST /api/v1/trade)
 export async function addTrade(payload) {
-  // Ensure org_id exists (backend requires it)
-  // const { org_id: tokenOrgId } = getIdsFromToken()
-   // ✅ Make sure token exists
-   const token = Cookies.get('dashboardToken');
-   console.log('Bearer token:', token);
-   
+  // ✅ Make sure token exists
+  const token = Cookies.get('dashboardToken');
+  if (!token) {
+    throw new Error('Missing dashboardToken')
+  }
+  
+  // Decode org_id from token if not provided
+  const payload_decoded = decodeJwtPayload(token)
+  const tokenOrgId = payload_decoded?.org_id || payload_decoded?.orgId || ''
+  
   const body = {
     ...payload,
-    org_id: payload.org_id ?? tokenOrgId,
+    org_id: payload.org_id || tokenOrgId,
     file_row_no: 1, // always 1 as requested
   }
 
-  const res = await api.post('/api/v1/trade', body, {
-    headers: {
-      'dashboard': `Bearer ${token}`, // manually attach token
-      'Content-Type': 'application/json', // optional but good
-    },
-  })
-  
-  if (res?.data?.success === false) {
-    throw new Error(res?.data?.message || 'Trade creation failed')
+  try {
+    const res = await api.post('/api/v1/trade', body, {
+      headers: {
+        'dashboard': `Bearer ${token}`, // manually attach token
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    const responseData = res?.data || {}
+    
+    // ✅ FIX: Check for error field first (backend might return { error: "...", success: false })
+    if (responseData.error) {
+      throw new Error(responseData.error)
+    }
+    
+    // ✅ FIX: Check if success is explicitly false
+    if (responseData.success === false) {
+      throw new Error(responseData.message || responseData.error || 'Trade creation failed')
+    }
+    
+    // ✅ FIX: If success is true or undefined, return the data
+    return responseData
+  } catch (error) {
+    // Handle axios errors (400, 500, etc.)
+    if (error?.response) {
+      const responseData = error.response?.data || {}
+      const errorMessage = 
+        responseData.error ||           // Backend returns { error: "..." }
+        responseData.message ||         // Some APIs return { message: "..." }
+        error.message ||               // Network errors
+        'Failed to add trade'
+      
+      const customError = new Error(errorMessage)
+      customError.response = error.response
+      customError.responseData = responseData
+      throw customError
+    }
+    
+    // Re-throw if it's already an Error
+    throw error
   }
-  return res.data
 }

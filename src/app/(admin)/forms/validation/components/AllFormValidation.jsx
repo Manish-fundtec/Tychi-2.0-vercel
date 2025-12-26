@@ -626,36 +626,29 @@ export const AddTrade = ({ onClose, onCreated }) => {
       setIsSaving(true)
       const res = await addTrade(payload)
       
-      // ✅ FIX: Check for success response
-      if (res?.data?.success || res?.success) {
+      // ✅ FIX: addTrade returns res.data directly, so res is already the response data
+      // Check for success response
+      if (res?.success === true || (res?.success !== false && !res?.error)) {
         onClose?.()
-        alert(res?.data?.message || res?.message || 'Trade added successfully')
-        onCreated?.(res?.data?.trade || res?.trade || null)
+        alert(res?.message || 'Trade added successfully')
+        onCreated?.(res?.trade || null)
         setValidated(false)
         return
       }
       
-      // ✅ FIX: Check if response has error (even with 200 status)
-      if (res?.data?.error || res?.error) {
-        const errMsg = res?.data?.error || res?.error || 'Failed to add trade.'
-        alert(errMsg)
-        setValidated(true)
-        return
-      }
-      
-      // ✅ FIX: If no success or error, show generic message
-      alert('Unexpected response from server')
+      // ✅ FIX: If we reach here, there's an error (should have been thrown, but handle anyway)
+      const errMsg = res?.error || res?.message || 'Failed to add trade.'
+      alert(errMsg)
       setValidated(true)
     } catch (err) {
       console.error('Create trade failed:', err)
       
       // ✅ FIX: Better error extraction - check multiple possible error formats
-      const errorData = err?.response?.data || {}
+      const errorData = err?.responseData || err?.response?.data || {}
       const errMsg = 
-        errorData.error ||           // Backend returns { error: "..." }
-        errorData.message ||          // Some APIs return { message: "..." }
-        err?.response?.data?.error || // Fallback
-        err?.message ||               // Network errors
+        err?.message ||               // Error message from addTrade (prioritize this)
+        errorData.error ||             // Backend returns { error: "..." }
+        errorData.message ||           // Some APIs return { message: "..." }
         'Server error. Please try again.'
       
       alert(errMsg)
