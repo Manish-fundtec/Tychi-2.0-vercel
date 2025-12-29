@@ -102,7 +102,7 @@ export const TradeColDefs = [
     
   },
   {
-    field: 'computed_amount',
+    field: 'gross_amount',
     headerName: 'Gross Amount',
     flex: 1,
     

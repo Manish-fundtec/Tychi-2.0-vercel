@@ -265,6 +265,22 @@ export default function TradesData() {
         }
       }
 
+      // Format Gross Amount column - use currency symbol at front
+      if (col?.field === 'gross_amount') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const value = p?.value
+            if (value === null || value === undefined || value === '') return '—'
+            const num = Number(value)
+            if (Number.isNaN(num)) return value
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            return currencySymbol ? `${currencySymbol}${formatted}` : formatted
+          },
+        }
+      }
+      
+      // Backward compatibility: also handle computed_amount if backend still sends it
       if (col?.field === 'computed_amount') {
         return {
           ...col,
@@ -351,7 +367,7 @@ export default function TradesData() {
       { key: 'price', label: 'Price' },
       { key: 'quantity', label: 'Quantity' },
       { key: 'amount', label: 'Amount' },
-      { key: 'computed_amount', label: 'Gross Amount' },
+      { key: 'gross_amount', label: 'Gross Amount' },
       { key: 'trade_type', label: 'Trade Type' },
       { key: 'broker_name', label: 'Broker' },
     ],
