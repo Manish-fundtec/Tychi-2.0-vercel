@@ -698,13 +698,14 @@ export function computePricingWindow(reportingFrequency, reportingStartDate, las
       // - If lpd < rsd → invalid state → show rsd
       // - If lpd >= rsd (including lpd === rsd) → pricing was completed → show next day (lpd + 1)
       // 
-      // ✅ FIX: After first pricing (lpd === rsd), show next day (rsd + 1)
-      // Backend correctly updates lpd after pricing is saved, so we can trust lpd >= rsd means pricing exists
+      // Note: After frequency change, if backend returns stale lpd, it might show wrong date.
+      // Backend should handle frequency change by clearing/updating last_pricing_date appropriately.
       const hasCompletedPricing = lpd !== null && lpd.getTime() >= rsd.getTime()
 
       if (hasCompletedPricing) {
         // Next day window (after completing pricing for lpd)
-        // e.g., lpd = 1/1/26 → show 1/2/26
+        // e.g., lpd = 1/1/26 → show 1/2/26 (first daily pricing completed)
+        // e.g., lpd = 1/2/26 → show 1/3/26 (second daily pricing completed)
         const start = addDaysUTC(lpd, 1)
         const lastDayInclusive = start
         return { start, lastDayInclusive }
@@ -1481,8 +1482,36 @@ export const ToggleBetweenModals = ({
       })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const json = await resp.json()
-      const last =
+      let last =
         json?.last_pricing_date || json?.meta?.last_pricing_date || json?.data?.last_pricing_date || json?.result?.last_pricing_date || null
+      
+      // ✅ FIX: For daily frequency, validate that actual daily pricing periods exist
+      // This handles frequency change scenario where backend might return stale last_pricing_date
+      const freq = String(reportingFrequency || '').toLowerCase()
+      if (freq === 'daily' && last) {
+        try {
+          // Check reporting periods to verify if daily pricing actually exists
+          const periodsUrl = `${API_BASE}/api/v1/pricing/${encodeURIComponent(currentFundId)}/reporting-periods?limit=1`
+          const periodsResp = await fetch(periodsUrl, {
+            headers: { Accept: 'application/json' },
+            credentials: 'include'
+          })
+          
+          if (periodsResp.ok) {
+            const periodsJson = await periodsResp.json()
+            const periodsCount = periodsJson?.count || (Array.isArray(periodsJson?.rows) ? periodsJson.rows.length : 0)
+            
+            // If no periods exist, clear lastPricingDate (frequency change scenario)
+            if (periodsCount === 0) {
+              console.log('[Pricing] No daily pricing periods found - clearing lastPricingDate (frequency change scenario)')
+              last = null
+            }
+          }
+        } catch (periodsErr) {
+          console.warn('[Pricing] Could not validate daily pricing periods:', periodsErr)
+          // On error, keep the last_pricing_date from backend
+        }
+      }
       
       console.log('[Pricing] Refreshed last pricing date:', last)
       setLastPricingDate((prev) => {
@@ -1496,7 +1525,7 @@ export const ToggleBetweenModals = ({
       setMetaError('Failed to load last pricing date')
       console.warn('[summary] last pricing date fetch failed:', e)
     }
-  }, [API_BASE, currentFundId])
+  }, [API_BASE, currentFundId, reportingFrequency])
 
   // Fetch the last pricing date on mount and when fundId changes
   useEffect(() => {
