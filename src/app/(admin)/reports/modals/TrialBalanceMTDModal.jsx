@@ -92,8 +92,8 @@ export default function TrialBalanceModalGrouped({
     ],
     [],
   );
-  const formatExportValue = (key, value) =>
-    ['opening', 'debit', 'credit', 'closing'].includes(String(key)) ? fmt(value) : value ?? '';
+  const formatExportValue = useCallback((key, value) =>
+    ['opening', 'debit', 'credit', 'closing'].includes(String(key)) ? fmt(value) : value ?? '', [fmt]);
 
   // fetch TB rows
   useEffect(() => {

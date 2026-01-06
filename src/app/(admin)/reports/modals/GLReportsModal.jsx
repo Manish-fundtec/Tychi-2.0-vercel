@@ -86,7 +86,7 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
     [],
   );
 
-  const formatExportValue = (key, value) => {
+  const formatExportValue = useCallback((key, value) => {
     switch (key) {
       case 'dramount':
       case 'cramount':
@@ -95,7 +95,7 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
       default:
         return value ?? '';
     }
-  };
+  }, [fmt]);
 
   // pagination
   const [page, setPage] = useState(1);

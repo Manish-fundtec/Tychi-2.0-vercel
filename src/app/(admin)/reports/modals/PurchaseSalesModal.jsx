@@ -53,10 +53,10 @@ export default function SalesPurchaseModal({
     ],
     [],
   );
-  const formatExportValue = (key, value) =>
+  const formatExportValue = useCallback((key, value) =>
     ['open_long', 'close_long', 'open_short', 'close_short'].includes(String(key))
       ? `${reportingCurrency}${fmt(value)}`
-      : value ?? '';
+      : value ?? '', [fmt, reportingCurrency]);
 
   useEffect(() => {
     if (!show || !fundId || !date) return;

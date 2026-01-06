@@ -87,10 +87,10 @@ export default function ProfitLossModal({
     
     return base;
   }, [reportingFrequency]);
-  const formatExportValue = (key, value) =>
+  const formatExportValue = useCallback((key, value) =>
     ['ptd_amount', 'mtd_amount', 'qtd_amount', 'ytd_amount'].includes(String(key))
       ? fmt(value)
-      : value ?? '';
+      : value ?? '', [fmt]);
 
   // fetch P&L rows
   // useEffect(() => {
