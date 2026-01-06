@@ -93,12 +93,12 @@ export default function LotSummaryModal({
     ],
     [],
   );
-  const formatExportValue = useCallback((key, value) =>
+  const formatExportValue = (key, value) =>
     ['balance_quantity', 'cost_per_unit', 'amount', 'market_price', 'market_value', 'upnl'].includes(
       String(key),
     )
       ? fmt(value)
-      : value ?? '', [fmt]);
+      : value ?? '';
 
   useEffect(() => {
     if (!show) return;

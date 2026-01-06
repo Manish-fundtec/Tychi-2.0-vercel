@@ -62,7 +62,7 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
     [],
   );
 
-  const formatExportValue = useCallback((key, value) => {
+  const formatExportValue = (key, value) => {
     const numericKeys = [
       'openPrice',
       'closePrice',
@@ -73,7 +73,7 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       'totalRpnl',
     ];
     return numericKeys.includes(String(key)) ? fmt(value) : value ?? '';
-  }, [fmt]);
+  };
 
   /** -------------------------
    **    LOAD RPNL (FIXED)

@@ -58,7 +58,7 @@ export default function BalanceSheetModal({
     ],
     [],
   );
-  const formatExportValue = useCallback((key, value) => (key === 'amount' ? fmt(value) : value ?? ''), [fmt]);
+  const formatExportValue = (key, value) => (key === 'amount' ? fmt(value) : value ?? '');
 
   // Fetch balance sheet rows
   useEffect(() => {
