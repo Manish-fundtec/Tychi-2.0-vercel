@@ -14,6 +14,7 @@ import Cookies from 'js-cookie'
 import jwt from 'jsonwebtoken'
 import { formatYmd } from '@/lib/dateFormat'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
+import { getFundDetails } from '@/lib/api/fund'
 import {
   parseISO,
   isValid,
@@ -693,24 +694,24 @@ export function computePricingWindow(reportingFrequency, reportingStartDate, las
   if (freq === 'daily') {
     if (rsd) {
       // For daily pricing:
-      // - If lpd is null → no pricing exists → show rsd (first pricing)
+      // - If lpd is null → no pricing exists → show rsd (first pricing: 1/1/26)
       // - If lpd < rsd → invalid state → show rsd
-      // - If lpd === rsd → treat as no pricing exists (backend might return rsd when no pricing)
-      // - If lpd > rsd → pricing was completed → show next day (lpd + 1)
+      // - If lpd >= rsd (including lpd === rsd) → pricing was completed → show next day (lpd + 1)
       // 
-      // Important: If lpd equals rsd, treat it as first pricing (not completed)
-      // This handles the case where backend returns reporting_start_date when no pricing exists
-      const hasCompletedPricing = lpd !== null && lpd.getTime() > rsd.getTime()
+      // ✅ FIX: After first pricing (lpd === rsd), show next day (rsd + 1)
+      // Backend correctly updates lpd after pricing is saved, so we can trust lpd >= rsd means pricing exists
+      const hasCompletedPricing = lpd !== null && lpd.getTime() >= rsd.getTime()
 
       if (hasCompletedPricing) {
         // Next day window (after completing pricing for lpd)
+        // e.g., lpd = 1/1/26 → show 1/2/26
         const start = addDaysUTC(lpd, 1)
         const lastDayInclusive = start
         return { start, lastDayInclusive }
       }
 
       // First day window → reporting_start_date
-      // (when lpd is null, lpd < rsd, or lpd === rsd)
+      // (when lpd is null or lpd < rsd)
       const start = rsd
       const lastDayInclusive = rsd
       return { start, lastDayInclusive }
@@ -904,14 +905,46 @@ export const ToggleBetweenModals = ({
     }
   }
 
+  // ✅ Function to refresh fund metadata (frequency, reporting start date) from DB
+  // Always fetches latest data from DB, matching backend behavior
+  const refreshFundMetadata = useCallback(async () => {
+    const fundIdToFetch = currentFundId || fundId
+    if (!fundIdToFetch) return
+
+    try {
+      console.log('[Pricing Modals] Fetching fund metadata from DB for fund:', fundIdToFetch)
+      const fundDetails = await getFundDetails(fundIdToFetch)
+      
+      if (fundDetails?.reporting_frequency) {
+        console.log('[Pricing Modals] Reporting frequency fetched from DB:', fundDetails.reporting_frequency)
+        setReportingFrequency(fundDetails.reporting_frequency)
+      }
+      
+      if (fundDetails?.reporting_start_date) {
+        console.log('[Pricing Modals] Reporting start date fetched from DB:', fundDetails.reporting_start_date)
+        setReportingStartDate(fundDetails.reporting_start_date)
+      }
+    } catch (err) {
+      console.error('[Pricing Modals] Error fetching fund metadata from DB:', err)
+      // Keep existing values from token as fallback if API fails
+    }
+  }, [currentFundId, fundId])
+
+  // ✅ Always fetch latest reporting_frequency from DB when fundId changes (matching backend behavior)
+  useEffect(() => {
+    refreshFundMetadata()
+  }, [refreshFundMetadata])
+
   const gotoUpload = async () => {
     setChooserOpen(false)
     setUploadOpen(true)
     // Refetch pricing period after revert (ensure we have latest data)
     await refreshLastPricingDate()
+    // ✅ Refresh fund metadata (including frequency) from DB to ensure fresh data
+    await refreshFundMetadata()
   }
 
-  // Grab org_id & fund_id
+  // Grab org_id & fund_id from token (initial load)
   useEffect(() => {
     const token = Cookies.get('dashboardToken')
     if (!token) return
@@ -922,6 +955,7 @@ export const ToggleBetweenModals = ({
       setFundId(normalized.fund_id || '')
       setOrgId(normalized.org_id || '')
 
+      // Use token as initial fallback, but will be updated from DB above
       setReportingFrequency(normalized.reporting_frequency || decoded?.fund?.reporting_frequency || decoded?.reporting_frequency || '')
       setReportingStartDate(normalized.reporting_start_date || decoded?.fund?.reporting_start_date || decoded?.reporting_start_date || '')
     } catch (err) {
@@ -1345,6 +1379,8 @@ export const ToggleBetweenModals = ({
     setManualOpen(true)
     // Refetch pricing period after revert (ensure we have latest data)
     await refreshLastPricingDate()
+    // ✅ Refresh fund metadata (including frequency) from DB to ensure fresh data
+    await refreshFundMetadata()
     await fetchManualSymbols()
   }
 
