@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import { Button, Modal, Table, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
-import { useDashboardToken } from '@/hooks/useDashboardToken';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -15,6 +14,9 @@ function getAuthHeaders() {
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
+
+const fmt = (v) =>
+  Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const EXCLUDED_PARENT_GL_CODES = new Set(['11000', '12000', '21200']);
 
@@ -30,22 +32,6 @@ export default function BalanceSheetModal({
   date,                   // 'YYYY-MM-DD'
   retainedGl = '34000',   // retained earnings GL (can override)
 }) {
-  // Get decimal precision from dashboard token - same pattern as trades
-  const dashboard = useDashboardToken();
-  const decimalPrecision = useMemo(() => {
-    const tokenPrecision = dashboard?.decimal_precision ?? dashboard?.fund?.decimal_precision
-    const numPrecision = tokenPrecision !== null && tokenPrecision !== undefined ? Number(tokenPrecision) : null
-    return numPrecision !== null && !isNaN(numPrecision) ? numPrecision : 2
-  }, [dashboard])
-  
-  // Format function using decimal precision
-  const fmt = useCallback((v) => {
-    return Number(v || 0).toLocaleString('en-IN', { 
-      minimumFractionDigits: decimalPrecision, 
-      maximumFractionDigits: decimalPrecision 
-    })
-  }, [decimalPrecision])
-  
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');

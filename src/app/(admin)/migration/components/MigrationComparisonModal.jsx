@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Modal, Button, Row, Col, Table, Spinner, Alert } from 'react-bootstrap'
 import Cookies from 'js-cookie'
 import { markMigrationAsPending, bookcloseMigration } from '@/lib/api/migration'
@@ -14,6 +14,9 @@ function getAuthHeaders() {
   if (token) h.Authorization = `Bearer ${token}`
   return h
 }
+
+const fmt = (v) =>
+  Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 // Helper function to check if GL code is in allowed ranges (13000-13999 or 21000-21999)
 const isAllowedGlCode = (glCode) => {
@@ -55,23 +58,6 @@ const convertToDebitCredit = (closingBalance, glCode) => {
 }
 
 export default function MigrationComparisonModal({ show, onClose, fundId, fileId, onRefreshHistory, showReviewOnly = false }) {
-  const tokenData = useDashboardToken()
-  
-  // Get decimal precision - same pattern as trades
-  const decimalPrecision = useMemo(() => {
-    const tokenPrecision = tokenData?.decimal_precision ?? tokenData?.fund?.decimal_precision
-    const numPrecision = tokenPrecision !== null && tokenPrecision !== undefined ? Number(tokenPrecision) : null
-    return numPrecision !== null && !isNaN(numPrecision) ? numPrecision : 2
-  }, [tokenData])
-  
-  // Format function using decimal precision
-  const fmt = useCallback((v) => {
-    return Number(v || 0).toLocaleString('en-IN', { 
-      minimumFractionDigits: decimalPrecision, 
-      maximumFractionDigits: decimalPrecision 
-    })
-  }, [decimalPrecision])
-  
   const [lastPricingDate, setLastPricingDate] = useState(null)
   const [trialBalanceData, setTrialBalanceData] = useState([])
   const [allTrialBalanceData, setAllTrialBalanceData] = useState([]) // All GL codes for reconcile modal
@@ -80,6 +66,7 @@ export default function MigrationComparisonModal({ show, onClose, fundId, fileId
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showReconcileModal, setShowReconcileModal] = useState(showReviewOnly) // If showReviewOnly, start with reconcile modal open
+  const tokenData = useDashboardToken()
   
   // Get reporting frequency and calculate default scope
   const reportingFrequency = String(
