@@ -6,6 +6,7 @@ import { Button, Modal, Table, Form, Row, Col, Spinner } from 'react-bootstrap';
 import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 import { useDashboardToken } from '@/hooks/useDashboardToken';
+import { getFundDetails } from '@/lib/api/fund';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -15,8 +16,6 @@ function getAuthHeaders() {
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
-const fmt = (v) =>
-  Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // --- Helpers to derive category from GL number ---
 const extractLeadingInt = (gl) => {
@@ -68,6 +67,44 @@ export default function TrialBalanceModalGrouped({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+   const [fundDetails, setFundDetails] = useState(null);
+  
+  // Fetch fund details to get current decimal_precision
+  useEffect(() => {
+    if (!fundId) {
+      setFundDetails(null);
+      return;
+    }
+    
+    const fetchFund = async () => {
+      try {
+        const details = await getFundDetails(fundId);
+        setFundDetails(details);
+      } catch (error) {
+        console.error('Failed to fetch fund details:', error);
+        setFundDetails(null);
+      }
+    };
+    
+    fetchFund();
+  }, [fundId]);
+  
+  // Get decimal precision - prioritize fund details from API, then token, then default to 2
+  const decimalPrecision = useMemo(() => {
+    const apiPrecision = fundDetails?.decimal_precision;
+    const tokenPrecision = dashboard?.decimal_precision ?? dashboard?.fund?.decimal_precision;
+    const precision = apiPrecision ?? tokenPrecision;
+    const numPrecision = precision !== null && precision !== undefined ? Number(precision) : null;
+    return numPrecision !== null && !isNaN(numPrecision) ? numPrecision : 2;
+  }, [fundDetails, dashboard]);
+  
+  // Format function using dynamic decimal precision
+  const fmt = useCallback((v) => {
+    return Number(v || 0).toLocaleString(undefined, { 
+      minimumFractionDigits: decimalPrecision, 
+      maximumFractionDigits: decimalPrecision 
+    });
+  }, [decimalPrecision]);
   const exportHeaders = useMemo(
     () => [
       { key: 'category', label: 'Category' },
