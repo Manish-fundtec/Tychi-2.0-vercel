@@ -15,9 +15,6 @@ function getAuthHeaders() {
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
-const fmt = (v) =>
-  Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 // --- Helpers to derive category from GL number ---
 const extractLeadingInt = (gl) => {
   const m = String(gl ?? '').match(/^(\d+)/);
@@ -43,9 +40,24 @@ export default function TrialBalanceModalGrouped({
   date,                // 'YYYY-MM-DD'
   defaultScope = 'MTD' // MTD | QTD | YTD | PTD
 }) {
-  // Get reporting frequency from dashboard token
+  // Get reporting frequency and decimal precision from dashboard token
   const dashboard = useDashboardToken();
   const reportingFrequency = String(dashboard?.fund?.reporting_frequency || dashboard?.reporting_frequency || 'monthly').toLowerCase();
+  
+  // Get decimal precision - same pattern as trades
+  const decimalPrecision = useMemo(() => {
+    const tokenPrecision = dashboard?.decimal_precision ?? dashboard?.fund?.decimal_precision
+    const numPrecision = tokenPrecision !== null && tokenPrecision !== undefined ? Number(tokenPrecision) : null
+    return numPrecision !== null && !isNaN(numPrecision) ? numPrecision : 2
+  }, [dashboard])
+  
+  // Format function using decimal precision
+  const fmt = useCallback((v) => {
+    return Number(v || 0).toLocaleString('en-IN', { 
+      minimumFractionDigits: decimalPrecision, 
+      maximumFractionDigits: decimalPrecision 
+    })
+  }, [decimalPrecision])
   
   // Set default scope based on frequency
   const getDefaultScope = useCallback(() => {
