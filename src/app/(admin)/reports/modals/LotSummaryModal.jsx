@@ -245,20 +245,54 @@ export default function LotSummaryModal({
     }
 
     for (const r0 of rows) {
+      // Calculate balance_quantity from quantity - realized_quantity (Tychi 1 logic)
+      // This ensures correct balance even if stored balance_quantity is wrong
+      const quantity = Number(r0.quantity ?? r0.raw?.quantity ?? 0);
+      const realizedQuantity = Number(r0.realized_quantity ?? r0.raw?.realized_quantity ?? 0);
+      
+      // Calculate balance: quantity - realized_quantity
+      // For positive quantity (buy): balance = 300 - 290 = 10
+      // For negative quantity (sell): balance = quantity + realized (since realized is positive)
+      const calculatedBalance = quantity - realizedQuantity;
+      
+      // Use calculated balance if quantity and realized_quantity are available, otherwise fallback to stored value
+      const balance_quantity = (quantity !== 0 || realizedQuantity !== 0) 
+        ? calculatedBalance 
+        : Number(r0.balance_quantity ?? r0.raw?.balance_quantity ?? 0);
+      
+      // Calculate cost_per_unit from amount and corrected balance_quantity
+      const originalAmount = Number(r0.amount ?? 0);
+      const cost_per_unit = balance_quantity !== 0
+        ? originalAmount / Math.abs(balance_quantity)
+        : Number(r0.cost_per_unit ?? 0);
+      
+      // Recalculate amount using corrected balance_quantity to ensure consistency
+      // amount = cost_per_unit * |balance_quantity|
+      const recalculatedAmount = (balance_quantity !== 0 && cost_per_unit !== 0)
+        ? cost_per_unit * Math.abs(balance_quantity)
+        : originalAmount;
+      
+      // Recalculate market_value using corrected balance_quantity
+      // market_value = market_price * |balance_quantity|
+      const market_price = Number(r0.market_price ?? 0);
+      const originalMarketValue = Number(r0.market_value ?? 0);
+      const recalculatedMarketValue = (market_price !== 0 && balance_quantity !== 0)
+        ? market_price * Math.abs(balance_quantity)
+        : originalMarketValue;
+      
+      // Recalculate UPNL = market_value - amount
+      const recalculatedUPNL = recalculatedMarketValue - recalculatedAmount;
+      
       const r = {
         symbol_id: r0.symbol_id,
         symbol_name: r0.symbol_name,
         lot_id: r0.lot_id,
-        balance_quantity: Number(r0.balance_quantity ?? r0.raw?.balance_quantity ?? 0),
-        cost_per_unit: Number(
-          r0.raw?.balance_quantity
-            ? Number(r0.amount ?? 0) / Number(r0.raw?.balance_quantity || 1)
-            : r0.cost_per_unit ?? 0,
-        ),
-        amount: Number(r0.amount ?? 0),
-        market_price: Number(r0.market_price ?? 0),
-        market_value: Number(r0.market_value ?? 0),
-        upnl: Number(r0.upnl ?? 0),
+        balance_quantity: balance_quantity,
+        cost_per_unit: cost_per_unit,
+        amount: recalculatedAmount,
+        market_price: market_price,
+        market_value: recalculatedMarketValue,
+        upnl: recalculatedUPNL,
         contract_size: Number(r0.contract_size ?? 1),
       };
 
