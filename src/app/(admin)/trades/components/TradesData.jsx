@@ -327,6 +327,52 @@ export default function TradesData() {
     }
   }, [fund_id])
 
+  // Download error file handler
+  const handleDownloadErrorFile = useCallback(async (fileId) => {
+    if (!fund_id || !fileId) {
+      alert('Missing fund ID or file ID')
+      return
+    }
+
+    try {
+      // Let axios interceptor handle authentication automatically
+      const response = await api.get(
+        `/api/v1/trade/uploadhistory/${fund_id}/errorfile/${fileId}`,
+        {
+          responseType: 'blob',
+        }
+      )
+
+      // Create blob from response
+      const blob = new Blob([response.data], {
+        type: response.headers['content-type'] || 'application/octet-stream',
+      })
+
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers['content-disposition']
+      let filename = `error-file-${fileId}.xlsx`
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '')
+        }
+      }
+
+      // Trigger browser download
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Download error:', error)
+      alert(error?.response?.data?.message || error?.message || 'Failed to download error file')
+    }
+  }, [fund_id])
+
   useEffect(() => {
     fetchTradeHistory()
   }, [fetchTradeHistory])
@@ -560,9 +606,46 @@ export default function TradesData() {
         flex: 1,
         valueGetter: (p) => (p.data?.uploaded_at ? new Date(p.data.uploaded_at).toLocaleString() : ''),
       },
-      { headerName: 'Uploaded By', field: 'user_id', flex: 1 },
+      {
+        headerName: 'Uploaded By',
+        field: 'user_name',
+        flex: 1,
+        valueGetter: (p) => {
+          const userName = p.data?.user_name
+          const userId = p.data?.user_id
+          return userName || userId || 'Unknown User'
+        },
+      },
+      {
+        headerName: 'Download error file',
+        field: 'download',
+        width: 160,
+        sortable: false,
+        filter: false,
+        cellRenderer: (params) => {
+          const errorFileUrl = params.data?.error_file_url
+          const fileId = params.data?.file_id
+
+          if (!errorFileUrl || !fileId) {
+            return ''
+          }
+
+          return (
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDownloadErrorFile(fileId)
+              }}
+            >
+              Download
+            </Button>
+          )
+        },
+      },
     ],
-    [],
+    [handleDownloadErrorFile],
   )
 
   return (
