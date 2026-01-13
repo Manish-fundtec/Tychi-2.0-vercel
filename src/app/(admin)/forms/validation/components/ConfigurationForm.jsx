@@ -44,6 +44,7 @@ import Cookies from 'js-cookie'
 import { jwtDecode } from 'jwt-decode'
 import axios from 'axios'
 import { toast } from 'react-toastify'
+import { useNotificationContext } from '@/context/useNotificationContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 const MAX_SIZE_MB = 5
@@ -1864,6 +1865,7 @@ const MAX_MB = 10
 export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
   const dashboard = useDashboardToken()
   const currentFundId = fundId || dashboard?.fund_id
+  const { showNotification } = useNotificationContext()
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
@@ -1906,7 +1908,12 @@ export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
       a.remove()
       URL.revokeObjectURL(a.href)
     } catch {
-      setErr('Template download failed. Try again.')
+      showNotification({
+        title: 'Download Failed',
+        message: 'Template download failed. Please try again.',
+        variant: 'danger',
+        delay: 5000
+      })
     }
   }
 
@@ -1948,8 +1955,17 @@ export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
         // backend may return: { success:false, error_file_url, message, error_message }
         // Prioritize error_message field for exceed limit errors
         const errorMessage = data.error_message || data.message || 'Upload/validation failed.'
-        setErr(errorMessage)
-        if (data.error_file_url) setErrorFileUrl(data.error_file_url)
+        
+        // Close modal and show notification instead of red error box
+        onClose?.()
+        
+        // Show notification with error message
+        showNotification({
+          title: 'Validation Failed',
+          message: errorMessage + (data.error_file_url ? ' Check the loader history tab to download the error file.' : ''),
+          variant: 'danger',
+          delay: 7000
+        })
       }
     } catch (e) {
       // Handle exceed limit errors from error response (400 bad request)
@@ -1968,9 +1984,17 @@ export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
         errorMessage = errorData.error_message || errorData.message || errorData.error || e?.message || 'Upload failed.'
       }
       
-      setErr(errorMessage)
+      // Close modal and show notification instead of red error box
+      onClose?.()
       
-      if (errorData.error_file_url) setErrorFileUrl(errorData.error_file_url)
+      // Show notification with error message
+      const notificationMessage = errorMessage + (errorData.error_file_url ? ' Check the loader history tab to download the error file.' : '')
+      showNotification({
+        title: 'Upload Failed',
+        message: notificationMessage,
+        variant: 'danger',
+        delay: 7000
+      })
     } finally {
       setLoading(false)
     }
@@ -2011,20 +2035,6 @@ export const UploadSymbols = ({ fundId, onClose, onUploaded }) => {
             }}>
             remove
           </Button>
-        </Alert>
-      )}
-
-      {err && (
-        <Alert variant="danger" className="py-2">
-          {err}
-          {errorFileUrl && (
-            <>
-              {' — '}
-              <a href={errorFileUrl} target="_blank" rel="noreferrer">
-                Download error file
-              </a>
-            </>
-          )}
         </Alert>
       )}
 
