@@ -45,6 +45,52 @@ const SymbolTab = () => {
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   const gridApiRef = useRef(null)
 
+  // Download error file handler
+  const handleDownloadErrorFile = useCallback(async (fileId) => {
+    if (!fund_id || !fileId) {
+      alert('Missing fund ID or file ID')
+      return
+    }
+
+    try {
+      // Let axios interceptor handle authentication automatically
+      const response = await api.get(
+        `/api/v1/symbols/uploadhistory/${fund_id}/errorfile/${fileId}`,
+        {
+          responseType: 'blob',
+        }
+      )
+
+      // Create blob from response
+      const blob = new Blob([response.data], {
+        type: response.headers['content-type'] || 'application/octet-stream',
+      })
+
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers['content-disposition']
+      let filename = `error-file-${fileId}.xlsx`
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '')
+        }
+      }
+
+      // Trigger browser download
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Download error:', error)
+      alert(error?.response?.data?.message || error?.message || 'Failed to download error file')
+    }
+  }, [fund_id])
+
   // NEW: grid columns for history
   // ── Columns for history grid
   const historyColDefs = useMemo(
@@ -75,43 +121,96 @@ const SymbolTab = () => {
         flex: 1,
         valueGetter: (p) => (p.data?.uploaded_at ? new Date(p.data.uploaded_at).toLocaleString() : ''),
       },
-      { headerName: 'Uploaded By', field: 'user_id', sortable: true, filter: true, flex: 1 },
+      {
+        headerName: 'Uploaded By',
+        field: 'user_name',
+        sortable: true,
+        filter: true,
+        flex: 1,
+        valueGetter: (p) => {
+          const userName = p.data?.user_name
+          const userId = p.data?.user_id
+          return userName || userId || 'Unknown User'
+        },
+      },
+      {
+        headerName: 'Download error file',
+        field: 'download',
+        width: 160,
+        sortable: false,
+        filter: false,
+        cellRenderer: (params) => {
+          // error_file_url can be a boolean flag (true) or a URL string
+          // Show button when error_file_url exists (truthy) and file_id is present
+          const errorFileUrl = params.data?.error_file_url
+          const fileId = params.data?.file_id
+
+          // Show download button if error_file_url exists (boolean true or non-empty string) and file_id is present
+          if (!errorFileUrl || !fileId) {
+            return ''
+          }
+
+          return (
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDownloadErrorFile(fileId)
+              }}
+            >
+              Download
+            </Button>
+          )
+        },
+      },
     ],
-    [],
+    [handleDownloadErrorFile],
   )
   // ── Fetch history (simple)
   const fetchHistory = useCallback(async ({ announce = false } = {}) => {
-    if (!fund_id) return
+    if (!fund_id) {
+      setHistory([])
+      return
+    }
     setLoadingHistory(true)
     setHistoryError('')
     try {
-      const token = Cookies.get('dashboardToken')
-      const res = await api.get(
-        // adjust base prefix only if your backend mount path differs
-        `/api/v1/symbols/uploadhistory/${fund_id}`,
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-      )
-      const payload = res?.data ?? []
-      let rows = []
-      if (Array.isArray(payload)) rows = payload
-      else if (Array.isArray(payload?.rows)) rows = payload.rows
-      else if (Array.isArray(payload?.data)) rows = payload.data
-      else if (Array.isArray(payload?.data?.rows)) rows = payload.data.rows
-      // normalize uploaded_at if your API returns created_at instead
-      const normalized = rows
-        .map((r) => ({
+      const res = await api.get(`/api/v1/symbols/uploadhistory/${fund_id}`)
+      console.log('[Symbols History] API Response:', res?.data)
+      
+      // Match trades pattern exactly
+      const rows = res?.data?.rows || []
+      console.log('[Symbols History] Parsed rows:', rows.length, rows)
+      
+      // Normalize data - handle flat structure (no nested User object)
+      // Backward compatibility: support both date_and_time and uploaded_at
+      const normalized = rows.map((r) => {
+        // Handle flat structure - extract fields directly (no nested User object)
+        // uploaded_at: prioritize uploaded_at, fallback to date_and_time for backward compatibility
+        const uploadedAt = r.uploaded_at || r.date_and_time || r.created_at || null
+        
+        // user_name: already in flat structure, no need to extract from nested User
+        // error_file_url: already in flat structure
+        // file_id: already in flat structure
+        
+        return {
           ...r,
-          uploaded_at: r.date_and_time || r.uploaded_at || r.created_at || null,
+          uploaded_at: uploadedAt,
           plain_status: normalizeStatusText(r.status),
-        }))
-        .sort((a, b) => {
-          const aTime = a.uploaded_at ? new Date(a.uploaded_at).getTime() : 0
-          const bTime = b.uploaded_at ? new Date(b.uploaded_at).getTime() : 0
-          return bTime - aTime
-        })
+          // Ensure all required fields are present
+          file_id: r.file_id || r.id || '',
+          file_name: r.file_name || r.filename || '',
+          user_name: r.user_name || r.userName || null, // Flat structure - user_name is directly on the object
+          user_id: r.user_id || r.userId || null, // Keep user_id as fallback
+          error_file_url: r.error_file_url || r.errorFileUrl || null, // For download button
+        }
+      })
+      
+      console.log('[Symbols History] Normalized data:', normalized)
       setHistory(normalized)
 
-      const topLevelFailed = typeof payload === 'object' && payload !== null && payload.status === 'Validation Failed'
+      const topLevelFailed = typeof res?.data === 'object' && res?.data !== null && res?.data.status === 'Validation Failed'
       const shouldAlert = announce || announceValidation
       const latestRowFailed = normalized.length
         ? normalizeStatusText(normalized[0].status) === 'validation failed'
@@ -121,7 +220,10 @@ const SymbolTab = () => {
         alert('Symbol upload validation failed. Check loader history for details.')
       }
     } catch (err) {
-      setHistoryError(err?.response?.data?.error || err?.message || 'Failed to load upload history')
+      console.error('[Symbols History] Fetch error:', err)
+      console.error('[Symbols History] Error response:', err?.response?.data)
+      setHistoryError(err?.response?.data?.error || err?.message || 'Failed to load symbol upload history')
+      setHistory([])
     } finally {
       setLoadingHistory(false)
       if (announce || announceValidation) setAnnounceValidation(false)
