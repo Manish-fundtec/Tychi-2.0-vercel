@@ -96,7 +96,7 @@ export const TradeColDefs = [
   { field: 'price', headerName: 'Price', flex: 1 },
   { field: 'quantity', headerName: 'Quantity', flex: 1 },
   {
-    field: 'amount',
+    field: 'updated_amount',
     headerName: 'Amount',
     flex: 1,
     
