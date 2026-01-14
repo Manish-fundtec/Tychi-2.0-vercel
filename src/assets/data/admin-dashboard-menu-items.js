@@ -33,7 +33,7 @@ export const ADMIN_DASHBOARD_MENU_ITEMS = [
     key: 'admin-users',
     label: 'Users',
     icon: ADMIN_ICON_MAP['Users'],
-    url: '/admin/users',
+    url: '/users',
   },
   {
     key: 'admin-system',
