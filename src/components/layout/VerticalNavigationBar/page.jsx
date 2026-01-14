@@ -14,7 +14,7 @@ import { getFundDetails } from '@/lib/api/fund';
 const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
   const pathname = usePathname();
   // Check if we're in admin dashboards route
-  const isAdminDashboardRoute = isAdminDashboard || pathname?.startsWith('/admindashboards/analytics');
+  const isAdminDashboardRoute = isAdminDashboard || pathname?.startsWith('/admindashboards');
   
   const [menuItems, setMenuItems] = useState(() => {
     if (isAdminDashboardRoute) {
