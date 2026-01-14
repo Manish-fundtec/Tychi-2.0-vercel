@@ -39,7 +39,7 @@ export const ADMIN_DASHBOARD_MENU_ITEMS = [
     key: 'admin-system',
     label: 'Roles',
     icon: ADMIN_ICON_MAP['Roles'],
-    url: '/admin/system',
+    url: '/admin/roles',
   },
   {
     key: 'admin-system',
