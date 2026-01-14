@@ -26,7 +26,7 @@ export const ADMIN_DASHBOARD_MENU_ITEMS = [
   {
     key: 'admin-reports',
     label: 'Funds',
-    icon: ADMIN_ICON_MAP['Funds'],
+    icon: ADMIN_ICON_MAP['Reports'],
     url: '/admin/funds',
   },
   {
