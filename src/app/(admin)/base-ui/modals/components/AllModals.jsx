@@ -7,7 +7,7 @@ import useModal from '@/hooks/useModal'
 import useToggle from '@/hooks/useToggle'
 import { AgGridReact } from 'ag-grid-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols, UploadMigration } from '@/app/(admin)/forms/validation/components/AllFormValidation'
+import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols, UploadMigration, AddUser } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { AddManualJournal } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { Button, Modal, ModalHeader, ModalBody, Dropdown, } from 'react-bootstrap'
 import Cookies from 'js-cookie'
@@ -2217,6 +2217,32 @@ export const TradeModal = ({ onSuccess }) => {
         </ModalHeader>
         <ModalBody>
           <AddTrade
+            onClose={toggleModal}
+            onCreated={() => {
+              if (typeof onSuccess === 'function') onSuccess()
+            }}
+          />
+        </ModalBody>
+      </Modal>
+    </>
+  )
+}
+
+export const AddUserModal = ({ onSuccess }) => {
+  const { isOpen, size, className, toggleModal, openModalWithSize } = useModal()
+
+  return (
+    <>
+      <Button type="button" variant="primary" onClick={() => openModalWithSize('lg')}>
+        Add User
+      </Button>
+
+      <Modal className="fade" show={isOpen} onHide={toggleModal} dialogClassName={className} size={size} centered>
+        <ModalHeader closeButton>
+          <h5 className="modal-title h4">Add User</h5>
+        </ModalHeader>
+        <ModalBody>
+          <AddUser
             onClose={toggleModal}
             onCreated={() => {
               if (typeof onSuccess === 'function') onSuccess()

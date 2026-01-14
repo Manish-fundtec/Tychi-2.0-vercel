@@ -4,6 +4,7 @@ import { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
+import { AddUserModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 
 // AG Grid (client-side only)
 const AgGridReact = dynamic(
@@ -15,6 +16,40 @@ const AdminUsersPage = () => {
   const gridApiRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
+
+  const refreshUsers = useCallback(() => {
+    // Refresh users list after adding new user
+    setLoading(true)
+    setTimeout(() => {
+      setRowData([
+        {
+          id: 1,
+          name: 'Admin One',
+          email: 'admin1@fundtec.in',
+          role: 'Admin',
+          status: 'Active',
+          createdAt: '2024-01-10',
+        },
+        {
+          id: 2,
+          name: 'Manager One',
+          email: 'manager@fundtec.in',
+          role: 'Manager',
+          status: 'Active',
+          createdAt: '2024-02-05',
+        },
+        {
+          id: 3,
+          name: 'Viewer User',
+          email: 'viewer@fundtec.in',
+          role: 'Viewer',
+          status: 'Inactive',
+          createdAt: '2024-03-01',
+        },
+      ])
+      setLoading(false)
+    }, 600)
+  }, [])
 
   // Register AG Grid modules
   useEffect(() => {
@@ -94,8 +129,9 @@ const AdminUsersPage = () => {
       <Row>
         <Col xl={12}>
           <Card>
-            <CardHeader className="border-bottom">
+            <CardHeader className="border-bottom d-flex justify-content-between align-items-center">
               <CardTitle as="h4">Admin Users</CardTitle>
+              <AddUserModal onSuccess={refreshUsers} />
             </CardHeader>
 
           <CardBody className="p-2">
