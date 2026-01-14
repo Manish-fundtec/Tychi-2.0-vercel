@@ -10,11 +10,36 @@ import AppMenu from './components/AppMenu';
 import { getMenuItems } from '@/helpers/Manu';
 import { getAdminMenuItems } from '@/helpers/AdminMenu';
 import { getFundDetails } from '@/lib/api/fund';
+import { ADMIN_DASHBOARD_MENU_ITEMS } from '@/assets/data/admin-dashboard-menu-items';
+
+// Helper function to get all admin menu URLs (including nested children)
+const getAllAdminMenuUrls = (menuItems) => {
+  const urls = [];
+  menuItems.forEach(item => {
+    if (item.url) {
+      urls.push(item.url);
+    }
+    if (item.children) {
+      item.children.forEach(child => {
+        if (child.url) {
+          urls.push(child.url);
+        }
+      });
+    }
+  });
+  return urls;
+};
 
 const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
   const pathname = usePathname();
-  // Check if we're in admin dashboards route
-  const isAdminDashboardRoute = isAdminDashboard || pathname?.startsWith('/admindashboards');
+  
+  // Get all admin menu URLs
+  const adminMenuUrls = getAllAdminMenuUrls(ADMIN_DASHBOARD_MENU_ITEMS);
+  
+  // Check if we're in admin route (admindashboards or any admin menu URL)
+  const isAdminDashboardRoute = isAdminDashboard || 
+    pathname?.startsWith('/admindashboards') ||
+    adminMenuUrls.some(url => pathname === url || pathname?.startsWith(url + '/'));
   
   const [menuItems, setMenuItems] = useState(() => {
     if (isAdminDashboardRoute) {

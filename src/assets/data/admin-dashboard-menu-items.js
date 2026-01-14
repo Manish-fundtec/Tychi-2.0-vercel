@@ -7,6 +7,9 @@ const ADMIN_ICON_MAP = {
   'Settings': 'ri:settings-3-line',
   'Reports': 'ri:file-chart-line',
   'System': 'ri:computer-line',
+  'Roles': 'ri:user-settings-line',
+  'Permissions': 'ri:shield-user-line',
+  'Funds': 'ri:money-dollar-circle-line',
 }
 
 // Admin Dashboard Menu Items
@@ -36,13 +39,13 @@ export const ADMIN_DASHBOARD_MENU_ITEMS = [
     url: '/users',
   },
   {
-    key: 'admin-system',
+    key: 'admin-roles',
     label: 'Roles',
     icon: ADMIN_ICON_MAP['Roles'],
     url: '/admin/roles',
   },
   {
-    key: 'admin-system',
+    key: 'admin-permissions',
     label: 'Permissions',
     icon: ADMIN_ICON_MAP['Permissions'],
     url: '/admin/permissions',
