@@ -3,18 +3,35 @@
 
 import LogoBox from '@/components/LogoBox';
 import React, { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import HoverMenuToggle from './components/HoverMenuToggle';
 import SimplebarReactClient from '@/components/wrappers/SimplebarReactClient';
 import AppMenu from './components/AppMenu';
 import { getMenuItems } from '@/helpers/Manu';
+import { getAdminMenuItems } from '@/helpers/AdminMenu';
 import { getFundDetails } from '@/lib/api/fund';
 
-const VerticalNavigationBar = ({ tokenData }) => {
-  const [menuItems, setMenuItems] = useState(() => getMenuItems(tokenData));
+const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
+  const pathname = usePathname();
+  // Check if we're in admin dashboards route
+  const isAdminDashboardRoute = isAdminDashboard || pathname?.startsWith('/admindashboards');
+  
+  const [menuItems, setMenuItems] = useState(() => {
+    if (isAdminDashboardRoute) {
+      return getAdminMenuItems(tokenData);
+    }
+    return getMenuItems(tokenData);
+  });
   const [fundData, setFundData] = useState(null);
 
-  // Fetch fund details if onboarding mode is not in token
+  // Fetch fund details if onboarding mode is not in token (only for regular menu)
   useEffect(() => {
+    if (isAdminDashboardRoute) {
+      // For admin dashboard, just update menu items when tokenData changes
+      setMenuItems(getAdminMenuItems(tokenData));
+      return;
+    }
+
     const onboardingMode = 
       tokenData?.fund?.onboardingmode || 
       tokenData?.fund?.onboarding_mode ||
@@ -43,7 +60,7 @@ const VerticalNavigationBar = ({ tokenData }) => {
       // Update menu items when tokenData changes
       setMenuItems(getMenuItems(tokenData));
     }
-  }, [tokenData]);
+  }, [tokenData, isAdminDashboardRoute]);
 
   return (
     <div className="main-nav" id="leftside-menu-container">
