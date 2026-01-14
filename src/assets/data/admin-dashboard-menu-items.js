@@ -20,22 +20,14 @@ export const ADMIN_DASHBOARD_MENU_ITEMS = [
     key: 'admin-dashboards',
     label: 'Admin Dashboards',
     icon: ADMIN_ICON_MAP['Admin Dashboards'],
-    children: [
-      {
-        key: 'admin-analytics',
-        label: 'Analytics',
-        icon: ADMIN_ICON_MAP['Analytics'],
-        url: '/admindashboards/analytics',
-        parentKey: 'admin-dashboards',
-      },
-      {
-        key: 'admin-customer',
-        label: 'Customer',
-        icon: ADMIN_ICON_MAP['Customer'],
-        url: '/admindashboards/customer',
-        parentKey: 'admin-dashboards',
-      },
-    ],
+    url: '/admindashboards/analytics',
+    
+  },
+  {
+    key: 'admin-reports',
+    label: 'Funds',
+    icon: ADMIN_ICON_MAP['Funds'],
+    url: '/admin/funds',
   },
   {
     key: 'admin-users',
@@ -44,21 +36,15 @@ export const ADMIN_DASHBOARD_MENU_ITEMS = [
     url: '/admin/users',
   },
   {
-    key: 'admin-settings',
-    label: 'Settings',
-    icon: ADMIN_ICON_MAP['Settings'],
-    url: '/admin/settings',
-  },
-  {
-    key: 'admin-reports',
-    label: 'Reports',
-    icon: ADMIN_ICON_MAP['Reports'],
-    url: '/admin/reports',
-  },
-  {
     key: 'admin-system',
     label: 'System',
     icon: ADMIN_ICON_MAP['System'],
     url: '/admin/system',
+  },
+  {
+    key: 'admin-settings',
+    label: 'Settings',
+    icon: ADMIN_ICON_MAP['Settings'],
+    url: '/admin/settings',
   },
 ];
