@@ -3,6 +3,7 @@
 import { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner } from 'react-bootstrap'
+import PageTitle from '@/components/PageTitle'
 
 // AG Grid (client-side only)
 const AgGridReact = dynamic(
@@ -14,6 +15,19 @@ const AdminUsersPage = () => {
   const gridApiRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
+
+  // Register AG Grid modules
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      import('ag-grid-community')
+        .then(({ ModuleRegistry, AllCommunityModule }) => {
+          ModuleRegistry.registerModules([AllCommunityModule])
+        })
+        .catch((err) => {
+          console.error('Failed to register AG Grid modules:', err)
+        })
+    }
+  }, [])
 
   // 🔹 Column Definitions (Admin Users)
   const columnDefs = useMemo(
@@ -75,12 +89,14 @@ const AdminUsersPage = () => {
   }, [])
 
   return (
-    <Row>
-      <Col xl={12}>
-        <Card>
-          <CardHeader className="border-bottom">
-            <CardTitle as="h4">Admin Users</CardTitle>
-          </CardHeader>
+    <>
+      <PageTitle title="Admin Users" subName="Admin" />
+      <Row>
+        <Col xl={12}>
+          <Card>
+            <CardHeader className="border-bottom">
+              <CardTitle as="h4">Admin Users</CardTitle>
+            </CardHeader>
 
           <CardBody className="p-2">
             {loading ? (
@@ -109,9 +125,10 @@ const AdminUsersPage = () => {
               </div>
             )}
           </CardBody>
-        </Card>
-      </Col>
-    </Row>
+          </Card>
+        </Col>
+      </Row>
+    </>
   )
 }
 
