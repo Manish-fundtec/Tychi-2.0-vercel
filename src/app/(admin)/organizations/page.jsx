@@ -46,7 +46,7 @@ const OrganizationsPage = () => {
   const columnDefs = useMemo(
     () => [
       { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 80, pinned: 'left' },
-      { field: 'name', headerName: 'Organization Name', flex: 1 },
+      { field: 'org_name', headerName: 'Organization Name', flex: 1 },
       { field: 'email', headerName: 'Email', flex: 1 },
       { field: 'phone', headerName: 'Phone', flex: 1 },
       { field: 'address', headerName: 'Address', flex: 1 },
