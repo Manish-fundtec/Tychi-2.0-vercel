@@ -7,7 +7,7 @@ import useModal from '@/hooks/useModal'
 import useToggle from '@/hooks/useToggle'
 import { AgGridReact } from 'ag-grid-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols, UploadMigration, AddUser } from '@/app/(admin)/forms/validation/components/AllFormValidation'
+import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols, UploadMigration, AddUser, AddRole, AddPermission, AddOrganization } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { AddManualJournal } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { Button, Modal, ModalHeader, ModalBody, Dropdown, } from 'react-bootstrap'
 import Cookies from 'js-cookie'
@@ -2243,6 +2243,84 @@ export const AddUserModal = ({ onSuccess }) => {
         </ModalHeader>
         <ModalBody>
           <AddUser
+            onClose={toggleModal}
+            onCreated={() => {
+              if (typeof onSuccess === 'function') onSuccess()
+            }}
+          />
+        </ModalBody>
+      </Modal>
+    </>
+  )
+}
+
+export const AddRoleModal = ({ onSuccess }) => {
+  const { isOpen, size, className, toggleModal, openModalWithSize } = useModal()
+
+  return (
+    <>
+      <Button type="button" variant="primary" onClick={() => openModalWithSize('lg')}>
+        Add Role
+      </Button>
+
+      <Modal className="fade" show={isOpen} onHide={toggleModal} dialogClassName={className} size={size} centered>
+        <ModalHeader closeButton>
+          <h5 className="modal-title h4">Add Role</h5>
+        </ModalHeader>
+        <ModalBody>
+          <AddRole
+            onClose={toggleModal}
+            onCreated={() => {
+              if (typeof onSuccess === 'function') onSuccess()
+            }}
+          />
+        </ModalBody>
+      </Modal>
+    </>
+  )
+}
+
+export const AddPermissionModal = ({ onSuccess }) => {
+  const { isOpen, size, className, toggleModal, openModalWithSize } = useModal()
+
+  return (
+    <>
+      <Button type="button" variant="primary" onClick={() => openModalWithSize('lg')}>
+        Add Permission
+      </Button>
+
+      <Modal className="fade" show={isOpen} onHide={toggleModal} dialogClassName={className} size={size} centered>
+        <ModalHeader closeButton>
+          <h5 className="modal-title h4">Add Permission</h5>
+        </ModalHeader>
+        <ModalBody>
+          <AddPermission
+            onClose={toggleModal}
+            onCreated={() => {
+              if (typeof onSuccess === 'function') onSuccess()
+            }}
+          />
+        </ModalBody>
+      </Modal>
+    </>
+  )
+}
+
+export const AddOrganizationModal = ({ onSuccess }) => {
+  const { isOpen, size, className, toggleModal, openModalWithSize } = useModal()
+
+  return (
+    <>
+      <Button type="button" variant="primary" onClick={() => openModalWithSize('lg')}>
+        Add Organization
+      </Button>
+
+      <Modal className="fade" show={isOpen} onHide={toggleModal} dialogClassName={className} size={size} centered>
+        <ModalHeader closeButton>
+          <h5 className="modal-title h4">Add Organization</h5>
+        </ModalHeader>
+        <ModalBody>
+          <AddOrganization
             onClose={toggleModal}
             onCreated={() => {
               if (typeof onSuccess === 'function') onSuccess()

@@ -2392,6 +2392,259 @@ export const AddUser = ({ onClose, onCreated }) => {
   )
 }
 
+export const AddRole = ({ onClose, onCreated }) => {
+  const [validated, setValidated] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const { showNotification } = useNotificationContext()
+
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    status: 'Active',
+  })
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const form = e.currentTarget
+    if (!form.checkValidity()) {
+      setValidated(true)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const response = await api.post('/api/v1/roles', formData)
+      showNotification({ message: 'Role created successfully!', variant: 'success' })
+      if (onCreated) onCreated()
+      if (onClose) onClose()
+      setFormData({ name: '', description: '', status: 'Active' })
+      setValidated(false)
+    } catch (error) {
+      console.error('Error creating role:', error)
+      showNotification({ message: error?.response?.data?.message || 'Failed to create role.', variant: 'danger' })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Form noValidate validated={validated} onSubmit={handleSubmit}>
+      <Row>
+        <FormGroup className="col-md-6">
+          <FormLabel>Role Name *</FormLabel>
+          <FormControl type="text" name="name" value={formData.name} onChange={handleChange} required placeholder="Enter role name" />
+          <Feedback type="invalid">Please provide a role name.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Status *</FormLabel>
+          <FormSelect name="status" value={formData.status} onChange={handleChange} required>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </FormSelect>
+        </FormGroup>
+
+        <FormGroup className="col-12">
+          <FormLabel>Description</FormLabel>
+          <FormControl as="textarea" rows={3} name="description" value={formData.description} onChange={handleChange} placeholder="Enter role description" />
+        </FormGroup>
+      </Row>
+
+      <div className="d-flex justify-content-end gap-2 mt-3">
+        <Button variant="secondary" onClick={() => onClose?.()} disabled={isSaving}>Cancel</Button>
+        <Button type="submit" variant="primary" disabled={isSaving}>
+          {isSaving ? <><Spinner animation="border" size="sm" className="me-2" /> Saving...</> : 'Create Role'}
+        </Button>
+      </div>
+    </Form>
+  )
+}
+
+export const AddPermission = ({ onClose, onCreated }) => {
+  const [validated, setValidated] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const { showNotification } = useNotificationContext()
+
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    module: '',
+    status: 'Active',
+  })
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const form = e.currentTarget
+    if (!form.checkValidity()) {
+      setValidated(true)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const response = await api.post('/api/v1/permissions', formData)
+      showNotification({ message: 'Permission created successfully!', variant: 'success' })
+      if (onCreated) onCreated()
+      if (onClose) onClose()
+      setFormData({ name: '', description: '', module: '', status: 'Active' })
+      setValidated(false)
+    } catch (error) {
+      console.error('Error creating permission:', error)
+      showNotification({ message: error?.response?.data?.message || 'Failed to create permission.', variant: 'danger' })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Form noValidate validated={validated} onSubmit={handleSubmit}>
+      <Row>
+        <FormGroup className="col-md-6">
+          <FormLabel>Permission Key *</FormLabel>
+          <FormControl type="text" name="name" value={formData.name} onChange={handleChange} required placeholder="e.g., users.create" />
+          <Feedback type="invalid">Please provide a permission key.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Module *</FormLabel>
+          <FormSelect name="module" value={formData.module} onChange={handleChange} required>
+            <option value="">Select module</option>
+            <option value="Users">Users</option>
+            <option value="Funds">Funds</option>
+            <option value="Trades">Trades</option>
+            <option value="Reports">Reports</option>
+            <option value="Settings">Settings</option>
+            <option value="Organizations">Organizations</option>
+          </FormSelect>
+          <Feedback type="invalid">Please select a module.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Status *</FormLabel>
+          <FormSelect name="status" value={formData.status} onChange={handleChange} required>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </FormSelect>
+        </FormGroup>
+
+        <FormGroup className="col-12">
+          <FormLabel>Description</FormLabel>
+          <FormControl as="textarea" rows={2} name="description" value={formData.description} onChange={handleChange} placeholder="Enter permission description" />
+        </FormGroup>
+      </Row>
+
+      <div className="d-flex justify-content-end gap-2 mt-3">
+        <Button variant="secondary" onClick={() => onClose?.()} disabled={isSaving}>Cancel</Button>
+        <Button type="submit" variant="primary" disabled={isSaving}>
+          {isSaving ? <><Spinner animation="border" size="sm" className="me-2" /> Saving...</> : 'Create Permission'}
+        </Button>
+      </div>
+    </Form>
+  )
+}
+
+export const AddOrganization = ({ onClose, onCreated }) => {
+  const [validated, setValidated] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const { showNotification } = useNotificationContext()
+
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    status: 'Active',
+  })
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const form = e.currentTarget
+    if (!form.checkValidity()) {
+      setValidated(true)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const response = await api.post('/api/v1/organizations', formData)
+      showNotification({ message: 'Organization created successfully!', variant: 'success' })
+      if (onCreated) onCreated()
+      if (onClose) onClose()
+      setFormData({ name: '', email: '', phone: '', address: '', status: 'Active' })
+      setValidated(false)
+    } catch (error) {
+      console.error('Error creating organization:', error)
+      showNotification({ message: error?.response?.data?.message || 'Failed to create organization.', variant: 'danger' })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Form noValidate validated={validated} onSubmit={handleSubmit}>
+      <Row>
+        <FormGroup className="col-md-6">
+          <FormLabel>Organization Name *</FormLabel>
+          <FormControl type="text" name="name" value={formData.name} onChange={handleChange} required placeholder="Enter organization name" />
+          <Feedback type="invalid">Please provide organization name.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Email *</FormLabel>
+          <FormControl type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Enter email address" />
+          <Feedback type="invalid">Please provide a valid email.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Phone</FormLabel>
+          <FormControl type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="Enter phone number" />
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Status *</FormLabel>
+          <FormSelect name="status" value={formData.status} onChange={handleChange} required>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </FormSelect>
+        </FormGroup>
+
+        <FormGroup className="col-12">
+          <FormLabel>Address</FormLabel>
+          <FormControl as="textarea" rows={2} name="address" value={formData.address} onChange={handleChange} placeholder="Enter address" />
+        </FormGroup>
+      </Row>
+
+      <div className="d-flex justify-content-end gap-2 mt-3">
+        <Button variant="secondary" onClick={() => onClose?.()} disabled={isSaving}>Cancel</Button>
+        <Button type="submit" variant="primary" disabled={isSaving}>
+          {isSaving ? <><Spinner animation="border" size="sm" className="me-2" /> Saving...</> : 'Create Organization'}
+        </Button>
+      </div>
+    </Form>
+  )
+}
+
 const AllFormValidation = () => {
   return (
     <>
