@@ -47,14 +47,14 @@ const OrganizationsPage = () => {
     () => [
       { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 80, pinned: 'left' },
       { field: 'name', headerName: 'Organization Name', flex: 1 },
-      { field: 'email', headerName: 'Email', flex: 1 },
-      { field: 'phone', headerName: 'Phone', flex: 1 },
-      { field: 'address', headerName: 'Address', flex: 1 },
-      { field: 'status', headerName: 'Status', flex: 1 },
+      { field: 'country', headerName: 'Country', flex: 1 },
+      { field: 'timezone', headerName: 'Timezone', flex: 1 },
+      { field: 'default_currency', headerName: 'Currency', flex: 1 },
+      { field: 'jurisdiction', headerName: 'Jurisdiction', flex: 1 },
       { field: 'createdAt', headerName: 'Created At', flex: 1 },
     ],
     []
-  )
+  ) 
 
   // Load initial data
   useEffect(() => {
