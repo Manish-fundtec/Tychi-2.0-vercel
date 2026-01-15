@@ -2564,10 +2564,10 @@ export const AddOrganization = ({ onClose, onCreated }) => {
 
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
-    phone: '',
-    address: '',
-    status: 'Active',
+    country: '',
+    timezone: '',
+    default_currency: '',
+    jurisdiction: '',
   })
 
   const handleChange = (e) => {
@@ -2587,11 +2587,11 @@ export const AddOrganization = ({ onClose, onCreated }) => {
 
     setIsSaving(true)
     try {
-      const response = await api.post('/api/v1/organizations', formData)
+      const response = await api.post('/api/v1/organization', formData)
       showNotification({ message: 'Organization created successfully!', variant: 'success' })
       if (onCreated) onCreated()
       if (onClose) onClose()
-      setFormData({ name: '', email: '', phone: '', address: '', status: 'Active' })
+      setFormData({ name: '', country: '', timezone: '', default_currency: '', jurisdiction: '' })
       setValidated(false)
     } catch (error) {
       console.error('Error creating organization:', error)
@@ -2611,27 +2611,26 @@ export const AddOrganization = ({ onClose, onCreated }) => {
         </FormGroup>
 
         <FormGroup className="col-md-6">
-          <FormLabel>Email *</FormLabel>
-          <FormControl type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Enter email address" />
-          <Feedback type="invalid">Please provide a valid email.</Feedback>
+          <FormLabel>Country *</FormLabel>
+          <FormControl type="text" name="country" value={formData.country} onChange={handleChange} required placeholder="Enter country" />
+          <Feedback type="invalid">Please provide country.</Feedback>
         </FormGroup>
 
         <FormGroup className="col-md-6">
-          <FormLabel>Phone</FormLabel>
-          <FormControl type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="Enter phone number" />
+          <FormLabel>Timezone *</FormLabel>
+          <FormControl type="text" name="timezone" value={formData.timezone} onChange={handleChange} required placeholder="e.g. Asia/Kolkata" />
+          <Feedback type="invalid">Please provide timezone.</Feedback>
         </FormGroup>
 
         <FormGroup className="col-md-6">
-          <FormLabel>Status *</FormLabel>
-          <FormSelect name="status" value={formData.status} onChange={handleChange} required>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </FormSelect>
+          <FormLabel>Default Currency *</FormLabel>
+          <FormControl type="text" name="default_currency" value={formData.default_currency} onChange={handleChange} required placeholder="e.g. USD, INR" />
+          <Feedback type="invalid">Please provide currency.</Feedback>
         </FormGroup>
 
-        <FormGroup className="col-12">
-          <FormLabel>Address</FormLabel>
-          <FormControl as="textarea" rows={2} name="address" value={formData.address} onChange={handleChange} placeholder="Enter address" />
+        <FormGroup className="col-md-6">
+          <FormLabel>Jurisdiction</FormLabel>
+          <FormControl type="text" name="jurisdiction" value={formData.jurisdiction} onChange={handleChange} placeholder="Enter jurisdiction" />
         </FormGroup>
       </Row>
 
