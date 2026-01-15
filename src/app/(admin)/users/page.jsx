@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
 import { AddUserModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
+import api from '@/lib/api/axios'
 
 // AG Grid (client-side only)
 const AgGridReact = dynamic(
@@ -17,38 +18,17 @@ const AdminUsersPage = () => {
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
 
-  const refreshUsers = useCallback(() => {
-    // Refresh users list after adding new user
+  const refreshUsers = useCallback(async () => {
     setLoading(true)
-    setTimeout(() => {
-      setRowData([
-        {
-          id: 1,
-          name: 'Admin One',
-          email: 'admin1@fundtec.in',
-          role: 'Admin',
-          status: 'Active',
-          createdAt: '2024-01-10',
-        },
-        {
-          id: 2,
-          name: 'Manager One',
-          email: 'manager@fundtec.in',
-          role: 'Manager',
-          status: 'Active',
-          createdAt: '2024-02-05',
-        },
-        {
-          id: 3,
-          name: 'Viewer User',
-          email: 'viewer@fundtec.in',
-          role: 'Viewer',
-          status: 'Inactive',
-          createdAt: '2024-03-01',
-        },
-      ])
+    try {
+      const response = await api.get('/api/v1/users')
+      setRowData(response.data?.data || response.data || [])
+    } catch (error) {
+      console.error('Error fetching users:', error)
+      setRowData([])
+    } finally {
       setLoading(false)
-    }, 600)
+    }
   }, [])
 
   // Register AG Grid modules
@@ -67,56 +47,22 @@ const AdminUsersPage = () => {
   // 🔹 Column Definitions (Admin Users)
   const columnDefs = useMemo(
     () => [
-      {
-        headerName: 'Sr.No',
-        valueGetter: 'node.rowIndex + 1',
-        width: 80,
-        pinned: 'left',
-      },
-      { field: 'name', headerName: 'Name', flex: 1 },
+      { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 80, pinned: 'left' },
+      { field: 'first_name', headerName: 'First Name', flex: 1 },
+      { field: 'last_name', headerName: 'Last Name', flex: 1 },
       { field: 'email', headerName: 'Email', flex: 1 },
-      { field: 'role', headerName: 'Role', flex: 1 },
+      { field: 'phone_number', headerName: 'Phone', flex: 1 },
+      { field: 'cognito_status', headerName: 'Cognito Status', flex: 1 },
       { field: 'status', headerName: 'Status', flex: 1 },
       { field: 'createdAt', headerName: 'Created At', flex: 1 },
     ],
     []
   )
 
-  // 🔹 Dummy Admin Users Data
+  // Load users on mount
   useEffect(() => {
-    setLoading(true)
-
-    // simulate API delay
-    setTimeout(() => {
-      setRowData([
-        {
-          id: 1,
-          name: 'Admin One',
-          email: 'admin1@fundtec.in',
-          role: 'Admin',
-          status: 'Active',
-          createdAt: '2024-01-10',
-        },
-        {
-          id: 2,
-          name: 'Manager One',
-          email: 'manager@fundtec.in',
-          role: 'Manager',
-          status: 'Active',
-          createdAt: '2024-02-05',
-        },
-        {
-          id: 3,
-          name: 'Viewer User',
-          email: 'viewer@fundtec.in',
-          role: 'Viewer',
-          status: 'Inactive',
-          createdAt: '2024-03-01',
-        },
-      ])
-      setLoading(false)
-    }, 600)
-  }, [])
+    refreshUsers()
+  }, [refreshUsers])
 
   // 🔹 Grid Ready
   const onGridReady = useCallback((params) => {
