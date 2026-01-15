@@ -21,7 +21,7 @@ const OrganizationsPage = () => {
   const refreshOrganizations = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await api.get('/api/v1/organizations')
+      const response = await api.get('/api/v1/organization')
       setRowData(response.data?.data || response.data || [])
     } catch (error) {
       console.error('Error fetching organizations:', error)
