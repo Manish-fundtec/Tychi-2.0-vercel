@@ -27,6 +27,12 @@ export const ADMIN_DASHBOARD_MENU_ITEMS = [
     
   },
   {
+    key: 'admin-organizations',
+    label: 'Organizations',
+    icon: ADMIN_ICON_MAP['Organizations'],
+    url: '/admin/organizations',
+  },
+  {
     key: 'admin-reports',
     label: 'Funds',
     icon: ADMIN_ICON_MAP['Reports'],
