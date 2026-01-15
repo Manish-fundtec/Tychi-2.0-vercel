@@ -10,6 +10,7 @@ const ADMIN_ICON_MAP = {
   'Roles': 'ri:user-settings-line',
   'Permissions': 'ri:shield-user-line',
   'Funds': 'ri:money-dollar-circle-line',
+  'Organization': 'ri:building-2-line',
 }
 
 // Admin Dashboard Menu Items
