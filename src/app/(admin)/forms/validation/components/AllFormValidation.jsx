@@ -2398,9 +2398,10 @@ export const AddRole = ({ onClose, onCreated }) => {
   const { showNotification } = useNotificationContext()
 
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    status: 'Active',
+    role_name: '',
+    role_tag: '',
+    role_description: '',
+    status: 'active',
   })
 
   const handleChange = (e) => {
@@ -2420,11 +2421,11 @@ export const AddRole = ({ onClose, onCreated }) => {
 
     setIsSaving(true)
     try {
-      const response = await api.post('/api/v1/roles', formData)
+      await api.post('/api/v1/roles', formData)
       showNotification({ message: 'Role created successfully!', variant: 'success' })
       if (onCreated) onCreated()
       if (onClose) onClose()
-      setFormData({ name: '', description: '', status: 'Active' })
+      setFormData({ role_name: '', role_tag: '', role_description: '', status: 'active' })
       setValidated(false)
     } catch (error) {
       console.error('Error creating role:', error)
@@ -2437,23 +2438,29 @@ export const AddRole = ({ onClose, onCreated }) => {
   return (
     <Form noValidate validated={validated} onSubmit={handleSubmit}>
       <Row>
-        <FormGroup className="col-md-6">
+        <FormGroup className="col-md-6 mb-3">
           <FormLabel>Role Name *</FormLabel>
-          <FormControl type="text" name="name" value={formData.name} onChange={handleChange} required placeholder="Enter role name" />
-          <Feedback type="invalid">Please provide a role name.</Feedback>
+          <FormControl type="text" name="role_name" value={formData.role_name} onChange={handleChange} required placeholder="Enter role name" />
+          <Feedback type="invalid">Please provide role name.</Feedback>
         </FormGroup>
 
-        <FormGroup className="col-md-6">
-          <FormLabel>Status *</FormLabel>
-          <FormSelect name="status" value={formData.status} onChange={handleChange} required>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
+        <FormGroup className="col-md-6 mb-3">
+          <FormLabel>Role Tag *</FormLabel>
+          <FormControl type="text" name="role_tag" value={formData.role_tag} onChange={handleChange} required placeholder="e.g. ADMIN, USER" />
+          <Feedback type="invalid">Please provide role tag.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6 mb-3">
+          <FormLabel>Status</FormLabel>
+          <FormSelect name="status" value={formData.status} onChange={handleChange}>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
           </FormSelect>
         </FormGroup>
 
-        <FormGroup className="col-12">
+        <FormGroup className="col-12 mb-3">
           <FormLabel>Description</FormLabel>
-          <FormControl as="textarea" rows={3} name="description" value={formData.description} onChange={handleChange} placeholder="Enter role description" />
+          <FormControl as="textarea" rows={2} name="role_description" value={formData.role_description} onChange={handleChange} placeholder="Enter description" />
         </FormGroup>
       </Row>
 

@@ -5,8 +5,8 @@ import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
 import { AddRoleModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
+import api from '@/lib/api/axios'
 
-// AG Grid (client-side only)
 const AgGridReact = dynamic(
   () => import('ag-grid-react').then((mod) => mod.AgGridReact),
   { ssr: false }
@@ -17,20 +17,28 @@ const RolesPage = () => {
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
 
-  const refreshRoles = useCallback(() => {
+  const refreshRoles = useCallback(async () => {
     setLoading(true)
-    setTimeout(() => {
-      setRowData([
-        { id: 1, name: 'Admin', description: 'Full system access', permissions: 15, status: 'Active', createdAt: '2024-01-01' },
-        { id: 2, name: 'Manager', description: 'Can manage funds and users', permissions: 10, status: 'Active', createdAt: '2024-01-05' },
-        { id: 3, name: 'Viewer', description: 'Read-only access', permissions: 3, status: 'Active', createdAt: '2024-01-10' },
-        { id: 4, name: 'Analyst', description: 'Can view and analyze data', permissions: 5, status: 'Active', createdAt: '2024-02-01' },
-      ])
+    try {
+      const response = await api.get('/api/v1/roles')
+      const data = response.data?.data || response.data || []
+      const mapped = data.map(role => ({
+        id: role.role_id,
+        name: role.role_name,
+        tag: role.role_tag,
+        description: role.role_description,
+        status: role.status,
+        createdAt: role.create_date_time,
+      }))
+      setRowData(mapped)
+    } catch (error) {
+      console.error('Error fetching roles:', error)
+      setRowData([])
+    } finally {
       setLoading(false)
-    }, 600)
+    }
   }, [])
 
-  // Register AG Grid modules
   useEffect(() => {
     if (typeof window !== 'undefined') {
       import('ag-grid-community')
@@ -41,20 +49,18 @@ const RolesPage = () => {
     }
   }, [])
 
-  // Column Definitions
   const columnDefs = useMemo(
     () => [
       { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 80, pinned: 'left' },
       { field: 'name', headerName: 'Role Name', flex: 1 },
-      { field: 'description', headerName: 'Description', flex: 2 },
-      { field: 'permissions', headerName: 'Permissions Count', flex: 1 },
+      { field: 'tag', headerName: 'Tag', flex: 1 },
+      { field: 'description', headerName: 'Description', flex: 1 },
       { field: 'status', headerName: 'Status', flex: 1 },
       { field: 'createdAt', headerName: 'Created At', flex: 1 },
     ],
     []
   )
 
-  // Load initial data
   useEffect(() => {
     refreshRoles()
   }, [refreshRoles])
@@ -73,7 +79,6 @@ const RolesPage = () => {
               <CardTitle as="h4">Roles Management</CardTitle>
               <AddRoleModal onSuccess={refreshRoles} />
             </CardHeader>
-
             <CardBody className="p-2">
               {loading ? (
                 <div className="d-flex align-items-center gap-2 p-3">
