@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
 import { AddOrganizationModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
+import api from '@/lib/api/axios'
 
 // AG Grid (client-side only)
 const AgGridReact = dynamic(
@@ -17,17 +18,17 @@ const OrganizationsPage = () => {
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
 
-  const refreshOrganizations = useCallback(() => {
+  const refreshOrganizations = useCallback(async () => {
     setLoading(true)
-    setTimeout(() => {
-      setRowData([
-        { id: 1, name: 'FundTec Capital', email: 'admin@fundtec.in', phone: '+1-555-0100', address: 'New York, USA', status: 'Active', createdAt: '2024-01-01' },
-        { id: 2, name: 'Alpha Investments', email: 'info@alpha.com', phone: '+1-555-0200', address: 'San Francisco, USA', status: 'Active', createdAt: '2024-02-01' },
-        { id: 3, name: 'Beta Holdings', email: 'contact@beta.io', phone: '+1-555-0300', address: 'Chicago, USA', status: 'Active', createdAt: '2024-03-01' },
-        { id: 4, name: 'Gamma Partners', email: 'hello@gamma.co', phone: '+1-555-0400', address: 'Boston, USA', status: 'Inactive', createdAt: '2024-04-01' },
-      ])
+    try {
+      const response = await api.get('/api/v1/organizations')
+      setRowData(response.data?.data || response.data || [])
+    } catch (error) {
+      console.error('Error fetching organizations:', error)
+      setRowData([])
+    } finally {
       setLoading(false)
-    }, 600)
+    }
   }, [])
 
   // Register AG Grid modules
