@@ -4,6 +4,7 @@ import { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Badge } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
+import { fetchFunds } from '@/lib/api/fund'
 
 // AG Grid (client-side only)
 const AgGridReact = dynamic(
@@ -13,12 +14,12 @@ const AgGridReact = dynamic(
 
 // Status Toggle Cell Renderer
 const StatusToggleRenderer = ({ value, data, onStatusChange }) => {
-  const isActive = value === 'Active'
+  const isActive = value === 'Active' || value === 'active'
   
   const handleToggle = () => {
     const newStatus = isActive ? 'Inactive' : 'Active'
     if (onStatusChange) {
-      onStatusChange(data.id, newStatus)
+      onStatusChange(data.fund_id, newStatus)
     }
   }
 
@@ -43,27 +44,26 @@ const FundsPage = () => {
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
 
-  const refreshFunds = useCallback(() => {
+  const refreshFunds = useCallback(async () => {
     setLoading(true)
-    setTimeout(() => {
-      setRowData([
-        { id: 1, name: 'Alpha Growth Fund', organization: 'FundTec Capital', aum: '$25M', currency: 'USD', fundType: 'Hedge Fund', status: 'Active', createdAt: '2024-01-01' },
-        { id: 2, name: 'Beta Value Fund', organization: 'Alpha Investments', aum: '$50M', currency: 'USD', fundType: 'Mutual Fund', status: 'Active', createdAt: '2024-02-01' },
-        { id: 3, name: 'Gamma Income Fund', organization: 'Beta Holdings', aum: '$15M', currency: 'EUR', fundType: 'Fixed Income', status: 'Inactive', createdAt: '2024-03-01' },
-        { id: 4, name: 'Delta Equity Fund', organization: 'Gamma Partners', aum: '$100M', currency: 'USD', fundType: 'Equity Fund', status: 'Active', createdAt: '2024-04-01' },
-        { id: 5, name: 'Epsilon Balanced Fund', organization: 'FundTec Capital', aum: '$30M', currency: 'GBP', fundType: 'Balanced Fund', status: 'Inactive', createdAt: '2024-05-01' },
-      ])
+    try {
+      const data = await fetchFunds()
+      setRowData(data?.funds || data || [])
+    } catch (error) {
+      console.error('Error fetching funds:', error)
+      setRowData([])
+    } finally {
       setLoading(false)
-    }, 600)
+    }
   }, [])
 
   // Handle status toggle
-  const handleStatusChange = useCallback((id, newStatus) => {
+  const handleStatusChange = useCallback((fundId, newStatus) => {
     setRowData(prev => prev.map(row => 
-      row.id === id ? { ...row, status: newStatus } : row
+      row.fund_id === fundId ? { ...row, fund_status: newStatus } : row
     ))
     // TODO: API call to update status
-    console.log(`Fund ${id} status changed to ${newStatus}`)
+    console.log(`Fund ${fundId} status changed to ${newStatus}`)
   }, [])
 
   // Register AG Grid modules
@@ -81,13 +81,10 @@ const FundsPage = () => {
   const columnDefs = useMemo(
     () => [
       { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 80, pinned: 'left' },
-      { field: 'name', headerName: 'Fund Name', flex: 1 },
-      { field: 'organization', headerName: 'Organization', flex: 1 },
-      { field: 'aum', headerName: 'AUM', flex: 1 },
-      { field: 'currency', headerName: 'Currency', width: 100 },
-      { field: 'fundType', headerName: 'Fund Type', flex: 1 },
+      { field: 'fund_id', headerName: 'Fund ID', flex: 1 },
+      { field: 'fund_name', headerName: 'Fund Name', flex: 1 },
       { 
-        field: 'status', 
+        field: 'fund_status', 
         headerName: 'Status', 
         flex: 1,
         cellRenderer: (params) => (
@@ -98,7 +95,6 @@ const FundsPage = () => {
           />
         )
       },
-      { field: 'createdAt', headerName: 'Created At', flex: 1 },
     ],
     [handleStatusChange]
   )
