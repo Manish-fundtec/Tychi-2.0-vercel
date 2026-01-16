@@ -2,9 +2,9 @@
 
 import { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner } from 'react-bootstrap'
+import { useRouter } from 'next/navigation'
+import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Button } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
-import { AddRoleModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import api from '@/lib/api/axios'
 
 const AgGridReact = dynamic(
@@ -13,6 +13,7 @@ const AgGridReact = dynamic(
 )
 
 const RolesPage = () => {
+  const router = useRouter()
   const gridApiRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
@@ -77,7 +78,9 @@ const RolesPage = () => {
           <Card>
             <CardHeader className="border-bottom d-flex justify-content-between align-items-center">
               <CardTitle as="h4">Roles Management</CardTitle>
-              <AddRoleModal onSuccess={refreshRoles} />
+              <Button variant="primary" onClick={() => router.push('/roles/add')}>
+                Add Role
+              </Button>
             </CardHeader>
             <CardBody className="p-2">
               {loading ? (
