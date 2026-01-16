@@ -4,7 +4,7 @@ import { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Badge } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
-import { fetchFunds } from '@/lib/api/fund'
+import { getAllFundsAdmin } from '@/lib/api/fund'
 
 // AG Grid (client-side only)
 const AgGridReact = dynamic(
@@ -47,8 +47,10 @@ const FundsPage = () => {
   const refreshFunds = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await fetchFunds()
-      setRowData(data?.funds || data || [])
+      const data = await getAllFundsAdmin()
+      // Backend returns { funds: [...], total: number }
+      const fundsList = data?.funds || data || []
+      setRowData(fundsList)
     } catch (error) {
       console.error('Error fetching funds:', error)
       setRowData([])
@@ -83,6 +85,21 @@ const FundsPage = () => {
       { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 80, pinned: 'left' },
       { field: 'fund_id', headerName: 'Fund ID', flex: 1 },
       { field: 'fund_name', headerName: 'Fund Name', flex: 1 },
+      { 
+        field: 'organization', 
+        headerName: 'Organization', 
+        flex: 1,
+        valueGetter: (params) => {
+          // Handle nested organization object from backend
+          if (params.data?.organization?.org_name) {
+            return params.data.organization.org_name
+          }
+          if (params.data?.organization_name) {
+            return params.data.organization_name
+          }
+          return 'N/A'
+        }
+      },
       { 
         field: 'fund_status', 
         headerName: 'Status', 

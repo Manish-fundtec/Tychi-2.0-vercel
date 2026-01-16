@@ -37,3 +37,15 @@ export const updateFund = async (fundId, payload) => {
   const res = await api.put(`/api/v1/fund/${encodeURIComponent(fundId)}`, payload)
   return res.data
 }
+
+// ✅ Admin: Get all funds
+export const getAllFundsAdmin = async () => {
+  const res = await api.get('/api/v1/fund-management/admin/all')
+  return res.data
+}
+
+// ✅ Admin: Get funds by organization
+export const getFundsByOrganizationAdmin = async () => {
+  const res = await api.get('/api/v1/fund-management/admin/by-organization')
+  return res.data
+}

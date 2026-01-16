@@ -22,7 +22,7 @@ import {
 import PageTitle from '@/components/PageTitle'
 import api from '@/lib/api/axios'
 import { useNotificationContext } from '@/context/useNotificationContext'
-import { fetchFunds } from '@/lib/api/fund'
+import { getAllFundsAdmin } from '@/lib/api/fund'
 
 const MODULES = [
   { key: 'trade', label: 'Trade' },
@@ -83,22 +83,34 @@ const AddRolePage = () => {
 
       setLoadingFunds(true)
       try {
-        const data = await fetchFunds()
+        // Fetch all funds from admin endpoint
+        const data = await getAllFundsAdmin()
         const allFunds = data?.funds || data || []
         
-        // Filter funds by organization_id if available
-        // If fund has org_id field, filter by it, otherwise show all funds
+        // Filter funds by organization_id
+        // Backend returns funds with organization object: { organization: { org_id, org_name } }
+        // or direct fields: organization_id, org_id
         const filteredFunds = allFunds.filter(fund => {
-          // Check if fund has organization_id or org_id field
-          return fund.organization_id === formData.organization_id || 
-                 fund.org_id === formData.organization_id ||
-                 !fund.organization_id // If no org_id, show all (fallback)
+          // Check nested organization object
+          if (fund.organization?.org_id) {
+            return fund.organization.org_id === formData.organization_id
+          }
+          // Check direct organization_id field
+          if (fund.organization_id) {
+            return fund.organization_id === formData.organization_id
+          }
+          // Check org_id field
+          if (fund.org_id) {
+            return fund.org_id === formData.organization_id
+          }
+          return false
         })
         
-        setFunds(filteredFunds.length > 0 ? filteredFunds : allFunds)
+        setFunds(filteredFunds)
       } catch (error) {
         console.error('Error fetching funds:', error)
         setError('Failed to load funds')
+        setFunds([])
       } finally {
         setLoadingFunds(false)
       }
