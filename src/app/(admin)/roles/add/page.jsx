@@ -24,15 +24,12 @@ import api from '@/lib/api/axios'
 import { useNotificationContext } from '@/context/useNotificationContext'
 import { getAllFundsAdmin } from '@/lib/api/fund'
 
-const MODULES = [
-  { key: 'trade', label: 'Trade' },
-  { key: 'configuration', label: 'Configuration' },
-  { key: 'reports', label: 'Reports' },
-  { key: 'pricing', label: 'Pricing' },
-  { key: 'general_ledger', label: 'General Ledger' },
+const PERMISSION_TYPES = [
+  { key: 'can_view', label: 'View' },
+  { key: 'can_add', label: 'Add' },
+  { key: 'can_edit', label: 'Edit' },
+  { key: 'can_delete', label: 'Delete' },
 ]
-
-const PERMISSIONS = ['view', 'edit', 'add', 'delete']
 
 const AddRolePage = () => {
   const router = useRouter()
@@ -42,17 +39,19 @@ const AddRolePage = () => {
   const [saving, setSaving] = useState(false)
   const [organizations, setOrganizations] = useState([])
   const [funds, setFunds] = useState([])
+  const [modules, setModules] = useState([])
   const [loadingOrgs, setLoadingOrgs] = useState(true)
   const [loadingFunds, setLoadingFunds] = useState(false)
+  const [loadingModules, setLoadingModules] = useState(true)
   const [error, setError] = useState('')
 
-  // Form state
+  // Form state - matching guide structure
   const [formData, setFormData] = useState({
     role_name: '',
     role_description: '',
-    organization_id: '',
-    fund_ids: [], // Array of selected fund IDs
-    permissions: {} // { module_key: { view: true, edit: false, add: false, delete: false } }
+    org_id: '',
+    funds: [], // Array of selected fund IDs
+    permissions: {} // { fundId: { moduleKey: { can_view, can_add, can_edit, can_delete } } }
   })
 
   // Fetch organizations on mount
@@ -73,10 +72,28 @@ const AddRolePage = () => {
     fetchOrganizations()
   }, [])
 
+  // Fetch modules on mount
+  useEffect(() => {
+    const fetchModules = async () => {
+      setLoadingModules(true)
+      try {
+        const response = await api.get('/api/v1/module/')
+        const data = response.data?.data || response.data || []
+        setModules(data)
+      } catch (error) {
+        console.error('Error fetching modules:', error)
+        setError('Failed to load modules')
+      } finally {
+        setLoadingModules(false)
+      }
+    }
+    fetchModules()
+  }, [])
+
   // Fetch funds when organization is selected
   useEffect(() => {
     const fetchFundsForOrg = async () => {
-      if (!formData.organization_id) {
+      if (!formData.org_id) {
         setFunds([])
         return
       }
@@ -88,20 +105,15 @@ const AddRolePage = () => {
         const allFunds = data?.funds || data || []
         
         // Filter funds by organization_id
-        // Backend returns funds with organization object: { organization: { org_id, org_name } }
-        // or direct fields: organization_id, org_id
         const filteredFunds = allFunds.filter(fund => {
-          // Check nested organization object
           if (fund.organization?.org_id) {
-            return fund.organization.org_id === formData.organization_id
+            return fund.organization.org_id === formData.org_id
           }
-          // Check direct organization_id field
           if (fund.organization_id) {
-            return fund.organization_id === formData.organization_id
+            return fund.organization_id === formData.org_id
           }
-          // Check org_id field
           if (fund.org_id) {
-            return fund.org_id === formData.organization_id
+            return fund.org_id === formData.org_id
           }
           return false
         })
@@ -117,7 +129,7 @@ const AddRolePage = () => {
     }
 
     fetchFundsForOrg()
-  }, [formData.organization_id])
+  }, [formData.org_id])
 
   // Handle form field changes
   const handleChange = (e) => {
@@ -125,43 +137,84 @@ const AddRolePage = () => {
     setFormData(prev => ({
       ...prev,
       [name]: value,
-      // Reset fund_ids when organization changes
-      ...(name === 'organization_id' ? { fund_ids: [] } : {})
+      // Reset funds and permissions when organization changes
+      ...(name === 'org_id' ? { funds: [], permissions: {} } : {})
     }))
   }
 
   // Handle fund checkbox changes
   const handleFundChange = (fundId, checked) => {
     setFormData(prev => {
-      const currentFundIds = prev.fund_ids || []
+      const currentFunds = prev.funds || []
+      let newFunds, newPermissions = { ...prev.permissions }
+      
       if (checked) {
         // Add fund ID if not already present
-        return {
-          ...prev,
-          fund_ids: [...currentFundIds, fundId]
+        newFunds = [...currentFunds, fundId]
+        // Initialize permissions for this fund if not exists
+        if (!newPermissions[fundId]) {
+          newPermissions[fundId] = {}
         }
       } else {
         // Remove fund ID
-        return {
-          ...prev,
-          fund_ids: currentFundIds.filter(id => id !== fundId)
-        }
+        newFunds = currentFunds.filter(id => id !== fundId)
+        // Remove permissions for this fund
+        delete newPermissions[fundId]
+      }
+      
+      return {
+        ...prev,
+        funds: newFunds,
+        permissions: newPermissions
       }
     })
   }
 
-  // Handle permission checkbox changes
-  const handlePermissionChange = (moduleKey, permission, checked) => {
+  // Handle permission checkbox changes - fund-specific
+  const handlePermissionChange = (fundId, moduleKey, permissionType, checked) => {
     setFormData(prev => ({
       ...prev,
       permissions: {
         ...prev.permissions,
-        [moduleKey]: {
-          ...prev.permissions[moduleKey],
-          [permission]: checked,
+        [fundId]: {
+          ...prev.permissions[fundId],
+          [moduleKey]: {
+            ...prev.permissions[fundId]?.[moduleKey],
+            [permissionType]: checked,
+          }
         }
       }
     }))
+  }
+
+  // Transform form data to API format (matching guide)
+  const transformFormDataForAPI = () => {
+    const { role_name, role_description, org_id, funds, permissions } = formData
+    
+    // Build permissions array
+    const permissionsArray = []
+    
+    funds.forEach(fundId => {
+      Object.keys(permissions[fundId] || {}).forEach(moduleKey => {
+        const perm = permissions[fundId][moduleKey]
+        permissionsArray.push({
+          fund_id: fundId,
+          module_key: moduleKey,
+          can_view: perm.can_view || false,
+          can_add: perm.can_add || false,
+          can_edit: perm.can_edit || false,
+          can_delete: perm.can_delete || false
+        })
+      })
+    })
+    
+    return {
+      role_name,
+      role_description,
+      org_id,
+      funds: funds,
+      permissions: permissionsArray
+    }
   }
 
   // Handle form submission
@@ -175,40 +228,38 @@ const AddRolePage = () => {
       return
     }
 
-    if (!formData.organization_id) {
+    if (!formData.org_id) {
       setError('Please select an organization')
       return
     }
 
-    if (!formData.fund_ids || formData.fund_ids.length === 0) {
+    if (!formData.funds || formData.funds.length === 0) {
       setError('Please select at least one fund')
+      return
+    }
+
+    // Check if at least one permission is set
+    let hasPermission = false
+    formData.funds.forEach(fundId => {
+      if (formData.permissions[fundId]) {
+        Object.keys(formData.permissions[fundId]).forEach(moduleKey => {
+          const perm = formData.permissions[fundId][moduleKey]
+          if (perm.can_view || perm.can_add || perm.can_edit || perm.can_delete) {
+            hasPermission = true
+          }
+        })
+      }
+    })
+
+    if (!hasPermission) {
+      setError('Please set at least one permission')
       return
     }
 
     setSaving(true)
     try {
-      // Prepare permissions array for API
-      const permissionsArray = []
-      Object.keys(formData.permissions).forEach(moduleKey => {
-        const modulePerms = formData.permissions[moduleKey]
-        Object.keys(modulePerms).forEach(permission => {
-          if (modulePerms[permission]) {
-            permissionsArray.push({
-              module: moduleKey,
-              permission: permission,
-            })
-          }
-        })
-      })
-
-      // Prepare payload
-      const payload = {
-        role_name: formData.role_name,
-        role_description: formData.role_description,
-        organization_id: formData.organization_id,
-        fund_ids: formData.fund_ids, // Array of fund IDs
-        permissions: permissionsArray,
-      }
+      // Transform to API format
+      const payload = transformFormDataForAPI()
 
       // Submit to API
       await api.post('/api/v1/roles/with-permissions', payload)
@@ -230,6 +281,14 @@ const AddRolePage = () => {
     } finally {
       setSaving(false)
     }
+  }
+
+  // Get selected funds data
+  const getSelectedFunds = () => {
+    return funds.filter(fund => {
+      const fundId = fund.fund_id || fund.id
+      return formData.funds.includes(fundId)
+    })
   }
 
   return (
@@ -295,8 +354,8 @@ const AddRolePage = () => {
                         </div>
                       ) : (
                         <FormSelect
-                          name="organization_id"
-                          value={formData.organization_id}
+                          name="org_id"
+                          value={formData.org_id}
                           onChange={handleChange}
                           required
                         >
@@ -331,7 +390,7 @@ const AddRolePage = () => {
                               <div className="row g-3">
                                 {funds.map((fund) => {
                                   const fundId = fund.fund_id || fund.id
-                                  const isChecked = formData.fund_ids?.includes(fundId) || false
+                                  const isChecked = formData.funds?.includes(fundId) || false
                                   return (
                                     <Col md={4} key={fundId}>
                                       <FormCheck
@@ -340,17 +399,17 @@ const AddRolePage = () => {
                                         label={fund.fund_name || fund.name}
                                         checked={isChecked}
                                         onChange={(e) => handleFundChange(fundId, e.target.checked)}
-                                        disabled={!formData.organization_id}
+                                        disabled={!formData.org_id}
                                       />
                                     </Col>
                                   )
                                 })}
                               </div>
                             )}
-                            {formData.fund_ids && formData.fund_ids.length > 0 && (
+                            {formData.funds && formData.funds.length > 0 && (
                               <div className="mt-3">
                                 <small className="text-muted">
-                                  {formData.fund_ids.length} fund{formData.fund_ids.length > 1 ? 's' : ''} selected
+                                  {formData.funds.length} fund{formData.funds.length > 1 ? 's' : ''} selected
                                 </small>
                               </div>
                             )}
@@ -361,50 +420,74 @@ const AddRolePage = () => {
                   </Col>
                 </Row>
 
-                {/* Module Permissions */}
-                <Row>
-                  <Col md={12}>
-                    <FormGroup className="mb-4">
-                      <FormLabel className="fw-bold">Module Permissions</FormLabel>
-                      <Card className="mt-2">
-                        <CardBody>
-                          <div className="table-responsive">
-                            <table className="table table-bordered">
-                              <thead>
-                                <tr>
-                                  <th>Module</th>
-                                  {PERMISSIONS.map(perm => (
-                                    <th key={perm} className="text-center text-capitalize">
-                                      {perm}
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {MODULES.map((module) => (
-                                  <tr key={module.key}>
-                                    <td className="fw-semibold">{module.label}</td>
-                                    {PERMISSIONS.map((permission) => (
-                                      <td key={permission} className="text-center">
-                                        <FormCheck
-                                          type="checkbox"
-                                          checked={formData.permissions[module.key]?.[permission] || false}
-                                          onChange={(e) =>
-                                            handlePermissionChange(module.key, permission, e.target.checked)
-                                          }
-                                        />
-                                      </td>
-                                    ))}
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </CardBody>
-                      </Card>
-                    </FormGroup>
-                  </Col>
-                </Row>
+                {/* Module Permissions - Per Fund */}
+                {loadingModules ? (
+                  <Row>
+                    <Col md={12}>
+                      <div className="d-flex align-items-center gap-2 p-3">
+                        <Spinner animation="border" size="sm" />
+                        <span>Loading modules...</span>
+                      </div>
+                    </Col>
+                  </Row>
+                ) : (
+                  getSelectedFunds().map((fund) => {
+                    const fundId = fund.fund_id || fund.id
+                    const fundName = fund.fund_name || fund.name
+                    
+                    return (
+                      <Row key={fundId} className="mb-4">
+                        <Col md={12}>
+                          <FormGroup>
+                            <FormLabel className="fw-bold">{fundName} - Module Permissions</FormLabel>
+                            <Card className="mt-2">
+                              <CardBody>
+                                <div className="table-responsive">
+                                  <table className="table table-bordered">
+                                    <thead>
+                                      <tr>
+                                        <th>Module</th>
+                                        {PERMISSION_TYPES.map(perm => (
+                                          <th key={perm.key} className="text-center">
+                                            {perm.label}
+                                          </th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {modules.map((module) => {
+                                        const moduleKey = module.module_key || module.key
+                                        const moduleName = module.module_name || module.name || moduleKey
+                                        const perm = formData.permissions[fundId]?.[moduleKey] || {}
+                                        
+                                        return (
+                                          <tr key={module.module_id || module.id}>
+                                            <td className="fw-semibold">{moduleName}</td>
+                                            {PERMISSION_TYPES.map((permissionType) => (
+                                              <td key={permissionType.key} className="text-center">
+                                                <FormCheck
+                                                  type="checkbox"
+                                                  checked={perm[permissionType.key] || false}
+                                                  onChange={(e) =>
+                                                    handlePermissionChange(fundId, moduleKey, permissionType.key, e.target.checked)
+                                                  }
+                                                />
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </CardBody>
+                            </Card>
+                          </FormGroup>
+                        </Col>
+                      </Row>
+                    )
+                  })
+                )}
 
                 {/* Action Buttons */}
                 <Row>
