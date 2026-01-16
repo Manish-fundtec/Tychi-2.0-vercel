@@ -51,7 +51,7 @@ const AddRolePage = () => {
     role_name: '',
     role_description: '',
     organization_id: '',
-    fund_id: '',
+    fund_ids: [], // Array of selected fund IDs
     permissions: {} // { module_key: { view: true, edit: false, add: false, delete: false } }
   })
 
@@ -113,9 +113,29 @@ const AddRolePage = () => {
     setFormData(prev => ({
       ...prev,
       [name]: value,
-      // Reset fund_id when organization changes
-      ...(name === 'organization_id' ? { fund_id: '' } : {})
+      // Reset fund_ids when organization changes
+      ...(name === 'organization_id' ? { fund_ids: [] } : {})
     }))
+  }
+
+  // Handle fund checkbox changes
+  const handleFundChange = (fundId, checked) => {
+    setFormData(prev => {
+      const currentFundIds = prev.fund_ids || []
+      if (checked) {
+        // Add fund ID if not already present
+        return {
+          ...prev,
+          fund_ids: [...currentFundIds, fundId]
+        }
+      } else {
+        // Remove fund ID
+        return {
+          ...prev,
+          fund_ids: currentFundIds.filter(id => id !== fundId)
+        }
+      }
+    })
   }
 
   // Handle permission checkbox changes
@@ -148,8 +168,8 @@ const AddRolePage = () => {
       return
     }
 
-    if (!formData.fund_id) {
-      setError('Please select a fund')
+    if (!formData.fund_ids || formData.fund_ids.length === 0) {
+      setError('Please select at least one fund')
       return
     }
 
@@ -174,7 +194,7 @@ const AddRolePage = () => {
         role_name: formData.role_name,
         role_description: formData.role_description,
         organization_id: formData.organization_id,
-        fund_id: formData.fund_id,
+        fund_ids: formData.fund_ids, // Array of fund IDs
         permissions: permissionsArray,
       }
 
@@ -280,34 +300,50 @@ const AddRolePage = () => {
                   </Col>
                 </Row>
 
-                {/* Funds Dropdown */}
+                {/* Funds Selection (Multiple) */}
                 <Row>
-                  <Col md={6}>
+                  <Col md={12}>
                     <FormGroup className="mb-3">
-                      <FormLabel>Fund *</FormLabel>
+                      <FormLabel>Select Funds *</FormLabel>
                       {loadingFunds ? (
                         <div className="d-flex align-items-center gap-2">
                           <Spinner animation="border" size="sm" />
                           <span>Loading funds...</span>
                         </div>
                       ) : (
-                        <FormSelect
-                          name="fund_id"
-                          value={formData.fund_id}
-                          onChange={handleChange}
-                          required
-                          disabled={!formData.organization_id || funds.length === 0}
-                        >
-                          <option value="">Select Fund</option>
-                          {funds.map((fund) => (
-                            <option key={fund.fund_id || fund.id} value={fund.fund_id || fund.id}>
-                              {fund.fund_name || fund.name}
-                            </option>
-                          ))}
-                        </FormSelect>
-                      )}
-                      {formData.organization_id && funds.length === 0 && !loadingFunds && (
-                        <small className="text-muted">No funds available for this organization</small>
+                        <Card className="mt-2">
+                          <CardBody>
+                            {funds.length === 0 ? (
+                              <p className="text-muted mb-0">No funds available for this organization</p>
+                            ) : (
+                              <div className="row g-3">
+                                {funds.map((fund) => {
+                                  const fundId = fund.fund_id || fund.id
+                                  const isChecked = formData.fund_ids?.includes(fundId) || false
+                                  return (
+                                    <Col md={4} key={fundId}>
+                                      <FormCheck
+                                        type="checkbox"
+                                        id={`fund-${fundId}`}
+                                        label={fund.fund_name || fund.name}
+                                        checked={isChecked}
+                                        onChange={(e) => handleFundChange(fundId, e.target.checked)}
+                                        disabled={!formData.organization_id}
+                                      />
+                                    </Col>
+                                  )
+                                })}
+                              </div>
+                            )}
+                            {formData.fund_ids && formData.fund_ids.length > 0 && (
+                              <div className="mt-3">
+                                <small className="text-muted">
+                                  {formData.fund_ids.length} fund{formData.fund_ids.length > 1 ? 's' : ''} selected
+                                </small>
+                              </div>
+                            )}
+                          </CardBody>
+                        </Card>
                       )}
                     </FormGroup>
                   </Col>
