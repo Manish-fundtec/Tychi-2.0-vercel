@@ -211,7 +211,7 @@ const AddRolePage = () => {
       }
 
       // Submit to API
-      await api.post('/api/v1/roles', payload)
+      await api.post('/api/v1/roles/with-permissions', payload)
       
       showNotification({
         message: 'Role created successfully!',
