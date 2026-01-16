@@ -52,6 +52,7 @@ const AdminUsersPage = () => {
       { field: 'last_name', headerName: 'Last Name', flex: 1 },
       { field: 'email', headerName: 'Email', flex: 1 },
       { field: 'phone_number', headerName: 'Phone', flex: 1 },
+      { field: 'role_name', headerName: 'Role', flex: 1 },
       { field: 'cognito_status', headerName: 'Cognito Status', flex: 1 },
       { field: 'status', headerName: 'Status', flex: 1 },
       { field: 'createdAt', headerName: 'Created At', flex: 1 },
