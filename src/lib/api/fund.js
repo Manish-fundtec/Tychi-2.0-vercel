@@ -40,12 +40,12 @@ export const updateFund = async (fundId, payload) => {
 
 // ✅ Admin: Get all funds
 export const getAllFundsAdmin = async () => {
-  const res = await api.get('/api/v1/fund-management/admin/all')
+  const res = await api.get('/api/v1/fund/admin/all')
   return res.data
 }
 
 // ✅ Admin: Get funds by organization
 export const getFundsByOrganizationAdmin = async () => {
-  const res = await api.get('/api/v1/fund-management/admin/by-organization')
+  const res = await api.get('/api/v1/fund/admin/by-organization')
   return res.data
 }
