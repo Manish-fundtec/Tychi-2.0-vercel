@@ -41,7 +41,7 @@ const useSignIn = () => {
         password: values.password,
       });
 
-      const { accessToken } = response.data;
+      const { accessToken, user } = response.data;
 
       if (accessToken) {
         // ✅ Store token in cookie for backend to read
@@ -56,8 +56,15 @@ const useSignIn = () => {
           variant: 'success',
         });
 
-        // 🚀 Redirect after successful login
-        push(queryParams['redirectTo'] ?? '/fundlist');
+        // 🚀 Check if user is admin and redirect accordingly
+        const isAdmin = user?.isAdmin || 
+                       user?.role_tag?.toUpperCase() === 'ADMIN' || 
+                       user?.role_name?.toLowerCase() === 'admin';
+        
+        const redirectPath = queryParams['redirectTo'] ?? 
+                            (isAdmin ? '/admindashboards/analytics' : '/fundlist');
+
+        push(redirectPath);
       } else {
         showNotification({
           message: 'Login failed. No token returned from server.',
