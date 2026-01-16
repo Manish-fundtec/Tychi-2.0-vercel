@@ -41,7 +41,7 @@ const useSignIn = () => {
         password: values.password,
       });
 
-      const { accessToken, user } = response.data;
+      const { accessToken, user, dashboardToken } = response.data;
 
       if (accessToken) {
         // ✅ Store token in cookie for backend to read
@@ -51,15 +51,25 @@ const useSignIn = () => {
           secure: process.env.NODE_ENV === 'production',
         });
 
-        showNotification({
-          message: 'Successfully logged in. Redirecting...',
-          variant: 'success',
-        });
-
         // 🚀 Check if user is admin and redirect accordingly
         const isAdmin = user?.isAdmin || 
                        user?.role_tag?.toUpperCase() === 'ADMIN' || 
                        user?.role_name?.toLowerCase() === 'admin';
+        
+        // ✅ For admin users, set dashboardToken from backend response
+        if (isAdmin && dashboardToken) {
+          Cookies.set('dashboardToken', dashboardToken, {
+            path: '/',
+            sameSite: 'Lax',
+            secure: process.env.NODE_ENV === 'production',
+            expires: 6 / 24, // 6 hours (matching backend expiry)
+          });
+        }
+
+        showNotification({
+          message: 'Successfully logged in. Redirecting...',
+          variant: 'success',
+        });
         
         const redirectPath = queryParams['redirectTo'] ?? 
                             (isAdmin ? '/admindashboards/analytics' : '/fundlist');
