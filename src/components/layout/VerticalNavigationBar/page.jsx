@@ -11,6 +11,7 @@ import { getMenuItems } from '@/helpers/Manu';
 import { getAdminMenuItems } from '@/helpers/AdminMenu';
 import { getFundDetails } from '@/lib/api/fund';
 import { ADMIN_DASHBOARD_MENU_ITEMS } from '@/assets/data/admin-dashboard-menu-items';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 
 // Helper function to get all admin menu URLs (including nested children)
 const getAllAdminMenuUrls = (menuItems) => {
@@ -33,6 +34,9 @@ const getAllAdminMenuUrls = (menuItems) => {
 const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
   const pathname = usePathname();
   
+  // Get user permissions (only for regular menu, not admin dashboard)
+  const { permissions: userPermissions, loading: permissionsLoading } = useUserPermissions();
+  
   // Get all admin menu URLs
   const adminMenuUrls = getAllAdminMenuUrls(ADMIN_DASHBOARD_MENU_ITEMS);
   
@@ -45,7 +49,7 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
     if (isAdminDashboardRoute) {
       return getAdminMenuItems(tokenData);
     }
-    return getMenuItems(tokenData);
+    return getMenuItems(tokenData, userPermissions);
   });
   const [fundData, setFundData] = useState(null);
 
@@ -76,16 +80,17 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
               onboardingmode: data.onboardingmode || data.onboarding_mode,
             },
           };
-          setMenuItems(getMenuItems(enhancedTokenData));
+          // Update menu items with permissions
+          setMenuItems(getMenuItems(enhancedTokenData, userPermissions));
         })
         .catch((err) => {
           console.error('Failed to fetch fund details for menu:', err);
         });
       } else {
-      // Update menu items when tokenData changes
-      setMenuItems(getMenuItems(tokenData));
+      // Update menu items when tokenData or permissions change
+      setMenuItems(getMenuItems(tokenData, userPermissions));
     }
-  }, [tokenData, isAdminDashboardRoute]);
+  }, [tokenData, isAdminDashboardRoute, userPermissions]);
 
   return (
     <div className="main-nav" id="leftside-menu-container">

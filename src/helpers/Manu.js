@@ -1,8 +1,58 @@
 import { MENU_ITEMS } from '@/assets/data/menu-items';
+import { hasMenuPermission, getModuleKeyFromMenuItem } from '@/config/menu-module-mapping';
 
-export const getMenuItems = (tokenData) => {
+/**
+ * Filter menu items based on user permissions
+ * Recursively filters menu items and their children
+ */
+const filterMenuItemsByPermissions = (items, userPermissions, fundId) => {
+  if (!items || !Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .map(item => {
+      // Don't filter title items
+      if (item.isTitle) {
+        return item;
+      }
+
+      // Check if this menu item has permission
+      const hasPermission = hasMenuPermission(item, userPermissions, fundId);
+
+      // If item has children, filter them first
+      let filteredChildren = null;
+      if (item.children && Array.isArray(item.children)) {
+        filteredChildren = filterMenuItemsByPermissions(item.children, userPermissions, fundId);
+        
+        // If parent has permission OR has visible children, show parent
+        if (hasPermission || filteredChildren.length > 0) {
+          return {
+            ...item,
+            children: filteredChildren.length > 0 ? filteredChildren : undefined
+          };
+        }
+        // If parent doesn't have permission and no visible children, hide it
+        return null;
+      }
+
+      // If no children, check permission directly
+      if (hasPermission) {
+        return item;
+      }
+
+      // No permission, hide item
+      return null;
+    })
+    .filter(item => item !== null); // Remove null items
+};
+
+export const getMenuItems = (tokenData, userPermissions = null) => {
   // Clone menu items to avoid mutating original
   const menuItems = JSON.parse(JSON.stringify(MENU_ITEMS));
+  
+  // Get fund_id from tokenData
+  const fundId = tokenData?.fund_id || tokenData?.fund?.fund_id || null;
   
   // Find General Ledger menu (key: 'customers')
   const generalLedger = menuItems.find(item => item.key === 'customers');
@@ -44,6 +94,11 @@ export const getMenuItems = (tokenData) => {
       // Remove Migration if onboarding mode is not 'existing'
       generalLedger.children = generalLedger.children.filter(child => child.key !== 'migration');
     }
+  }
+  
+  // Filter menu items based on permissions if provided
+  if (userPermissions && Array.isArray(userPermissions) && fundId) {
+    return filterMenuItemsByPermissions(menuItems, userPermissions, fundId);
   }
   
   return menuItems;
