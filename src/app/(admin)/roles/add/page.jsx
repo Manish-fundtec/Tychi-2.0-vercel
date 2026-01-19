@@ -37,11 +37,9 @@ const AddRolePage = () => {
   
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [organizations, setOrganizations] = useState([])
   const [funds, setFunds] = useState([])
   const [modules, setModules] = useState([])
-  const [loadingOrgs, setLoadingOrgs] = useState(true)
-  const [loadingFunds, setLoadingFunds] = useState(false)
+  const [loadingFunds, setLoadingFunds] = useState(true)
   const [loadingModules, setLoadingModules] = useState(true)
   const [error, setError] = useState('')
 
@@ -49,27 +47,28 @@ const AddRolePage = () => {
   const [formData, setFormData] = useState({
     role_name: '',
     role_description: '',
-    org_id: '',
     funds: [], // Array of selected fund IDs
     permissions: {} // { fundId: { moduleKey: { can_view, can_add, can_edit, can_delete } } }
   })
 
-  // Fetch organizations on mount
+  // Fetch funds on mount
   useEffect(() => {
-    const fetchOrganizations = async () => {
-      setLoadingOrgs(true)
+    const fetchFunds = async () => {
+      setLoadingFunds(true)
       try {
-        const response = await api.get('/api/v1/organization')
-        const data = response.data?.data || response.data || []
-        setOrganizations(data)
+        // Fetch all funds from admin endpoint
+        const data = await getAllFundsAdmin()
+        const allFunds = data?.funds || data || []
+        setFunds(allFunds)
       } catch (error) {
-        console.error('Error fetching organizations:', error)
-        setError('Failed to load organizations')
+        console.error('Error fetching funds:', error)
+        setError('Failed to load funds')
+        setFunds([])
       } finally {
-        setLoadingOrgs(false)
+        setLoadingFunds(false)
       }
     }
-    fetchOrganizations()
+    fetchFunds()
   }, [])
 
   // Fetch modules on mount
@@ -90,55 +89,13 @@ const AddRolePage = () => {
     fetchModules()
   }, [])
 
-  // Fetch funds when organization is selected
-  useEffect(() => {
-    const fetchFundsForOrg = async () => {
-      if (!formData.org_id) {
-        setFunds([])
-        return
-      }
-
-      setLoadingFunds(true)
-      try {
-        // Fetch all funds from admin endpoint
-        const data = await getAllFundsAdmin()
-        const allFunds = data?.funds || data || []
-        
-        // Filter funds by organization_id
-        const filteredFunds = allFunds.filter(fund => {
-          if (fund.organization?.org_id) {
-            return fund.organization.org_id === formData.org_id
-          }
-          if (fund.organization_id) {
-            return fund.organization_id === formData.org_id
-          }
-          if (fund.org_id) {
-            return fund.org_id === formData.org_id
-          }
-          return false
-        })
-        
-        setFunds(filteredFunds)
-      } catch (error) {
-        console.error('Error fetching funds:', error)
-        setError('Failed to load funds')
-        setFunds([])
-      } finally {
-        setLoadingFunds(false)
-      }
-    }
-
-    fetchFundsForOrg()
-  }, [formData.org_id])
 
   // Handle form field changes
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
-      [name]: value,
-      // Reset funds and permissions when organization changes
-      ...(name === 'org_id' ? { funds: [], permissions: {} } : {})
+      [name]: value
     }))
   }
 
@@ -189,7 +146,7 @@ const AddRolePage = () => {
 
   // Transform form data to API format (matching guide)
   const transformFormDataForAPI = () => {
-    const { role_name, role_description, org_id, funds, permissions } = formData
+    const { role_name, role_description, funds, permissions } = formData
     
     // Build permissions array
     const permissionsArray = []
@@ -211,7 +168,6 @@ const AddRolePage = () => {
     return {
       role_name,
       role_description,
-      org_id,
       funds: funds,
       permissions: permissionsArray
     }
@@ -225,11 +181,6 @@ const AddRolePage = () => {
     // Validation
     if (!formData.role_name.trim()) {
       setError('Role name is required')
-      return
-    }
-
-    if (!formData.org_id) {
-      setError('Please select an organization')
       return
     }
 
@@ -342,35 +293,6 @@ const AddRolePage = () => {
                   </Col>
                 </Row>
 
-                {/* Organization Dropdown */}
-                <Row>
-                  <Col md={6}>
-                    <FormGroup className="mb-3">
-                      <FormLabel>Organization *</FormLabel>
-                      {loadingOrgs ? (
-                        <div className="d-flex align-items-center gap-2">
-                          <Spinner animation="border" size="sm" />
-                          <span>Loading organizations...</span>
-                        </div>
-                      ) : (
-                        <FormSelect
-                          name="org_id"
-                          value={formData.org_id}
-                          onChange={handleChange}
-                          required
-                        >
-                          <option value="">Select Organization</option>
-                          {organizations.map((org) => (
-                            <option key={org.organization_id || org.id} value={org.organization_id || org.id}>
-                              {org.organization_name || org.name}
-                            </option>
-                          ))}
-                        </FormSelect>
-                      )}
-                    </FormGroup>
-                  </Col>
-                </Row>
-
                 {/* Funds Selection (Multiple) */}
                 <Row>
                   <Col md={12}>
@@ -385,7 +307,7 @@ const AddRolePage = () => {
                         <Card className="mt-2">
                           <CardBody>
                             {funds.length === 0 ? (
-                              <p className="text-muted mb-0">No funds available for this organization</p>
+                              <p className="text-muted mb-0">No funds available</p>
                             ) : (
                               <div className="row g-3">
                                 {funds.map((fund) => {
@@ -399,7 +321,6 @@ const AddRolePage = () => {
                                         label={fund.fund_name || fund.name}
                                         checked={isChecked}
                                         onChange={(e) => handleFundChange(fundId, e.target.checked)}
-                                        disabled={!formData.org_id}
                                       />
                                     </Col>
                                   )
