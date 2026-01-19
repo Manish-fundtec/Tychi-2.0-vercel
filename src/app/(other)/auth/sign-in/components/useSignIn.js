@@ -10,10 +10,13 @@ import useQueryParams from '@/hooks/useQueryParams';
 import { signIn } from 'next-auth/react';
 import axios from '@/lib/api/axios';
 import Cookies from 'js-cookie';
+import { useAuth } from '@/context/useAuthContext';
+
 const useSignIn = () => {
   const [loading, setLoading] = useState(false);
   const { push } = useRouter();
   const { showNotification } = useNotificationContext();
+  const { setUser, fetchUserPermissions } = useAuth();
   const queryParams = useQueryParams();
 
   const loginFormSchema = yup.object({
@@ -64,6 +67,17 @@ const useSignIn = () => {
             secure: process.env.NODE_ENV === 'production',
             expires: 6 / 24, // 6 hours (matching backend expiry)
           });
+        }
+
+        // ✅ Store user in context
+        setUser(user);
+
+        // ✅ Fetch and store permissions
+        try {
+          await fetchUserPermissions();
+        } catch (permError) {
+          console.error('Failed to fetch permissions after login:', permError);
+          // Continue with login even if permissions fail
         }
 
         showNotification({
