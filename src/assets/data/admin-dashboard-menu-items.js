@@ -47,16 +47,16 @@ export const ADMIN_DASHBOARD_MENU_ITEMS = [
   },
   {
     key: 'admin-roles',
-    label: 'Roles',
+    label: 'Roles & Permissions',
     icon: ADMIN_ICON_MAP['Roles'],
     url: '/roles',
   },
-  {
-    key: 'admin-permissions',
-    label: 'Permissions',
-    icon: ADMIN_ICON_MAP['Permissions'],
-    url: '/permissions',
-  },
+  // {
+  //   key: 'admin-permissions',
+  //   label: 'Permissions',
+  //   icon: ADMIN_ICON_MAP['Permissions'],
+  //   url: '/permissions',
+  // },
   {
     key: 'admin-settings',
     label: 'Settings',
