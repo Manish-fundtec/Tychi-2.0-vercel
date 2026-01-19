@@ -1,11 +1,11 @@
 import { MENU_ITEMS } from '@/assets/data/menu-items';
-import { hasMenuPermission, getModuleKeyFromMenuItem } from '@/config/menu-module-mapping';
+import { hasMenuPermission } from '@/config/menu-module-mapping';
 
 /**
  * Filter menu items based on user permissions
  * Recursively filters menu items and their children
  */
-const filterMenuItemsByPermissions = (items, userPermissions, fundId) => {
+const filterMenuItemsByPermissions = (items, userPermissions) => {
   if (!items || !Array.isArray(items)) {
     return [];
   }
@@ -18,12 +18,12 @@ const filterMenuItemsByPermissions = (items, userPermissions, fundId) => {
       }
 
       // Check if this menu item has permission
-      const hasPermission = hasMenuPermission(item, userPermissions, fundId);
+      const hasPermission = hasMenuPermission(item, userPermissions);
 
       // If item has children, filter them first
       let filteredChildren = null;
       if (item.children && Array.isArray(item.children)) {
-        filteredChildren = filterMenuItemsByPermissions(item.children, userPermissions, fundId);
+        filteredChildren = filterMenuItemsByPermissions(item.children, userPermissions);
         
         // If parent has permission OR has visible children, show parent
         if (hasPermission || filteredChildren.length > 0) {
@@ -50,9 +50,6 @@ const filterMenuItemsByPermissions = (items, userPermissions, fundId) => {
 export const getMenuItems = (tokenData, userPermissions = null) => {
   // Clone menu items to avoid mutating original
   const menuItems = JSON.parse(JSON.stringify(MENU_ITEMS));
-  
-  // Get fund_id from tokenData
-  const fundId = tokenData?.fund_id || tokenData?.fund?.fund_id || null;
   
   // Find General Ledger menu (key: 'customers')
   const generalLedger = menuItems.find(item => item.key === 'customers');
@@ -97,8 +94,8 @@ export const getMenuItems = (tokenData, userPermissions = null) => {
   }
   
   // Filter menu items based on permissions if provided
-  if (userPermissions && Array.isArray(userPermissions) && fundId) {
-    return filterMenuItemsByPermissions(menuItems, userPermissions, fundId);
+  if (userPermissions && userPermissions.modules) {
+    return filterMenuItemsByPermissions(menuItems, userPermissions);
   }
   
   return menuItems;
