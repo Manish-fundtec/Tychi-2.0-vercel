@@ -125,25 +125,6 @@ api.interceptors.response.use(
       }
     }
     
-    // Handle 403 Forbidden errors - redirect to 403 page
-    if (typeof window !== 'undefined' && error.response?.status === 403) {
-      // Don't redirect if already on 403 page or if it's a permissions endpoint
-      const currentPath = window.location.pathname;
-      const isPermissionsEndpoint = error.config?.url?.includes('/permissions');
-      
-      if (currentPath !== '/403' && !isPermissionsEndpoint) {
-        console.warn('⚠️ 403 Forbidden - Redirecting to access denied page');
-        // Use setTimeout to avoid navigation during render
-        setTimeout(() => {
-          window.location.href = '/403';
-        }, 100);
-      }
-      
-      // Enhance error object for easier handling
-      error.isPermissionError = true;
-      error.errorMessage = error.response?.data?.message || 'You do not have permission to perform this action';
-    }
-    
     // Handle exceed limit errors for symbol and manualjournal requests
     if (typeof window !== 'undefined' && (isSymbolRequest || isManualJournalRequest)) {
       const status = error.response?.status;

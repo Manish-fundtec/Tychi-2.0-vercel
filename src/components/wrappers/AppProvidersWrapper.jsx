@@ -9,8 +9,6 @@ const LayoutProvider = dynamic(() => import('@/context/useLayoutContext').then(m
   ssr: false
 });
 import { NotificationProvider } from '@/context/useNotificationContext';
-import { AuthProvider } from '@/context/useAuthContext';
-
 const AppProvidersWrapper = ({
   children
 }) => {
@@ -33,14 +31,12 @@ const AppProvidersWrapper = ({
     };
   }, []);
   return <SessionProvider>
-      <AuthProvider>
-        <LayoutProvider>
-          <NotificationProvider>
-            {children}
-            <ToastContainer theme="colored" />
-          </NotificationProvider>
-        </LayoutProvider>
-      </AuthProvider>
+      <LayoutProvider>
+        <NotificationProvider>
+          {children}
+          <ToastContainer theme="colored" />
+        </NotificationProvider>
+      </LayoutProvider>
     </SessionProvider>;
 };
 export default AppProvidersWrapper;

@@ -4,14 +4,12 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Cookies from 'js-cookie'
 import { Dropdown, DropdownHeader, DropdownItem, DropdownMenu, DropdownToggle } from 'react-bootstrap'
-import { useAuth } from '@/context/useAuthContext'
 
 const ProfileDropdown = () => {
   const fundName = 'Celestia Capital Fund' // Your Fund Name
   const fundInitial = fundName.charAt(0).toUpperCase() // Extract First Letter
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
-  const { clearAuth } = useAuth()
 
   const handleLogout = async () => {
     if (loggingOut) return
@@ -26,9 +24,6 @@ const ProfileDropdown = () => {
       const logoutJson = await res.json().catch(() => ({}))
       console.log('🔒 Logout response:', logoutJson)
 
-      // Clear auth context (user and permissions)
-      clearAuth()
-
       // Clear cookies client-side
       Cookies.remove('dashboardToken', { path: '/' })
       Cookies.remove('userToken', { path: '/' })
@@ -42,8 +37,7 @@ const ProfileDropdown = () => {
       router.replace('/auth/sign-in')
     } catch (e) {
       console.error('Logout failed:', e)
-      // Still clear auth context, cookies and redirect even if API call fails
-      clearAuth()
+      // Still clear cookies and redirect even if API call fails
       Cookies.remove('dashboardToken', { path: '/' })
       Cookies.remove('userToken', { path: '/' })
       router.replace('/auth/sign-in')

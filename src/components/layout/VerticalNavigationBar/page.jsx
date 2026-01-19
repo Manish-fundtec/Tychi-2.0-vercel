@@ -11,7 +11,6 @@ import { getMenuItems } from '@/helpers/Manu';
 import { getAdminMenuItems } from '@/helpers/AdminMenu';
 import { getFundDetails } from '@/lib/api/fund';
 import { ADMIN_DASHBOARD_MENU_ITEMS } from '@/assets/data/admin-dashboard-menu-items';
-import { useAuth } from '@/context/useAuthContext';
 
 // Helper function to get all admin menu URLs (including nested children)
 const getAllAdminMenuUrls = (menuItems) => {
@@ -33,7 +32,6 @@ const getAllAdminMenuUrls = (menuItems) => {
 
 const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
   const pathname = usePathname();
-  const { permissions } = useAuth();
   
   // Get all admin menu URLs
   const adminMenuUrls = getAllAdminMenuUrls(ADMIN_DASHBOARD_MENU_ITEMS);
@@ -45,17 +43,17 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
   
   const [menuItems, setMenuItems] = useState(() => {
     if (isAdminDashboardRoute) {
-      return getAdminMenuItems(tokenData, permissions);
+      return getAdminMenuItems(tokenData);
     }
-    return getMenuItems(tokenData, permissions);
+    return getMenuItems(tokenData);
   });
   const [fundData, setFundData] = useState(null);
 
   // Fetch fund details if onboarding mode is not in token (only for regular menu)
   useEffect(() => {
     if (isAdminDashboardRoute) {
-      // For admin dashboard, just update menu items when tokenData or permissions change
-      setMenuItems(getAdminMenuItems(tokenData, permissions));
+      // For admin dashboard, just update menu items when tokenData changes
+      setMenuItems(getAdminMenuItems(tokenData));
       return;
     }
 
@@ -78,16 +76,16 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
               onboardingmode: data.onboardingmode || data.onboarding_mode,
             },
           };
-          setMenuItems(getMenuItems(enhancedTokenData, permissions));
+          setMenuItems(getMenuItems(enhancedTokenData));
         })
         .catch((err) => {
           console.error('Failed to fetch fund details for menu:', err);
         });
       } else {
-      // Update menu items when tokenData or permissions change
-      setMenuItems(getMenuItems(tokenData, permissions));
+      // Update menu items when tokenData changes
+      setMenuItems(getMenuItems(tokenData));
     }
-  }, [tokenData, isAdminDashboardRoute, permissions]);
+  }, [tokenData, isAdminDashboardRoute]);
 
   return (
     <div className="main-nav" id="leftside-menu-container">
