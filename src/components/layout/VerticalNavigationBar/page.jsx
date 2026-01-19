@@ -12,6 +12,7 @@ import { getAdminMenuItems } from '@/helpers/AdminMenu';
 import { getFundDetails } from '@/lib/api/fund';
 import { ADMIN_DASHBOARD_MENU_ITEMS } from '@/assets/data/admin-dashboard-menu-items';
 import { useAuth } from '@/context/useAuthContext';
+import Cookies from 'js-cookie';
 
 // Helper function to get all admin menu URLs (including nested children)
 const getAllAdminMenuUrls = (menuItems) => {
@@ -35,6 +36,9 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
   const pathname = usePathname();
   const { permissions } = useAuth();
   
+  // Check if user has dashboardToken (admin indicator)
+  const hasDashboardToken = typeof window !== 'undefined' && !!Cookies.get('dashboardToken');
+  
   // Get all admin menu URLs
   const adminMenuUrls = getAllAdminMenuUrls(ADMIN_DASHBOARD_MENU_ITEMS);
   
@@ -45,17 +49,20 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
   
   const [menuItems, setMenuItems] = useState(() => {
     if (isAdminDashboardRoute) {
-      return getAdminMenuItems(tokenData, permissions);
+      return getAdminMenuItems(tokenData, permissions, hasDashboardToken);
     }
-    return getMenuItems(tokenData, permissions);
+    return getMenuItems(tokenData, permissions, hasDashboardToken);
   });
   const [fundData, setFundData] = useState(null);
 
   // Fetch fund details if onboarding mode is not in token (only for regular menu)
   useEffect(() => {
+    // Re-check dashboardToken on each render
+    const currentHasDashboardToken = typeof window !== 'undefined' && !!Cookies.get('dashboardToken');
+    
     if (isAdminDashboardRoute) {
       // For admin dashboard, just update menu items when tokenData or permissions change
-      setMenuItems(getAdminMenuItems(tokenData, permissions));
+      setMenuItems(getAdminMenuItems(tokenData, permissions, currentHasDashboardToken));
       return;
     }
 
@@ -78,14 +85,14 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
               onboardingmode: data.onboardingmode || data.onboarding_mode,
             },
           };
-          setMenuItems(getMenuItems(enhancedTokenData, permissions));
+          setMenuItems(getMenuItems(enhancedTokenData, permissions, currentHasDashboardToken));
         })
         .catch((err) => {
           console.error('Failed to fetch fund details for menu:', err);
         });
       } else {
       // Update menu items when tokenData or permissions change
-      setMenuItems(getMenuItems(tokenData, permissions));
+      setMenuItems(getMenuItems(tokenData, permissions, currentHasDashboardToken));
     }
   }, [tokenData, isAdminDashboardRoute, permissions]);
 

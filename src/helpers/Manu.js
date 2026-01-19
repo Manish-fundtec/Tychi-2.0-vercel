@@ -17,12 +17,42 @@ const MENU_MODULE_MAP = {
 };
 
 /**
+ * Check if user is admin based on tokenData
+ * @param {Object} tokenData - Token data from JWT
+ * @param {boolean} hasDashboardToken - Whether user has dashboardToken (admin indicator)
+ * @returns {boolean} - True if user is admin
+ */
+const isAdminUser = (tokenData, hasDashboardToken = false) => {
+  // If dashboardToken exists, user is definitely admin
+  if (hasDashboardToken) {
+    return true;
+  }
+  
+  if (!tokenData) {
+    return false;
+  }
+  
+  // Check admin flags in token
+  return tokenData.isAdmin === true ||
+         tokenData.role_tag?.toUpperCase() === 'ADMIN' ||
+         tokenData.role_name?.toLowerCase() === 'admin' ||
+         tokenData.user_type?.toLowerCase() === 'admin';
+};
+
+/**
  * Filter menu items based on user permissions
  * @param {Array} items - Menu items to filter
  * @param {Object} permissions - User permissions object { modules: {}, funds: {} }
+ * @param {boolean} isAdmin - Whether user is admin (skip permission checks if true)
  * @returns {Array} - Filtered menu items
  */
-const filterMenuByPermissions = (items, permissions) => {
+const filterMenuByPermissions = (items, permissions, isAdmin = false) => {
+  // If user is admin, show all menu items without filtering
+  if (isAdmin) {
+    return items;
+  }
+
+  // If no permissions data, show all items (backward compatibility)
   if (!permissions || !permissions.modules) {
     return items;
   }
@@ -36,7 +66,7 @@ const filterMenuByPermissions = (items, permissions) => {
 
       // Check if item has children - filter children first
       if (item.children) {
-        const filteredChildren = filterMenuByPermissions(item.children, permissions);
+        const filteredChildren = filterMenuByPermissions(item.children, permissions, isAdmin);
         // Keep parent if it has at least one visible child
         if (filteredChildren.length > 0) {
           item.children = filteredChildren;
@@ -65,9 +95,12 @@ const filterMenuByPermissions = (items, permissions) => {
     });
 };
 
-export const getMenuItems = (tokenData, permissions = null) => {
+export const getMenuItems = (tokenData, permissions = null, hasDashboardToken = false) => {
   // Clone menu items to avoid mutating original
   const menuItems = JSON.parse(JSON.stringify(MENU_ITEMS));
+  
+  // Check if user is admin
+  const isAdmin = isAdminUser(tokenData, hasDashboardToken);
   
   // Find General Ledger menu (key: 'customers')
   const generalLedger = menuItems.find(item => item.key === 'customers');
@@ -111,12 +144,8 @@ export const getMenuItems = (tokenData, permissions = null) => {
     }
   }
   
-  // Filter menu items based on permissions if provided
-  if (permissions) {
-    return filterMenuByPermissions(menuItems, permissions);
-  }
-  
-  return menuItems;
+  // Filter menu items based on permissions (skip if admin)
+  return filterMenuByPermissions(menuItems, permissions, isAdmin);
 };
 export const findAllParent = (menuItems, menuItem) => {
   let parents = [];
