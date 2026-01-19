@@ -50,7 +50,7 @@ const PermissionExample = () => {
               <Button variant="danger">Delete Trade</Button>
             )}
             {!canViewTrade && (
-              <Alert variant="warning">You don't have permission to view trades</Alert>
+              <Alert variant="warning">You don&apos;t have permission to view trades</Alert>
             )}
           </div>
         </CardBody>
@@ -64,8 +64,8 @@ const PermissionExample = () => {
         <CardBody>
           <ProtectedRoute module="trade" action="can_view">
             <Alert variant="info">
-              This content is only visible if you have 'can_view' permission for 'trade' module.
-              If you don't have permission, you'll be redirected to /403.
+              This content is only visible if you have &apos;can_view&apos; permission for &apos;trade&apos; module.
+              If you don&apos;t have permission, you&apos;ll be redirected to /403.
             </Alert>
           </ProtectedRoute>
         </CardBody>
