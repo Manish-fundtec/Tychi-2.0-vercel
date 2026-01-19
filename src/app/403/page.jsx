@@ -22,9 +22,9 @@ const Error403 = () => {
             <div className="mb-4">
               <i className="ri-shield-cross-line" style={{ fontSize: '4rem', color: '#dc3545' }}></i>
             </div>
-            <h4 className="mb-3">You don&apos;t have permission to access this resource</h4>
+            <h4 className="mb-3">You don't have permission to access this resource</h4>
             <p className="text-muted mb-4">
-              The page or resource you&apos;re trying to access requires specific permissions that you don&apos;t currently have.
+              The page or resource you're trying to access requires specific permissions that you don't currently have.
               Please contact your administrator if you believe this is an error.
             </p>
             <div className="d-flex gap-2 justify-content-center">
