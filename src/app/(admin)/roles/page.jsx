@@ -21,8 +21,43 @@ const RolesPage = () => {
   const refreshRoles = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await api.get('/api/v1/roles/with-permissions')
-      const data = response.data?.data || response.data || []
+      // First, try to get all organizations
+      const orgsResponse = await api.get('/api/v1/organization')
+      const organizations = orgsResponse.data?.data || orgsResponse.data || []
+      
+      if (organizations.length === 0) {
+        setRowData([])
+        setLoading(false)
+        return
+      }
+
+      // Fetch roles for all organizations and combine them
+      const allRolesPromises = organizations.map(async (org) => {
+        try {
+          const orgId = org.organization_id || org.id
+          const response = await api.get(`/api/v1/roles/org/${orgId}/with-permissions`)
+          const data = response.data?.data || response.data || []
+          return Array.isArray(data) ? data : []
+        } catch (error) {
+          console.error(`Error fetching roles for org ${org.organization_id || org.id}:`, error)
+          return []
+        }
+      })
+
+      const allRolesArrays = await Promise.all(allRolesPromises)
+      const allRoles = allRolesArrays.flat()
+      
+      // Remove duplicates based on role_id
+      const uniqueRolesMap = new Map()
+      allRoles.forEach(role => {
+        const roleId = role.role_id || role.id
+        if (roleId && !uniqueRolesMap.has(roleId)) {
+          uniqueRolesMap.set(roleId, role)
+        }
+      })
+      
+      const data = Array.from(uniqueRolesMap.values())
+      
       const mapped = data.map(role => ({
         id: role.role_id,
         name: role.role_name,
@@ -33,9 +68,11 @@ const RolesPage = () => {
         permissions: role.permissions || [],
         funds: role.funds || [],
       }))
+      
       setRowData(mapped)
     } catch (error) {
       console.error('Error fetching roles:', error)
+      console.error('Error response:', error?.response?.data)
       setRowData([])
     } finally {
       setLoading(false)
