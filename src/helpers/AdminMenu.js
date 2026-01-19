@@ -12,42 +12,12 @@ const ADMIN_MENU_MODULE_MAP = {
 };
 
 /**
- * Check if user is admin based on tokenData
- * @param {Object} tokenData - Token data from JWT
- * @param {boolean} hasDashboardToken - Whether user has dashboardToken (admin indicator)
- * @returns {boolean} - True if user is admin
- */
-const isAdminUser = (tokenData, hasDashboardToken = false) => {
-  // If dashboardToken exists, user is definitely admin
-  if (hasDashboardToken) {
-    return true;
-  }
-  
-  if (!tokenData) {
-    return false;
-  }
-  
-  // Check admin flags in token
-  return tokenData.isAdmin === true ||
-         tokenData.role_tag?.toUpperCase() === 'ADMIN' ||
-         tokenData.role_name?.toLowerCase() === 'admin' ||
-         tokenData.user_type?.toLowerCase() === 'admin';
-};
-
-/**
  * Filter admin menu items based on user permissions
  * @param {Array} items - Menu items to filter
  * @param {Object} permissions - User permissions object { modules: {}, funds: {} }
- * @param {boolean} isAdmin - Whether user is admin (skip permission checks if true)
  * @returns {Array} - Filtered menu items
  */
-const filterAdminMenuByPermissions = (items, permissions, isAdmin = false) => {
-  // If user is admin, show all admin menu items without filtering
-  if (isAdmin) {
-    return items;
-  }
-
-  // If no permissions data, show all items (backward compatibility)
+const filterAdminMenuByPermissions = (items, permissions) => {
   if (!permissions || !permissions.modules) {
     return items;
   }
@@ -61,7 +31,7 @@ const filterAdminMenuByPermissions = (items, permissions, isAdmin = false) => {
 
       // Check if item has children - filter children first
       if (item.children) {
-        const filteredChildren = filterAdminMenuByPermissions(item.children, permissions, isAdmin);
+        const filteredChildren = filterAdminMenuByPermissions(item.children, permissions);
         // Keep parent if it has at least one visible child
         if (filteredChildren.length > 0) {
           item.children = filteredChildren;
@@ -90,15 +60,19 @@ const filterAdminMenuByPermissions = (items, permissions, isAdmin = false) => {
     });
 };
 
-export const getAdminMenuItems = (tokenData, permissions = null, hasDashboardToken = false) => {
+export const getAdminMenuItems = (tokenData, permissions = null) => {
   // Clone menu items to avoid mutating original
   const menuItems = JSON.parse(JSON.stringify(ADMIN_DASHBOARD_MENU_ITEMS));
   
-  // Check if user is admin
-  const isAdmin = isAdminUser(tokenData, hasDashboardToken);
+  // Filter menu items based on permissions if provided
+  if (permissions) {
+    return filterAdminMenuByPermissions(menuItems, permissions);
+  }
   
-  // Filter menu items based on permissions (skip if admin)
-  return filterAdminMenuByPermissions(menuItems, permissions, isAdmin);
+  // You can add conditional logic here based on tokenData if needed
+  // For example, show/hide certain menu items based on admin permissions
+  
+  return menuItems;
 };
 
 export const findAllParent = (menuItems, menuItem) => {
