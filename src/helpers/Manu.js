@@ -1,6 +1,7 @@
 import { MENU_ITEMS } from '@/assets/data/menu-items';
+import { getVisibleMenuKeys, shouldShowMenuItem } from './moduleMenuMapping';
 
-export const getMenuItems = (tokenData) => {
+export const getMenuItems = (tokenData, permissions = [], fundId = null) => {
   // Clone menu items to avoid mutating original
   const menuItems = JSON.parse(JSON.stringify(MENU_ITEMS));
   
@@ -44,6 +45,40 @@ export const getMenuItems = (tokenData) => {
       // Remove Migration if onboarding mode is not 'existing'
       generalLedger.children = generalLedger.children.filter(child => child.key !== 'migration');
     }
+  }
+
+  // Filter menu items based on permissions
+  if (permissions && permissions.length > 0) {
+    const visibleMenuKeys = getVisibleMenuKeys(permissions, fundId);
+    
+    // Filter menu items based on permissions
+    const filteredMenuItems = menuItems.filter(item => {
+      // Always keep title items
+      if (item.isTitle) {
+        return true;
+      }
+
+      // Check if this item should be visible
+      if (!shouldShowMenuItem(item, visibleMenuKeys)) {
+        return false;
+      }
+
+      // Filter children if they exist
+      if (item.children && item.children.length > 0) {
+        item.children = item.children.filter(child => 
+          shouldShowMenuItem(child, visibleMenuKeys)
+        );
+        
+        // If no children are visible, hide the parent (unless it has a direct URL)
+        if (item.children.length === 0 && !item.url) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    return filteredMenuItems;
   }
   
   return menuItems;

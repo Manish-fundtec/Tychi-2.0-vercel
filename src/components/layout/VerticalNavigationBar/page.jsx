@@ -11,6 +11,7 @@ import { getMenuItems } from '@/helpers/Manu';
 import { getAdminMenuItems } from '@/helpers/AdminMenu';
 import { getFundDetails } from '@/lib/api/fund';
 import { ADMIN_DASHBOARD_MENU_ITEMS } from '@/assets/data/admin-dashboard-menu-items';
+import { getUserRolePermissions } from '@/helpers/getUserPermissions';
 
 // Helper function to get all admin menu URLs (including nested children)
 const getAllAdminMenuUrls = (menuItems) => {
@@ -48,12 +49,44 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
     return getMenuItems(tokenData);
   });
   const [fundData, setFundData] = useState(null);
+  const [userPermissions, setUserPermissions] = useState([]);
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
 
-  // Fetch fund details if onboarding mode is not in token (only for regular menu)
+  // Get fund ID from token
+  const fundId = tokenData?.fund_id || tokenData?.fundId || null;
+
+  // Fetch user permissions
   useEffect(() => {
+    if (!tokenData) {
+      setLoadingPermissions(false);
+      return;
+    }
+
+    const fetchPermissions = async () => {
+      try {
+        setLoadingPermissions(true);
+        const permissions = await getUserRolePermissions(tokenData, fundId);
+        setUserPermissions(permissions || []);
+      } catch (error) {
+        console.error('Error fetching user permissions:', error);
+        setUserPermissions([]);
+      } finally {
+        setLoadingPermissions(false);
+      }
+    };
+
+    fetchPermissions();
+  }, [tokenData, fundId]);
+
+  // Update menu items when tokenData, permissions, or route changes
+  useEffect(() => {
+    if (loadingPermissions) {
+      return; // Wait for permissions to load
+    }
+
     if (isAdminDashboardRoute) {
-      // For admin dashboard, just update menu items when tokenData changes
-      setMenuItems(getAdminMenuItems(tokenData));
+      // For admin dashboard, update menu items with permissions
+      setMenuItems(getAdminMenuItems(tokenData, userPermissions, fundId));
       return;
     }
 
@@ -76,16 +109,18 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
               onboardingmode: data.onboardingmode || data.onboarding_mode,
             },
           };
-          setMenuItems(getMenuItems(enhancedTokenData));
+          setMenuItems(getMenuItems(enhancedTokenData, userPermissions, fundId));
         })
         .catch((err) => {
           console.error('Failed to fetch fund details for menu:', err);
+          // Still update menu with permissions even if fund fetch fails
+          setMenuItems(getMenuItems(tokenData, userPermissions, fundId));
         });
-      } else {
+    } else {
       // Update menu items when tokenData changes
-      setMenuItems(getMenuItems(tokenData));
+      setMenuItems(getMenuItems(tokenData, userPermissions, fundId));
     }
-  }, [tokenData, isAdminDashboardRoute]);
+  }, [tokenData, isAdminDashboardRoute, userPermissions, fundId, loadingPermissions]);
 
   return (
     <div className="main-nav" id="leftside-menu-container">

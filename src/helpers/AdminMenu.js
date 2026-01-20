@@ -1,11 +1,44 @@
 import { ADMIN_DASHBOARD_MENU_ITEMS } from '@/assets/data/admin-dashboard-menu-items';
+import { getVisibleMenuKeys, shouldShowMenuItem } from './moduleMenuMapping';
 
-export const getAdminMenuItems = (tokenData) => {
+export const getAdminMenuItems = (tokenData, permissions = [], fundId = null) => {
   // Clone menu items to avoid mutating original
   const menuItems = JSON.parse(JSON.stringify(ADMIN_DASHBOARD_MENU_ITEMS));
   
-  // You can add conditional logic here based on tokenData if needed
-  // For example, show/hide certain menu items based on admin permissions
+  // Filter menu items based on permissions
+  // Note: Admin menus might not need permission filtering, but we'll support it
+  if (permissions && permissions.length > 0) {
+    const visibleMenuKeys = getVisibleMenuKeys(permissions, fundId);
+    
+    // Filter menu items based on permissions
+    const filteredMenuItems = menuItems.filter(item => {
+      // Always keep title items
+      if (item.isTitle) {
+        return true;
+      }
+
+      // Check if this item should be visible
+      if (!shouldShowMenuItem(item, visibleMenuKeys)) {
+        return false;
+      }
+
+      // Filter children if they exist
+      if (item.children && item.children.length > 0) {
+        item.children = item.children.filter(child => 
+          shouldShowMenuItem(child, visibleMenuKeys)
+        );
+        
+        // If no children are visible, hide the parent (unless it has a direct URL)
+        if (item.children.length === 0 && !item.url) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    return filteredMenuItems;
+  }
   
   return menuItems;
 };
