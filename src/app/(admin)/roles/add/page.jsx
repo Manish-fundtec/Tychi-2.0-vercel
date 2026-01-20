@@ -170,6 +170,67 @@ const AddRolePage = () => {
     })
   }
 
+  // Handle select all funds
+  const handleSelectAllFunds = (checked) => {
+    if (checked) {
+      // Select all funds
+      const allFundIds = funds.map(fund => fund.fund_id || fund.id)
+      const newPermissions = { ...formData.permissions }
+      
+      // Initialize permissions for all funds
+      allFundIds.forEach(fundId => {
+        if (!newPermissions[fundId]) {
+          newPermissions[fundId] = {}
+        }
+      })
+      
+      setFormData(prev => ({
+        ...prev,
+        funds: allFundIds,
+        permissions: newPermissions
+      }))
+    } else {
+      // Deselect all funds
+      setFormData(prev => ({
+        ...prev,
+        funds: [],
+        permissions: {}
+      }))
+    }
+  }
+
+  // Handle select all modules for a specific fund
+  const handleSelectAllModules = (fundId, checked) => {
+    setFormData(prev => {
+      const newPermissions = { ...prev.permissions }
+      
+      if (!newPermissions[fundId]) {
+        newPermissions[fundId] = {}
+      }
+      
+      if (checked) {
+        // Select all modules with all permissions
+        modules.forEach(module => {
+          const moduleKey = module.module_key || module.key
+          newPermissions[fundId][moduleKey] = {
+            can_view: true,
+            can_add: true,
+            can_edit: true,
+            can_delete: true
+          }
+        })
+      } else {
+        // Deselect all modules
+        newPermissions[fundId] = {}
+      }
+      
+      return {
+        ...prev,
+        permissions: newPermissions
+      }
+    })
+  }
+
   // Handle permission checkbox changes - fund-specific
   const handlePermissionChange = (fundId, moduleKey, permissionType, checked) => {
     setFormData(prev => ({
@@ -387,24 +448,40 @@ const AddRolePage = () => {
                             {funds.length === 0 ? (
                               <p className="text-muted mb-0">No funds available for this organization</p>
                             ) : (
-                              <div className="row g-3">
-                                {funds.map((fund) => {
-                                  const fundId = fund.fund_id || fund.id
-                                  const isChecked = formData.funds?.includes(fundId) || false
-                                  return (
-                                    <Col md={4} key={fundId}>
-                                      <FormCheck
-                                        type="checkbox"
-                                        id={`fund-${fundId}`}
-                                        label={fund.fund_name || fund.name}
-                                        checked={isChecked}
-                                        onChange={(e) => handleFundChange(fundId, e.target.checked)}
-                                        disabled={!formData.org_id}
-                                      />
-                                    </Col>
-                                  )
-                                })}
-                              </div>
+                              <>
+                                <div className="mb-3 pb-2 border-bottom">
+                                  <FormCheck
+                                    type="checkbox"
+                                    id="select-all-funds"
+                                    label="Select All Funds"
+                                    checked={funds.length > 0 && funds.every(fund => {
+                                      const fundId = fund.fund_id || fund.id
+                                      return formData.funds?.includes(fundId)
+                                    })}
+                                    onChange={(e) => handleSelectAllFunds(e.target.checked)}
+                                    disabled={!formData.org_id}
+                                    className="fw-semibold"
+                                  />
+                                </div>
+                                <div className="row g-3">
+                                  {funds.map((fund) => {
+                                    const fundId = fund.fund_id || fund.id
+                                    const isChecked = formData.funds?.includes(fundId) || false
+                                    return (
+                                      <Col md={4} key={fundId}>
+                                        <FormCheck
+                                          type="checkbox"
+                                          id={`fund-${fundId}`}
+                                          label={fund.fund_name || fund.name}
+                                          checked={isChecked}
+                                          onChange={(e) => handleFundChange(fundId, e.target.checked)}
+                                          disabled={!formData.org_id}
+                                        />
+                                      </Col>
+                                    )
+                                  })}
+                                </div>
+                              </>
                             )}
                             {formData.funds && formData.funds.length > 0 && (
                               <div className="mt-3">
@@ -439,7 +516,21 @@ const AddRolePage = () => {
                       <Row key={fundId} className="mb-4">
                         <Col md={12}>
                           <FormGroup>
-                            <FormLabel className="fw-bold">{fundName} - Module Permissions</FormLabel>
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <FormLabel className="fw-bold mb-0">{fundName} - Module Permissions</FormLabel>
+                              <FormCheck
+                                type="checkbox"
+                                id={`select-all-modules-${fundId}`}
+                                label="Select All Modules"
+                                checked={modules.length > 0 && modules.every(module => {
+                                  const moduleKey = module.module_key || module.key
+                                  const perm = formData.permissions[fundId]?.[moduleKey]
+                                  return perm && perm.can_view && perm.can_add && perm.can_edit && perm.can_delete
+                                })}
+                                onChange={(e) => handleSelectAllModules(fundId, e.target.checked)}
+                                className="fw-semibold"
+                              />
+                            </div>
                             <Card className="mt-2">
                               <CardBody>
                                 <div className="table-responsive">
