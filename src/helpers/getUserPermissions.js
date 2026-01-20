@@ -15,76 +15,90 @@ export const getUserRolePermissions = async (tokenData, fundId = null) => {
     const roleId = tokenData?.role_id || tokenData?.roleId;
     const orgId = tokenData?.org_id || tokenData?.organization_id;
 
+    console.log('🔍 getUserRolePermissions - Input:', { userId, roleId, orgId, fundId, tokenData });
+
     if (!userId && !roleId) {
-      console.warn('No user ID or role ID found in token');
+      console.warn('⚠️ No user ID or role ID found in token');
       return [];
     }
 
-    // If we have role ID, fetch role with permissions
-    if (roleId && orgId) {
+    // First, try to get user details to get role_id (if not in token)
+    let actualRoleId = roleId;
+    let actualOrgId = orgId;
+
+    if (userId && !actualRoleId) {
       try {
-        const response = await api.get(`/api/v1/roles/org/${orgId}/with-permissions`);
-        const roles = response.data?.data || response.data || [];
-        const userRole = Array.isArray(roles) 
-          ? roles.find(r => (r.role_id || r.id) === roleId)
-          : null;
-
-        if (userRole && userRole.permissions) {
-          let permissions = userRole.permissions || [];
-          
-          // Filter by fund if fundId is provided
-          if (fundId) {
-            permissions = permissions.filter(p => 
-              (p.fund_id || p.fundId) === fundId
-            );
-          }
-
-          return permissions;
-        }
+        console.log('📡 Fetching user details for userId:', userId);
+        const userResponse = await api.get(`/api/v1/users/${userId}`);
+        const user = userResponse.data?.data || userResponse.data;
+        console.log('👤 User details:', user);
+        
+        actualRoleId = user?.role_id || user?.roleId || user?.role?.role_id || user?.role?.id;
+        actualOrgId = user?.org_id || user?.organization_id || user?.organization?.org_id || orgId;
+        
+        console.log('✅ Extracted role info:', { actualRoleId, actualOrgId });
       } catch (error) {
-        console.error('Error fetching role permissions:', error);
+        console.error('❌ Error fetching user details:', error);
       }
     }
 
-    // Alternative: Try to get user details with role
-    if (userId) {
+    // If we have role ID and org ID, fetch role with permissions
+    if (actualRoleId && actualOrgId) {
       try {
-        const response = await api.get(`/api/v1/users/${userId}`);
-        const user = response.data?.data || response.data;
+        console.log('📡 Fetching role permissions for roleId:', actualRoleId, 'orgId:', actualOrgId);
+        const response = await api.get(`/api/v1/roles/org/${actualOrgId}/with-permissions`);
+        const roles = response.data?.data || response.data || [];
+        console.log('📋 All roles:', roles);
         
-        if (user?.role_id || user?.roleId) {
-          const userRoleId = user.role_id || user.roleId;
-          const userOrgId = user.org_id || user.organization_id || orgId;
+        const userRole = Array.isArray(roles) 
+          ? roles.find(r => {
+              const rId = r.role_id || r.id;
+              const match = rId == actualRoleId || String(rId) === String(actualRoleId);
+              console.log('🔍 Comparing role:', rId, 'with', actualRoleId, 'match:', match);
+              return match;
+            })
+          : null;
+
+        console.log('🎭 User role found:', userRole);
+
+        if (userRole && userRole.permissions) {
+          let permissions = Array.isArray(userRole.permissions) ? userRole.permissions : [];
+          console.log('🔐 Raw permissions:', permissions);
           
-          if (userOrgId) {
-            const roleResponse = await api.get(`/api/v1/roles/org/${userOrgId}/with-permissions`);
-            const roles = roleResponse.data?.data || roleResponse.data || [];
-            const userRole = Array.isArray(roles)
-              ? roles.find(r => (r.role_id || r.id) === userRoleId)
-              : null;
-
-            if (userRole && userRole.permissions) {
-              let permissions = userRole.permissions || [];
-              
-              // Filter by fund if fundId is provided
-              if (fundId) {
-                permissions = permissions.filter(p => 
-                  (p.fund_id || p.fundId) === fundId
-                );
-              }
-
-              return permissions;
-            }
+          // Filter by fund if fundId is provided
+          if (fundId) {
+            permissions = permissions.filter(p => {
+              const pFundId = p.fund_id || p.fundId;
+              const match = pFundId == fundId || String(pFundId) === String(fundId);
+              return match;
+            });
+            console.log('🔐 Filtered permissions for fundId', fundId, ':', permissions);
           }
+
+          // Log each permission's module_key
+          permissions.forEach(p => {
+            console.log('📦 Permission:', {
+              module_key: p.module_key || p.moduleKey,
+              can_view: p.can_view,
+              fund_id: p.fund_id || p.fundId
+            });
+          });
+
+          return permissions;
+        } else {
+          console.warn('⚠️ User role found but no permissions:', userRole);
         }
       } catch (error) {
-        console.error('Error fetching user with role:', error);
+        console.error('❌ Error fetching role permissions:', error);
+        console.error('Error details:', error.response?.data || error.message);
       }
+    } else {
+      console.warn('⚠️ Missing roleId or orgId:', { actualRoleId, actualOrgId });
     }
 
     return [];
   } catch (error) {
-    console.error('Error in getUserRolePermissions:', error);
+    console.error('❌ Error in getUserRolePermissions:', error);
     return [];
   }
 };

@@ -48,8 +48,26 @@ export const getMenuItems = (tokenData, permissions = [], fundId = null) => {
   }
 
   // Filter menu items based on permissions
-  if (permissions && permissions.length > 0) {
+  // If permissions array is provided (even if empty), we filter
+  // If permissions is undefined/null, it means we haven't loaded them yet or user is admin - show all temporarily
+  if (permissions !== undefined && permissions !== null) {
+    console.log('🔐 Filtering menu with permissions:', permissions);
+    
+    if (permissions.length === 0) {
+      // User has no permissions - return only title
+      console.log('⚠️ No permissions found, showing only title');
+      return menuItems.filter(item => item.isTitle); // Only show title
+    }
+    
     const visibleMenuKeys = getVisibleMenuKeys(permissions, fundId);
+    console.log('🔍 Visible menu keys:', Array.from(visibleMenuKeys || []));
+    console.log('🔍 Total permissions:', permissions.length);
+    
+    // If no visible menu keys, show only title
+    if (!visibleMenuKeys || visibleMenuKeys.size === 0) {
+      console.log('⚠️ No visible menu keys found, showing only title');
+      return menuItems.filter(item => item.isTitle);
+    }
     
     // Filter menu items based on permissions
     const filteredMenuItems = menuItems.filter(item => {
@@ -59,28 +77,38 @@ export const getMenuItems = (tokenData, permissions = [], fundId = null) => {
       }
 
       // Check if this item should be visible
-      if (!shouldShowMenuItem(item, visibleMenuKeys)) {
+      const shouldShow = shouldShowMenuItem(item, visibleMenuKeys);
+      if (!shouldShow) {
+        console.log(`🚫 Hiding menu: ${item.key} (${item.label})`);
         return false;
       }
 
       // Filter children if they exist
       if (item.children && item.children.length > 0) {
+        const originalCount = item.children.length;
         item.children = item.children.filter(child => 
           shouldShowMenuItem(child, visibleMenuKeys)
         );
         
+        console.log(`📁 Menu ${item.key}: ${originalCount} children -> ${item.children.length} visible`);
+        
         // If no children are visible, hide the parent (unless it has a direct URL)
         if (item.children.length === 0 && !item.url) {
+          console.log(`🚫 Hiding parent menu (no visible children): ${item.key}`);
           return false;
         }
       }
 
+      console.log(`✅ Showing menu: ${item.key} (${item.label})`);
       return true;
     });
 
+    console.log('✅ Final filtered menu items count:', filteredMenuItems.length);
     return filteredMenuItems;
   }
   
+  // If permissions is undefined/null, show all (fallback - might be loading or admin)
+  console.log('ℹ️ Permissions not provided (undefined/null), showing all menus (might be loading or admin)');
   return menuItems;
 };
 export const findAllParent = (menuItems, menuItem) => {

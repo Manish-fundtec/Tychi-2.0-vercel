@@ -42,15 +42,20 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
     pathname?.startsWith('/admindashboards') ||
     adminMenuUrls.some(url => pathname === url || pathname?.startsWith(url + '/'));
   
-  const [menuItems, setMenuItems] = useState(() => {
-    if (isAdminDashboardRoute) {
-      return getAdminMenuItems(tokenData);
-    }
-    return getMenuItems(tokenData);
-  });
   const [fundData, setFundData] = useState(null);
-  const [userPermissions, setUserPermissions] = useState([]);
+  const [userPermissions, setUserPermissions] = useState([]); // Start with empty array, not undefined
   const [loadingPermissions, setLoadingPermissions] = useState(true);
+  
+  // Initialize menu items - will be updated when permissions load
+  const [menuItems, setMenuItems] = useState(() => {
+    // Initially show only title while permissions load
+    if (isAdminDashboardRoute) {
+      const items = getAdminMenuItems(tokenData, [], fundId);
+      return items.filter(item => item.isTitle);
+    }
+    const items = getMenuItems(tokenData, [], fundId);
+    return items.filter(item => item.isTitle);
+  });
 
   // Get fund ID from token
   const fundId = tokenData?.fund_id || tokenData?.fundId || null;
@@ -66,9 +71,19 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
       try {
         setLoadingPermissions(true);
         const permissions = await getUserRolePermissions(tokenData, fundId);
-        setUserPermissions(permissions || []);
+        console.log('🔐 Fetched user permissions:', permissions);
+        console.log('🔐 Permissions count:', permissions?.length || 0);
+        console.log('🔐 Token data:', tokenData);
+        console.log('🔐 Fund ID:', fundId);
+        
+        // Always set to array, never undefined
+        const permissionsArray = Array.isArray(permissions) ? permissions : [];
+        setUserPermissions(permissionsArray);
+        
+        console.log('🔐 Set userPermissions to:', permissionsArray);
       } catch (error) {
-        console.error('Error fetching user permissions:', error);
+        console.error('❌ Error fetching user permissions:', error);
+        // On error, set empty array so menu shows only title
         setUserPermissions([]);
       } finally {
         setLoadingPermissions(false);

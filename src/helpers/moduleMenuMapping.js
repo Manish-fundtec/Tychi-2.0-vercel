@@ -102,19 +102,24 @@ export const getVisibleMenuKeys = (permissions = [], fundId = null) => {
   const visibleMenuKeys = new Set();
   
   if (!permissions || permissions.length === 0) {
-    // If no permissions, show all menus (fallback for admin or no permission system)
-    return null; // null means show all
+    // If no permissions, return empty set (show nothing)
+    return new Set();
   }
+
+  console.log('🔍 Processing permissions:', permissions);
+  console.log('🔍 Fund ID filter:', fundId);
 
   permissions.forEach(permission => {
     // If fundId is provided, only consider permissions for that fund
-    if (fundId && permission.fund_id && permission.fund_id !== fundId) {
+    if (fundId && permission.fund_id && String(permission.fund_id) !== String(fundId)) {
+      console.log(`⏭️ Skipping permission - fund mismatch: ${permission.fund_id} !== ${fundId}`);
       return;
     }
 
     // Check if user has view permission for this module
-    if (permission.can_view) {
+    if (permission.can_view === true || permission.can_view === 1 || permission.can_view === 'true') {
       const moduleKey = permission.module_key || permission.moduleKey || permission.module;
+      console.log(`✅ Found permission with can_view=true for module: ${moduleKey}`);
       
       // Try to find menu key with case-insensitive matching
       const menuKey = MODULE_MENU_MAPPING[moduleKey] || 
@@ -123,6 +128,7 @@ export const getVisibleMenuKeys = (permissions = [], fundId = null) => {
       
       if (menuKey) {
         visibleMenuKeys.add(menuKey);
+        console.log(`✅ Mapped module "${moduleKey}" to menu key "${menuKey}"`);
         
         // Handle parent-child relationships
         // If a child menu is visible, ensure parent is also visible
@@ -130,11 +136,17 @@ export const getVisibleMenuKeys = (permissions = [], fundId = null) => {
             menuKey === 'customer-details' || menuKey === 'add-customer' || 
             menuKey === 'add-customer-2' || menuKey === 'migration') {
           visibleMenuKeys.add('customers'); // General Ledger parent
+          console.log(`✅ Added parent menu "customers" for child "${menuKey}"`);
         }
+      } else {
+        console.warn(`⚠️ No menu mapping found for module key: ${moduleKey}`);
       }
+    } else {
+      console.log(`⏭️ Skipping permission - can_view is false for module: ${permission.module_key || permission.moduleKey}`);
     }
   });
 
+  console.log('📋 Final visible menu keys:', Array.from(visibleMenuKeys));
   return visibleMenuKeys;
 };
 
@@ -145,9 +157,9 @@ export const getVisibleMenuKeys = (permissions = [], fundId = null) => {
  * @returns {boolean} Whether the menu item should be visible
  */
 export const shouldShowMenuItem = (menuItem, visibleMenuKeys) => {
-  // If visibleMenuKeys is null, show all (no permission filtering)
-  if (visibleMenuKeys === null) {
-    return true;
+  // If visibleMenuKeys is null or undefined, don't show (shouldn't happen, but safety check)
+  if (visibleMenuKeys === null || visibleMenuKeys === undefined) {
+    return false;
   }
 
   // Always show title items
