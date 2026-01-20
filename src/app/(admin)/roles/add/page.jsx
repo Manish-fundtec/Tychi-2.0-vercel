@@ -248,6 +248,29 @@ const AddRolePage = () => {
     }))
   }
 
+  // Handle apply module permissions to all funds
+  const handleApplyToAllFunds = (sourceFundId, moduleKey) => {
+    setFormData(prev => {
+      const sourcePermissions = prev.permissions[sourceFundId]?.[moduleKey] || {}
+      const newPermissions = { ...prev.permissions }
+      
+      // Apply source fund's module permissions to all other selected funds
+      prev.funds.forEach(fundId => {
+        if (fundId !== sourceFundId) {
+          if (!newPermissions[fundId]) {
+            newPermissions[fundId] = {}
+          }
+          newPermissions[fundId][moduleKey] = { ...sourcePermissions }
+        }
+      })
+      
+      return {
+        ...prev,
+        permissions: newPermissions
+      }
+    })
+  }
+
   // Transform form data to API format (matching guide)
   const transformFormDataForAPI = () => {
     const { role_name, role_description, org_id, funds, permissions } = formData
@@ -543,6 +566,9 @@ const AddRolePage = () => {
                                             {perm.label}
                                           </th>
                                         ))}
+                                        {formData.funds && formData.funds.length > 1 && (
+                                          <th className="text-center">Actions</th>
+                                        )}
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -565,6 +591,18 @@ const AddRolePage = () => {
                                                 />
                                               </td>
                                             ))}
+                                            {formData.funds && formData.funds.length > 1 && (
+                                              <td className="text-center">
+                                                <Button
+                                                  variant="outline-primary"
+                                                  size="sm"
+                                                  onClick={() => handleApplyToAllFunds(fundId, moduleKey)}
+                                                  title="Apply this module's permissions to all other funds"
+                                                >
+                                                  Apply to All Funds
+                                                </Button>
+                                              </td>
+                                            )}
                                           </tr>
                                         )
                                       })}
