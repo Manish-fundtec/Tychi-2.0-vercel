@@ -604,9 +604,6 @@ const AddRolePage = () => {
                                             {perm.label}
                                           </th>
                                         ))}
-                                        {formData.funds && formData.funds.length > 1 && (
-                                          <th className="text-center">Actions</th>
-                                        )}
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -629,18 +626,6 @@ const AddRolePage = () => {
                                                 />
                                               </td>
                                             ))}
-                                            {formData.funds && formData.funds.length > 1 && (
-                                              <td className="text-center">
-                                                <Button
-                                                  variant="outline-primary"
-                                                  size="sm"
-                                                  onClick={() => handleApplyToAllFunds(fundId, moduleKey)}
-                                                  title="Apply this module's permissions to all other funds"
-                                                >
-                                                  Apply to All Funds
-                                                </Button>
-                                              </td>
-                                            )}
                                           </tr>
                                         )
                                       })}
