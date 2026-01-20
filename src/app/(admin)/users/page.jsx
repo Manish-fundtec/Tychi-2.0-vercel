@@ -103,6 +103,12 @@ const AdminUsersPage = () => {
     )
   }, [handleDeleteUser])
 
+  const GreenBadgeRenderer = useCallback((params) => {
+    const value = params?.value ?? params?.data?.[params?.colDef?.field]
+    const text = value === null || value === undefined || value === '' ? '—' : String(value)
+    return <span className="badge bg-success">{text}</span>
+  }, [])
+
   // 🔹 Column Definitions (Admin Users)
   const columnDefs = useMemo(
     () => [
@@ -112,8 +118,8 @@ const AdminUsersPage = () => {
       { field: 'email', headerName: 'Email', flex: 1 },
       { field: 'phone_number', headerName: 'Phone', flex: 1 },
       { field: 'role_name', headerName: 'Role', flex: 1 },
-      { field: 'cognito_status', headerName: 'Cognito Status', flex: 1 },
-      { field: 'status', headerName: 'Status', flex: 1 },
+      { field: 'cognito_status', headerName: 'Cognito Status', flex: 1, cellRenderer: GreenBadgeRenderer },
+      { field: 'status', headerName: 'Status', flex: 1, cellRenderer: GreenBadgeRenderer },
       {
         headerName: 'Actions',
         cellRenderer: ActionCellRenderer,
@@ -123,7 +129,7 @@ const AdminUsersPage = () => {
         filter: false,
       },
     ],
-    [ActionCellRenderer]
+    [ActionCellRenderer, GreenBadgeRenderer]
   )
 
   // Load users on mount

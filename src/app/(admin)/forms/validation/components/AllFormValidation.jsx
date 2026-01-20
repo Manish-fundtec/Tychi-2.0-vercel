@@ -2238,6 +2238,8 @@ export const AddUser = ({ onClose, onCreated }) => {
   const [validated, setValidated] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const { showNotification } = useNotificationContext()
+  const [roles, setRoles] = useState([])
+  const [loadingRoles, setLoadingRoles] = useState(false)
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -2246,6 +2248,35 @@ export const AddUser = ({ onClose, onCreated }) => {
     role: '',
     status: 'Active',
   })
+
+  // Fetch roles for dropdown
+  useEffect(() => {
+    let ignore = false
+
+    const fetchRoles = async () => {
+      setLoadingRoles(true)
+      try {
+        const res = await api.get('/api/v1/roles')
+        const data = res?.data?.data || res?.data || []
+        const list = Array.isArray(data) ? data : []
+        if (!ignore) setRoles(list)
+      } catch (error) {
+        console.error('Error fetching roles:', error)
+        if (!ignore) setRoles([])
+        showNotification({
+          message: error?.response?.data?.message || 'Failed to load roles.',
+          variant: 'danger',
+        })
+      } finally {
+        if (!ignore) setLoadingRoles(false)
+      }
+    }
+
+    fetchRoles()
+    return () => {
+      ignore = true
+    }
+  }, [showNotification])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -2353,9 +2384,22 @@ export const AddUser = ({ onClose, onCreated }) => {
             required
           >
             <option value="">Select role</option>
-            <option value="Admin">Admin</option>
-            <option value="Manager">Manager</option>
-            <option value="Viewer">Viewer</option>
+            {loadingRoles ? (
+              <option value="" disabled>
+                Loading roles...
+              </option>
+            ) : (
+              roles.map((r) => {
+                const key = r.role_id || r.id || r.role_name
+                const name = r.role_name || r.name || r.role || ''
+                if (!name) return null
+                return (
+                  <option key={key} value={name}>
+                    {name}
+                  </option>
+                )
+              })
+            )}
           </FormSelect>
           <Feedback type="invalid">Please select a role.</Feedback>
         </FormGroup>
@@ -2396,6 +2440,8 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
   const [validated, setValidated] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const { showNotification } = useNotificationContext()
+  const [roles, setRoles] = useState([])
+  const [loadingRoles, setLoadingRoles] = useState(false)
 
   const [formData, setFormData] = useState({
     firstName: user?.first_name || '',
@@ -2404,6 +2450,35 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
     role: user?.role_name || user?.role || '',
     status: user?.status || 'Active',
   })
+
+  // Fetch roles for dropdown
+  useEffect(() => {
+    let ignore = false
+
+    const fetchRoles = async () => {
+      setLoadingRoles(true)
+      try {
+        const res = await api.get('/api/v1/roles')
+        const data = res?.data?.data || res?.data || []
+        const list = Array.isArray(data) ? data : []
+        if (!ignore) setRoles(list)
+      } catch (error) {
+        console.error('Error fetching roles:', error)
+        if (!ignore) setRoles([])
+        showNotification({
+          message: error?.response?.data?.message || 'Failed to load roles.',
+          variant: 'danger',
+        })
+      } finally {
+        if (!ignore) setLoadingRoles(false)
+      }
+    }
+
+    fetchRoles()
+    return () => {
+      ignore = true
+    }
+  }, [showNotification])
 
   useEffect(() => {
     if (user) {
@@ -2517,9 +2592,22 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
             required
           >
             <option value="">Select role</option>
-            <option value="Admin">Admin</option>
-            <option value="Manager">Manager</option>
-            <option value="Viewer">Viewer</option>
+            {loadingRoles ? (
+              <option value="" disabled>
+                Loading roles...
+              </option>
+            ) : (
+              roles.map((r) => {
+                const key = r.role_id || r.id || r.role_name
+                const name = r.role_name || r.name || r.role || ''
+                if (!name) return null
+                return (
+                  <option key={key} value={name}>
+                    {name}
+                  </option>
+                )
+              })
+            )}
           </FormSelect>
           <Feedback type="invalid">Please select a role.</Feedback>
         </FormGroup>
