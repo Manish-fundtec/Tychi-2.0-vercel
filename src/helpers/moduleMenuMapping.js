@@ -29,6 +29,44 @@ export const MODULE_MENU_MAPPING = {
   'Configuration': 'configuration',
   'CONFIGURATION': 'configuration',
   
+  // Configuration sub-tabs/modules
+  'configuration_basic': 'configuration-basic',
+  'configurationBasic': 'configuration-basic',
+  'basic': 'configuration-basic',
+  'Basic': 'configuration-basic',
+  
+  'configuration_brokerage': 'configuration-brokerage',
+  'configurationBrokerage': 'configuration-brokerage',
+  'brokerage': 'configuration-brokerage',
+  'brokerage_account': 'configuration-brokerage',
+  'Brokerage Account': 'configuration-brokerage',
+  
+  'configuration_bank': 'configuration-bank',
+  'configurationBank': 'configuration-bank',
+  'bank': 'configuration-bank',
+  'Bank': 'configuration-bank',
+  
+  'configuration_exchange': 'configuration-exchange',
+  'configurationExchange': 'configuration-exchange',
+  'exchange': 'configuration-exchange',
+  'Exchange': 'configuration-exchange',
+  
+  'configuration_asset_type': 'configuration-asset-type',
+  'configurationAssetType': 'configuration-asset-type',
+  'asset_type': 'configuration-asset-type',
+  'assetType': 'configuration-asset-type',
+  'Asset Type': 'configuration-asset-type',
+  
+  'configuration_symbol': 'configuration-symbol',
+  'configurationSymbol': 'configuration-symbol',
+  'symbol': 'configuration-symbol',
+  'Symbol': 'configuration-symbol',
+  
+  'configuration_mapping': 'configuration-mapping',
+  'configurationMapping': 'configuration-mapping',
+  'mapping': 'configuration-mapping',
+  'Mapping': 'configuration-mapping',
+  
   'general_ledger': 'customers',  // General Ledger module -> General Ledger menu (key: customers)
   'generalLedger': 'customers',
   'general ledger': 'customers',
