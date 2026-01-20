@@ -42,23 +42,16 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
     pathname?.startsWith('/admindashboards') ||
     adminMenuUrls.some(url => pathname === url || pathname?.startsWith(url + '/'));
   
+  // Get fund ID from token (define before useState)
+  const fundId = tokenData?.fund_id || tokenData?.fundId || null;
+  
   const [fundData, setFundData] = useState(null);
   const [userPermissions, setUserPermissions] = useState([]); // Start with empty array, not undefined
   const [loadingPermissions, setLoadingPermissions] = useState(true);
   
   // Initialize menu items - will be updated when permissions load
-  const [menuItems, setMenuItems] = useState(() => {
-    // Initially show only title while permissions load
-    if (isAdminDashboardRoute) {
-      const items = getAdminMenuItems(tokenData, [], fundId);
-      return items.filter(item => item.isTitle);
-    }
-    const items = getMenuItems(tokenData, [], fundId);
-    return items.filter(item => item.isTitle);
-  });
-
-  // Get fund ID from token
-  const fundId = tokenData?.fund_id || tokenData?.fundId || null;
+  // Start with empty array to avoid any initialization errors
+  const [menuItems, setMenuItems] = useState([]);
 
   // Fetch user permissions
   useEffect(() => {
@@ -95,54 +88,68 @@ const VerticalNavigationBar = ({ tokenData, isAdminDashboard = false }) => {
 
   // Update menu items when tokenData, permissions, or route changes
   useEffect(() => {
-    if (loadingPermissions) {
-      return; // Wait for permissions to load
-    }
-
-    if (isAdminDashboardRoute) {
-      // For admin dashboard, update menu items with permissions
-      setMenuItems(getAdminMenuItems(tokenData, userPermissions, fundId));
+    // Don't update if still loading or no tokenData
+    if (loadingPermissions || !tokenData) {
       return;
     }
 
-    const onboardingMode = 
-      tokenData?.fund?.onboardingmode || 
-      tokenData?.fund?.onboarding_mode ||
-      tokenData?.onboardingmode ||
-      tokenData?.onboarding_mode;
-      
-    // If onboarding mode is not in token, fetch fund details
-    if (!onboardingMode && tokenData?.fund_id) {
-      getFundDetails(tokenData.fund_id)
-        .then((data) => {
-          setFundData(data);
-          // Merge fund data into tokenData structure
-          const enhancedTokenData = {
-            ...tokenData,
-            fund: {
-              ...tokenData.fund,
-              onboardingmode: data.onboardingmode || data.onboarding_mode,
-            },
-          };
-          setMenuItems(getMenuItems(enhancedTokenData, userPermissions, fundId));
-        })
-        .catch((err) => {
-          console.error('Failed to fetch fund details for menu:', err);
-          // Still update menu with permissions even if fund fetch fails
-          setMenuItems(getMenuItems(tokenData, userPermissions, fundId));
-        });
-    } else {
-      // Update menu items when tokenData changes
-      setMenuItems(getMenuItems(tokenData, userPermissions, fundId));
+    try {
+      if (isAdminDashboardRoute) {
+        // For admin dashboard, update menu items with permissions
+        const items = getAdminMenuItems(tokenData, userPermissions, fundId);
+        setMenuItems(items || []);
+        return;
+      }
+
+      const onboardingMode = 
+        tokenData?.fund?.onboardingmode || 
+        tokenData?.fund?.onboarding_mode ||
+        tokenData?.onboardingmode ||
+        tokenData?.onboarding_mode;
+        
+      // If onboarding mode is not in token, fetch fund details
+      if (!onboardingMode && tokenData?.fund_id) {
+        getFundDetails(tokenData.fund_id)
+          .then((data) => {
+            setFundData(data);
+            // Merge fund data into tokenData structure
+            const enhancedTokenData = {
+              ...tokenData,
+              fund: {
+                ...tokenData.fund,
+                onboardingmode: data.onboardingmode || data.onboarding_mode,
+              },
+            };
+            const items = getMenuItems(enhancedTokenData, userPermissions, fundId);
+            setMenuItems(items || []);
+          })
+          .catch((err) => {
+            console.error('Failed to fetch fund details for menu:', err);
+            // Still update menu with permissions even if fund fetch fails
+            const items = getMenuItems(tokenData, userPermissions, fundId);
+            setMenuItems(items || []);
+          });
+      } else {
+        // Update menu items when tokenData changes
+        const items = getMenuItems(tokenData, userPermissions, fundId);
+        setMenuItems(items || []);
+      }
+    } catch (error) {
+      console.error('Error updating menu items:', error);
+      // Fallback to empty array on error
+      setMenuItems([]);
     }
   }, [tokenData, isAdminDashboardRoute, userPermissions, fundId, loadingPermissions]);
+
+  // Ensure menuItems is always an array
+  const safeMenuItems = Array.isArray(menuItems) ? menuItems : [];
 
   return (
     <div className="main-nav" id="leftside-menu-container">
       <LogoBox />
       <HoverMenuToggle />
       <SimplebarReactClient className="scrollbar" data-simplebar>
-        <AppMenu menuItems={menuItems} tokenData={tokenData} />
+        <AppMenu menuItems={safeMenuItems} tokenData={tokenData} />
       </SimplebarReactClient>
     </div>
   );
