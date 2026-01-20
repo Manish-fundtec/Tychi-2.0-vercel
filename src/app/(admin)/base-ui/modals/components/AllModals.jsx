@@ -7,7 +7,7 @@ import useModal from '@/hooks/useModal'
 import useToggle from '@/hooks/useToggle'
 import { AgGridReact } from 'ag-grid-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols, UploadMigration, AddUser, AddRole, AddPermission, AddOrganization } from '@/app/(admin)/forms/validation/components/AllFormValidation'
+import { AddGl, AddFund, AddStatementBalance, AddTrade, UploadTrade, UploadManualJournal, UploadSymbols, UploadMigration, AddUser, EditUser, AddRole, AddPermission, AddOrganization } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { AddManualJournal } from '@/app/(admin)/forms/validation/components/AllFormValidation'
 import { Button, Modal, ModalHeader, ModalBody, Dropdown, } from 'react-bootstrap'
 import Cookies from 'js-cookie'
@@ -2248,6 +2248,31 @@ export const AddUserModal = ({ onSuccess }) => {
               if (typeof onSuccess === 'function') onSuccess()
             }}
           />
+        </ModalBody>
+      </Modal>
+    </>
+  )
+}
+
+export const EditUserModal = ({ user, onSuccess, onClose }) => {
+  const isOpen = !!user
+
+  return (
+    <>
+      <Modal className="fade" show={isOpen} onHide={onClose} size="lg" centered>
+        <ModalHeader closeButton>
+          <h5 className="modal-title h4">Edit User</h5>
+        </ModalHeader>
+        <ModalBody>
+          {user && (
+            <EditUser
+              user={user}
+              onClose={onClose}
+              onUpdated={() => {
+                if (typeof onSuccess === 'function') onSuccess()
+              }}
+            />
+          )}
         </ModalBody>
       </Modal>
     </>

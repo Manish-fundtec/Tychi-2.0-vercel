@@ -2,10 +2,11 @@
 
 import { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner } from 'react-bootstrap'
+import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Button } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
-import { AddUserModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
+import { AddUserModal, EditUserModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import api from '@/lib/api/axios'
+import { useNotificationContext } from '@/context/useNotificationContext'
 
 // AG Grid (client-side only)
 const AgGridReact = dynamic(
@@ -17,6 +18,8 @@ const AdminUsersPage = () => {
   const gridApiRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
+  const [editingUser, setEditingUser] = useState(null)
+  const { showNotification } = useNotificationContext()
 
   const refreshUsers = useCallback(async () => {
     setLoading(true)
@@ -44,6 +47,62 @@ const AdminUsersPage = () => {
     }
   }, [])
 
+  // Handle delete user
+  const handleDeleteUser = useCallback(async (user) => {
+    const userId = user?.user_id || user?.id || user?.userId
+    if (!userId) {
+      showNotification({
+        message: 'User ID is missing',
+        variant: 'danger',
+      })
+      return
+    }
+
+    if (!window.confirm(`Are you sure you want to delete user "${user.first_name} ${user.last_name}"?`)) {
+      return
+    }
+
+    try {
+      await api.delete(`/api/v1/users/${userId}`)
+      showNotification({
+        message: 'User deleted successfully!',
+        variant: 'success',
+      })
+      refreshUsers()
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      showNotification({
+        message: error?.response?.data?.message || 'Failed to delete user. Please try again.',
+        variant: 'danger',
+      })
+    }
+  }, [refreshUsers, showNotification])
+
+  // Action cell renderer
+  const ActionCellRenderer = useCallback((params) => {
+    const user = params.data
+    return (
+      <div className="d-flex gap-2 justify-content-center">
+        <Button
+          variant="outline-primary"
+          size="sm"
+          onClick={() => setEditingUser(user)}
+          title="Edit User"
+        >
+          Edit
+        </Button>
+        <Button
+          variant="outline-danger"
+          size="sm"
+          onClick={() => handleDeleteUser(user)}
+          title="Delete User"
+        >
+          Delete
+        </Button>
+      </div>
+    )
+  }, [handleDeleteUser])
+
   // 🔹 Column Definitions (Admin Users)
   const columnDefs = useMemo(
     () => [
@@ -55,9 +114,16 @@ const AdminUsersPage = () => {
       { field: 'role_name', headerName: 'Role', flex: 1 },
       { field: 'cognito_status', headerName: 'Cognito Status', flex: 1 },
       { field: 'status', headerName: 'Status', flex: 1 },
-      // { field: 'createdAt', headerName: 'Created At', flex: 1 },
+      {
+        headerName: 'Actions',
+        cellRenderer: ActionCellRenderer,
+        width: 150,
+        pinned: 'right',
+        sortable: false,
+        filter: false,
+      },
     ],
-    []
+    [ActionCellRenderer]
   )
 
   // Load users on mount
@@ -80,6 +146,14 @@ const AdminUsersPage = () => {
               <CardTitle as="h4">Admin Users</CardTitle>
               <AddUserModal onSuccess={refreshUsers} />
             </CardHeader>
+            <EditUserModal
+              user={editingUser}
+              onClose={() => setEditingUser(null)}
+              onSuccess={() => {
+                setEditingUser(null)
+                refreshUsers()
+              }}
+            />
 
           <CardBody className="p-2">
             {loading ? (

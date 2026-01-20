@@ -2392,6 +2392,170 @@ export const AddUser = ({ onClose, onCreated }) => {
   )
 }
 
+export const EditUser = ({ onClose, onUpdated, user }) => {
+  const [validated, setValidated] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const { showNotification } = useNotificationContext()
+
+  const [formData, setFormData] = useState({
+    firstName: user?.first_name || '',
+    lastName: user?.last_name || '',
+    email: user?.email || '',
+    role: user?.role_name || user?.role || '',
+    status: user?.status || 'Active',
+  })
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        firstName: user?.first_name || '',
+        lastName: user?.last_name || '',
+        email: user?.email || '',
+        role: user?.role_name || user?.role || '',
+        status: user?.status || 'Active',
+      })
+    }
+  }, [user])
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const form = e.currentTarget
+    if (!form.checkValidity()) {
+      setValidated(true)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const userId = user?.user_id || user?.id || user?.userId
+      if (!userId) {
+        throw new Error('User ID is missing')
+      }
+
+      const response = await api.put(`/api/v1/users/${userId}`, {
+        name: `${formData.firstName} ${formData.lastName}`,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        role: formData.role,
+        status: formData.status,
+      })
+
+      showNotification({
+        message: 'User updated successfully!',
+        variant: 'success',
+      })
+
+      if (onUpdated) onUpdated()
+      if (onClose) onClose()
+    } catch (error) {
+      console.error('Error updating user:', error)
+      showNotification({
+        message: error?.response?.data?.message || 'Failed to update user. Please try again.',
+        variant: 'danger',
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Form noValidate validated={validated} onSubmit={handleSubmit}>
+      <Row>
+        <FormGroup className="col-md-6">
+          <FormLabel>First Name *</FormLabel>
+          <FormControl
+            type="text"
+            name="firstName"
+            value={formData.firstName}
+            onChange={handleChange}
+            required
+            placeholder="Enter first name"
+          />
+          <Feedback type="invalid">Please provide a valid first name.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Last Name *</FormLabel>
+          <FormControl
+            type="text"
+            name="lastName"
+            value={formData.lastName}
+            onChange={handleChange}
+            required
+            placeholder="Enter last name"
+          />
+          <Feedback type="invalid">Please provide a valid last name.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Email *</FormLabel>
+          <FormControl
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            placeholder="Enter email address"
+          />
+          <Feedback type="invalid">Please provide a valid email address.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Role *</FormLabel>
+          <FormSelect
+            name="role"
+            value={formData.role}
+            onChange={handleChange}
+            required
+          >
+            <option value="">Select role</option>
+            <option value="Admin">Admin</option>
+            <option value="Manager">Manager</option>
+            <option value="Viewer">Viewer</option>
+          </FormSelect>
+          <Feedback type="invalid">Please select a role.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Status *</FormLabel>
+          <FormSelect
+            name="status"
+            value={formData.status}
+            onChange={handleChange}
+            required
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </FormSelect>
+        </FormGroup>
+      </Row>
+
+      <div className="d-flex justify-content-end gap-2 mt-3">
+        <Button variant="secondary" onClick={() => onClose?.()} disabled={isSaving}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary" disabled={isSaving}>
+          {isSaving ? (
+            <>
+              <Spinner animation="border" size="sm" className="me-2" /> Saving...
+            </>
+          ) : (
+            'Update User'
+          )}
+        </Button>
+      </div>
+    </Form>
+  )
+}
+
 export const AddRole = ({ onClose, onCreated }) => {
   const [validated, setValidated] = useState(false)
   const [isSaving, setIsSaving] = useState(false)

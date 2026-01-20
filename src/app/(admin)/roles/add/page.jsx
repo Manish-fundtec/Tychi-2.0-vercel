@@ -271,6 +271,32 @@ const AddRolePage = () => {
     })
   }
 
+  // Handle apply all modules from one fund to all other funds
+  const handleApplyAllModulesToAllFunds = (sourceFundId) => {
+    setFormData(prev => {
+      const sourcePermissions = prev.permissions[sourceFundId] || {}
+      const newPermissions = { ...prev.permissions }
+      
+      // Apply source fund's all module permissions to all other selected funds
+      prev.funds.forEach(fundId => {
+        if (fundId !== sourceFundId) {
+          if (!newPermissions[fundId]) {
+            newPermissions[fundId] = {}
+          }
+          // Copy all modules from source fund
+          Object.keys(sourcePermissions).forEach(moduleKey => {
+            newPermissions[fundId][moduleKey] = { ...sourcePermissions[moduleKey] }
+          })
+        }
+      })
+      
+      return {
+        ...prev,
+        permissions: newPermissions
+      }
+    })
+  }
+
   // Transform form data to API format (matching guide)
   const transformFormDataForAPI = () => {
     const { role_name, role_description, org_id, funds, permissions } = formData
@@ -541,18 +567,30 @@ const AddRolePage = () => {
                           <FormGroup>
                             <div className="d-flex justify-content-between align-items-center mb-2">
                               <FormLabel className="fw-bold mb-0">{fundName} - Module Permissions</FormLabel>
-                              <FormCheck
-                                type="checkbox"
-                                id={`select-all-modules-${fundId}`}
-                                label="Select All Modules"
-                                checked={modules.length > 0 && modules.every(module => {
-                                  const moduleKey = module.module_key || module.key
-                                  const perm = formData.permissions[fundId]?.[moduleKey]
-                                  return perm && perm.can_view && perm.can_add && perm.can_edit && perm.can_delete
-                                })}
-                                onChange={(e) => handleSelectAllModules(fundId, e.target.checked)}
-                                className="fw-semibold"
-                              />
+                              <div className="d-flex align-items-center gap-3">
+                                <FormCheck
+                                  type="checkbox"
+                                  id={`select-all-modules-${fundId}`}
+                                  label="Select All Modules"
+                                  checked={modules.length > 0 && modules.every(module => {
+                                    const moduleKey = module.module_key || module.key
+                                    const perm = formData.permissions[fundId]?.[moduleKey]
+                                    return perm && perm.can_view && perm.can_add && perm.can_edit && perm.can_delete
+                                  })}
+                                  onChange={(e) => handleSelectAllModules(fundId, e.target.checked)}
+                                  className="fw-semibold"
+                                />
+                                {formData.funds && formData.funds.length > 1 && (
+                                  <Button
+                                    variant="outline-primary"
+                                    size="sm"
+                                    onClick={() => handleApplyAllModulesToAllFunds(fundId)}
+                                    title="Apply all modules from this fund to all other funds"
+                                  >
+                                    Apply to All Funds
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                             <Card className="mt-2">
                               <CardBody>
