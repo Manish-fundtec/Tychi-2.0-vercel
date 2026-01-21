@@ -103,9 +103,8 @@ export default function TradesData() {
         }
         
         const permissionsArray = Array.isArray(perms) ? perms : []
-        setPermissions(permissionsArray)
         
-        console.log('🔐 Trades - Fetched permissions:', {
+        console.log('🔐 Trades - Fetched permissions BEFORE setState:', {
           count: permissionsArray.length,
           permissions: permissionsArray,
           tradePermissions: permissionsArray.filter(p => {
@@ -113,6 +112,11 @@ export default function TradesData() {
             return moduleKey === 'trade' || moduleKey === 'trades'
           }),
         })
+        
+        setPermissions(permissionsArray)
+        
+        // Force a re-check after setting permissions
+        console.log('🔐 Trades - Permissions set in state, count:', permissionsArray.length)
       } catch (error) {
         console.error('❌ Error fetching permissions:', error)
         setPermissions([])
@@ -128,16 +132,20 @@ export default function TradesData() {
   const currentFundId = fund_id || fundId
   
   // Check permissions - try with and without fund filter
+  // IMPORTANT: Check permissions even if array is empty (might be loading or no permissions)
   const hasPermissions = !loadingPermissions && permissions.length > 0
   
   // Try matching with fund ID first, then without fund filter (for org-level permissions)
-  const canAddWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
-  const canAddWithoutFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', null) : false
+  // Allow checking even if hasPermissions is false (will return false but won't break)
+  const canAddWithFund = permissions.length > 0 ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
+  const canAddWithoutFund = permissions.length > 0 ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', null) : false
   const canAdd = canAddWithFund || canAddWithoutFund
   
   // Debug: Log the permission check results
   console.log('🔍 Permission Check Results:', {
     hasPermissions,
+    loadingPermissions,
+    permissionsLength: permissions.length,
     currentFundId,
     canAddWithFund,
     canAddWithoutFund,
@@ -146,15 +154,17 @@ export default function TradesData() {
       module_key: p?.module_key,
       fund_id: p?.fund_id,
       can_add: p?.can_add,
+      can_edit: p?.can_edit,
+      can_delete: p?.can_delete,
     })),
   })
   
-  const canEditWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
-  const canEditWithoutFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', null) : false
+  const canEditWithFund = permissions.length > 0 ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
+  const canEditWithoutFund = permissions.length > 0 ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', null) : false
   const canEdit = canEditWithFund || canEditWithoutFund
   
-  const canDeleteWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
-  const canDeleteWithoutFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', null) : false
+  const canDeleteWithFund = permissions.length > 0 ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
+  const canDeleteWithoutFund = permissions.length > 0 ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', null) : false
   const canDelete = canDeleteWithFund || canDeleteWithoutFund
   
   // TEMPORARY: If permissions are still loading, show buttons (for testing)
