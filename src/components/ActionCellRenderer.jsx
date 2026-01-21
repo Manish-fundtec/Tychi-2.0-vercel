@@ -3,7 +3,27 @@ import React from 'react';
 
 export default function ActionCellRenderer(props) {
   const trade = props.data;
-  const { onViewTrade, onEditTrade, onDeleteTrade, canEdit, canDelete } = props.context || {};
+  const { onViewTrade, onDeleteTrade, canDelete } = props.context || {};
+
+  // Immediate debug log to verify component is being called
+  console.log('🔍 ActionCellRenderer Rendered:', {
+    hasProps: !!props,
+    hasData: !!trade,
+    tradeId: trade?.trade_id,
+    hasContext: !!props.context,
+    canDelete,
+  });
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('🔍 ActionCellRenderer Debug (useEffect):', {
+      hasContext: !!props.context,
+      canDelete,
+      tradeId: trade?.trade_id,
+      hasViewHandler: typeof onViewTrade === 'function',
+      hasDeleteHandler: typeof onDeleteTrade === 'function',
+    });
+  }, [props.context, canDelete, trade, onViewTrade, onDeleteTrade]);
 
   const handleView = () => {
     if (typeof onViewTrade === 'function') {
@@ -11,14 +31,6 @@ export default function ActionCellRenderer(props) {
       return;
     }
     alert('No view handler provided.');
-  };
-
-  const handleEdit = () => {
-    if (typeof onEditTrade === 'function') {
-      onEditTrade(trade);
-      return;
-    }
-    alert('No edit handler provided.');
   };
 
   const handleDelete = () => {
@@ -29,11 +41,12 @@ export default function ActionCellRenderer(props) {
     alert('No delete handler provided.');
   };
 
-  // Show edit button only if canEdit is explicitly true
-  // Show delete button only if canDelete is explicitly true
-  const showEdit = canEdit === true;
-  const showDelete = canDelete === true;
+  // Show delete button unless explicitly set to false
+  // Default behavior: show buttons if canDelete is undefined/null (backward compatibility)
+  const showDelete = canDelete !== false;
 
+  // Always render View button, conditionally render Delete button
+  // Ensure buttons are always visible for debugging
   if (!trade) {
     return <div>No trade data</div>
   }
@@ -47,15 +60,6 @@ export default function ActionCellRenderer(props) {
       >
         View
       </button>
-      {showEdit && (
-        <button 
-          className="btn btn-sm btn-outline-warning" 
-          onClick={handleEdit}
-          style={{ minWidth: '60px' }}
-        >
-          Edit
-        </button>
-      )}
       {showDelete && (
         <button 
           className="btn btn-sm btn-danger" 
