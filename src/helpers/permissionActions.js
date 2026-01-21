@@ -24,14 +24,45 @@ export function canModuleAction(permissions, moduleKeys, actionKey, fundId = nul
   const normalizedKeys = new Set(keys.map(normalize).filter(Boolean));
   if (normalizedKeys.size === 0) return false;
 
-  return permissions.some((p) => {
+  const result = permissions.some((p) => {
     const pFundId = p?.fund_id ?? p?.fundId;
-    if (fundId != null && pFundId != null && String(pFundId) !== String(fundId)) return false;
+    
+    // Fund ID check - if fundId is provided, it must match (unless permission has no fund_id)
+    if (fundId != null && pFundId != null && String(pFundId) !== String(fundId)) {
+      return false;
+    }
 
     const pModuleKey = normalize(p?.module_key ?? p?.moduleKey ?? p?.module);
-    if (!normalizedKeys.has(pModuleKey)) return false;
+    if (!normalizedKeys.has(pModuleKey)) {
+      return false;
+    }
 
-    return truthy(p?.[actionKey]);
+    const actionValue = p?.[actionKey];
+    const isTruthy = truthy(actionValue);
+    
+    // Debug logging for troubleshooting
+    if (actionKey === 'can_add' || actionKey === 'can_delete') {
+      console.log(`🔍 canModuleAction check:`, {
+        moduleKeys,
+        actionKey,
+        fundId,
+        permission: {
+          module_key: p?.module_key,
+          normalizedModuleKey: pModuleKey,
+          fund_id: pFundId,
+          [actionKey]: actionValue,
+          isTruthy,
+        },
+        normalizedKeys: Array.from(normalizedKeys),
+        moduleKeyMatches: normalizedKeys.has(pModuleKey),
+        fundIdMatches: fundId == null || pFundId == null || String(pFundId) === String(fundId),
+        finalResult: isTruthy,
+      });
+    }
+
+    return isTruthy;
   });
+
+  return result;
 }
 
