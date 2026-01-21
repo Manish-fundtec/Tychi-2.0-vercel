@@ -101,12 +101,12 @@ export default function TradesData() {
   // Permission checks for trade module
   const currentFundId = fund_id || fundId
   
-  // If permissions are still loading OR if no permissions found, default to true (show buttons)
-  // This ensures buttons are visible by default and only hidden if explicitly denied
+  // Check permissions - only show buttons if explicitly granted
+  // Default to false when loading or no permissions found (hide buttons by default)
   const hasPermissions = !loadingPermissions && permissions.length > 0
-  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : true
-  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : true
-  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : true
+  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
+  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
+  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
   
   // Debug logging
   useEffect(() => {
