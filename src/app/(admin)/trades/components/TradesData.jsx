@@ -88,7 +88,15 @@ export default function TradesData() {
         const permissionsArray = Array.isArray(perms) ? perms : []
         setPermissions(permissionsArray)
         
-        console.log('🔐 Trades - Fetched permissions:', permissionsArray)
+        console.log('🔐 Trades - Fetched permissions:', {
+          count: permissionsArray.length,
+          permissions: permissionsArray,
+          fundId: currentFundId,
+          tradePermissions: permissionsArray.filter(p => {
+            const mk = (p?.module_key || p?.moduleKey || '').toLowerCase()
+            return mk === 'trade' || mk === 'trades'
+          })
+        })
       } catch (error) {
         console.error('❌ Error fetching permissions:', error)
         setPermissions([])
@@ -107,17 +115,40 @@ export default function TradesData() {
   // Default to false when loading or no permissions found (hide buttons by default)
   const hasPermissions = !loadingPermissions && permissions.length > 0
   
-  // Check permissions - try with fundId first, then without fundId (global permissions)
-  const canAddWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
-  const canAddGlobal = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', null) : false
-  const canAdd = canAddWithFund || canAddGlobal
+  // Also check permissions directly even if hasPermissions is false (in case of timing issues)
+  const hasAnyPermissions = permissions.length > 0
   
-  const canEditWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
-  const canEditGlobal = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', null) : false
+  // Check permissions - try with fundId first, then without fundId (global permissions)
+  // Also check for uppercase "TRADE" and "Trades" to handle backend variations
+  const canAddWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades', 'TRADE', 'Trades'], 'can_add', currentFundId) : false
+  const canAddGlobal = hasPermissions ? canModuleAction(permissions, ['trade', 'trades', 'TRADE', 'Trades'], 'can_add', null) : false
+  
+  // Direct check as fallback - check if any permission has can_add = true for trade module
+  const directCanAdd = hasAnyPermissions && permissions?.some(p => {
+    const mk = (p?.module_key || p?.moduleKey || '').toLowerCase()
+    const isTrade = mk === 'trade' || mk === 'trades'
+    const fundMatch = !currentFundId || !p?.fund_id || String(p.fund_id) === String(currentFundId)
+    const canAddValue = p?.can_add === true || p?.can_add === 1 || p?.can_add === 'true' || p?.can_add === '1'
+    return isTrade && fundMatch && canAddValue
+  }) || false
+  
+  const canAdd = canAddWithFund || canAddGlobal || directCanAdd
+  
+  console.log('🔍 canAdd Check:', {
+    hasPermissions,
+    canAddWithFund,
+    canAddGlobal,
+    directCanAdd,
+    finalCanAdd: canAdd,
+    permissionsCount: permissions.length
+  })
+  
+  const canEditWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades', 'TRADE', 'Trades'], 'can_edit', currentFundId) : false
+  const canEditGlobal = hasPermissions ? canModuleAction(permissions, ['trade', 'trades', 'TRADE', 'Trades'], 'can_edit', null) : false
   const canEdit = canEditWithFund || canEditGlobal
   
-  const canDeleteWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
-  const canDeleteGlobal = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', null) : false
+  const canDeleteWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades', 'TRADE', 'Trades'], 'can_delete', currentFundId) : false
+  const canDeleteGlobal = hasPermissions ? canModuleAction(permissions, ['trade', 'trades', 'TRADE', 'Trades'], 'can_delete', null) : false
   const canDelete = canDeleteWithFund || canDeleteGlobal
   
   // Debug logging - Detailed
@@ -756,7 +787,10 @@ export default function TradesData() {
             <CardTitle as="h4">Trades</CardTitle>
             <div className="d-flex gap-2">
               {/* If your modals accept onSuccess, these will refresh both tabs */}
-              {canAdd && (
+              {(() => {
+                console.log('🔘 Render check - canAdd:', canAdd, 'hasPermissions:', hasPermissions, 'loadingPermissions:', loadingPermissions, 'permissions.length:', permissions.length);
+                return canAdd;
+              })() && (
                 <>
                   <TradeModal
                     onSuccess={() => {
