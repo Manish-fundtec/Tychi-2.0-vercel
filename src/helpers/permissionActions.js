@@ -26,13 +26,7 @@ export function canModuleAction(permissions, moduleKeys, actionKey, fundId = nul
 
   return permissions.some((p) => {
     const pFundId = p?.fund_id ?? p?.fundId;
-    
-    // If fundId is provided, check if permission matches:
-    // - If permission has fund_id, it must match
-    // - If permission has no fund_id (null/undefined), it's considered global and matches
-    if (fundId != null && pFundId != null && String(pFundId) !== String(fundId)) {
-      return false;
-    }
+    if (fundId != null && pFundId != null && String(pFundId) !== String(fundId)) return false;
 
     const pModuleKey = normalize(p?.module_key ?? p?.moduleKey ?? p?.module);
     if (!normalizedKeys.has(pModuleKey)) return false;

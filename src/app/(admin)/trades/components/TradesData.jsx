@@ -85,10 +85,8 @@ export default function TradesData() {
         setLoadingPermissions(true)
         const currentFundId = fund_id || fundId
         const perms = await getUserRolePermissions(tokenData, currentFundId)
-        const permissionsArray = Array.isArray(perms) ? perms : []
-        setPermissions(permissionsArray)
-        
-        console.log('🔐 Trades - Fetched permissions:', permissionsArray)
+        setPermissions(Array.isArray(perms) ? perms : [])
+        console.log('🔐 Trades - Fetched permissions:', perms)
       } catch (error) {
         console.error('❌ Error fetching permissions:', error)
         setPermissions([])
@@ -106,27 +104,25 @@ export default function TradesData() {
   // Check permissions - only show buttons if explicitly granted
   // Default to false when loading or no permissions found (hide buttons by default)
   const hasPermissions = !loadingPermissions && permissions.length > 0
-  
-  // Try with fundId first, if no match and fundId exists, try without fundId (global permissions)
-  const canAddWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
-  const canAdd = canAddWithFund || (hasPermissions && currentFundId ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', null) : false)
-  
-  const canEditWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
-  const canEdit = canEditWithFund || (hasPermissions && currentFundId ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', null) : false)
-  
-  const canDeleteWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
-  const canDelete = canDeleteWithFund || (hasPermissions && currentFundId ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', null) : false)
+  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
+  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
+  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
   
   // Debug logging
   useEffect(() => {
     console.log('🔍 Trades Permissions Debug:', {
-      permissionsCount: permissions?.length || 0,
+      permissions,
+      permissionsCount: permissions?.length,
       currentFundId,
       loadingPermissions,
       hasPermissions,
       canAdd,
       canEdit,
       canDelete,
+      tradePermissions: permissions?.filter(p => {
+        const moduleKey = (p?.module_key || p?.moduleKey || '').toLowerCase()
+        return moduleKey === 'trade' || moduleKey === 'trades'
+      }),
     })
   }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions, hasPermissions])
   
