@@ -3,7 +3,7 @@ import React from 'react';
 
 export default function ActionCellRenderer(props) {
   const trade = props.data;
-  const { onViewTrade, onDeleteTrade } = props.context || {};
+  const { onViewTrade, onDeleteTrade, canDelete = true } = props.context || {};
 
   const handleView = () => {
     if (typeof onViewTrade === 'function') {
@@ -26,9 +26,11 @@ export default function ActionCellRenderer(props) {
       <button className="btn btn-sm btn-outline-primary" onClick={handleView}>
         View
       </button>
-      <button className="btn btn-sm btn-danger" onClick={handleDelete}>
-        Delete
-      </button>
+      {canDelete && (
+        <button className="btn btn-sm btn-danger" onClick={handleDelete}>
+          Delete
+        </button>
+      )}
     </div>
   );
 }

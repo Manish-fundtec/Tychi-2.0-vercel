@@ -26,6 +26,9 @@ import { TradeModal, UploadTradeModal } from '@/app/(admin)/base-ui/modals/compo
 import { deleteTrade, bulkDeleteTrades } from '@/lib/api/trades'
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
 import { getFundDetails } from '@/lib/api/fund'
+import { useUserToken } from '@/hooks/useUserToken'
+import { getUserRolePermissions } from '@/helpers/getUserPermissions'
+import { canModuleAction } from '@/helpers/permissionActions'
 
 // Register all Community features
 ModuleRegistry.registerModules([AllCommunityModule])
@@ -61,8 +64,45 @@ export default function TradesData() {
   }, [])
 
   const dashboard = useDashboardToken()
+  const userToken = useUserToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
   const fund_id = dashboard?.fund_id || ''
+  
+  // Permissions state
+  const [permissions, setPermissions] = useState([])
+  const [loadingPermissions, setLoadingPermissions] = useState(true)
+  
+  // Fetch user permissions
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      const tokenData = userToken || dashboard
+      if (!tokenData) {
+        setLoadingPermissions(false)
+        return
+      }
+      
+      try {
+        setLoadingPermissions(true)
+        const currentFundId = fund_id || fundId
+        const perms = await getUserRolePermissions(tokenData, currentFundId)
+        setPermissions(Array.isArray(perms) ? perms : [])
+        console.log('🔐 Trades - Fetched permissions:', perms)
+      } catch (error) {
+        console.error('❌ Error fetching permissions:', error)
+        setPermissions([])
+      } finally {
+        setLoadingPermissions(false)
+      }
+    }
+    
+    fetchPermissions()
+  }, [userToken, dashboard, fund_id, fundId])
+  
+  // Permission checks for trade module
+  const currentFundId = fund_id || fundId
+  const canAdd = canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId)
+  const canEdit = canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId)
+  const canDelete = canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId)
   
   // Fetch fund details to get current decimal_precision
   useEffect(() => {
@@ -656,20 +696,24 @@ export default function TradesData() {
             <CardTitle as="h4">Trades</CardTitle>
             <div className="d-flex gap-2">
               {/* If your modals accept onSuccess, these will refresh both tabs */}
-              <TradeModal
-                onSuccess={() => {
-                  //  NEW: refresh after manual add
-                  refreshTrades()
-                  fetchTradeHistory()
-                }}
-              />
-              <UploadTradeModal
-                onSuccess={() => {
-                  //  NEW: refresh after upload
-                  refreshTrades()
-                  fetchTradeHistory()
-                }}
-              />
+              {canAdd && (
+                <>
+                  <TradeModal
+                    onSuccess={() => {
+                      //  NEW: refresh after manual add
+                      refreshTrades()
+                      fetchTradeHistory()
+                    }}
+                  />
+                  <UploadTradeModal
+                    onSuccess={() => {
+                      //  NEW: refresh after upload
+                      refreshTrades()
+                      fetchTradeHistory()
+                    }}
+                  />
+                </>
+              )}
             </div>
           </CardHeader>
 
@@ -690,14 +734,16 @@ export default function TradesData() {
                   <Button variant="outline-secondary" size="sm" onClick={handleClearSelection} disabled={!selectedRows.length}>
                     Clear Selection
                   </Button>
-                  <Button 
-                    variant="outline-danger" 
-                    size="sm" 
-                    onClick={handleBulkDelete} 
-                    disabled={!selectedRows.length || bulkActionLoading}
-                  >
-                    {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
-                  </Button>
+                  {canDelete && (
+                    <Button 
+                      variant="outline-danger" 
+                      size="sm" 
+                      onClick={handleBulkDelete} 
+                      disabled={!selectedRows.length || bulkActionLoading}
+                    >
+                      {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
+                    </Button>
+                  )}
                   <Button variant="outline-success" size="sm" onClick={() => handleExport('csv')} disabled={!rowData.length || loading}>
                     {selectedRows.length > 0 ? `Export Selected CSV (${selectedRows.length})` : 'Export Filtered CSV'}
                   </Button>
@@ -728,6 +774,7 @@ export default function TradesData() {
                     context={{
                       onViewTrade: handleViewTrade,
                       onDeleteTrade: handleSingleDelete,
+                      canDelete: canDelete,
                     }}
                     suppressRowClickSelection={false}
                     overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">Loading...</span>' : undefined}
