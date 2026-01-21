@@ -388,9 +388,18 @@ const EditRolePage = () => {
     })
   }
 
-  // Transform form data to API format (matching guide)
-  const transformFormDataForAPI = () => {
-    const { role_name, role_description, org_id, funds, permissions } = formData
+  // Transform form data to API format for basic role update
+  const transformBasicRoleData = () => {
+    const { role_name, role_description } = formData
+    return {
+      role_name,
+      role_description,
+    }
+  }
+
+  // Transform form data to API format for permissions update
+  const transformPermissionsData = () => {
+    const { funds, permissions } = formData
     
     // Build permissions array
     const permissionsArray = []
@@ -409,10 +418,8 @@ const EditRolePage = () => {
       })
     })
     
+    // API expects: { funds: [], permissions: [] }
     return {
-      role_name,
-      role_description,
-      org_id,
       funds: funds,
       permissions: permissionsArray
     }
@@ -459,21 +466,34 @@ const EditRolePage = () => {
 
     setSaving(true)
     try {
-      // Transform to API format
-      const payload = transformFormDataForAPI()
+      // Step 1: Update basic role info (role_name, role_description)
+      const basicRolePayload = transformBasicRoleData()
+      console.log('🔍 Step 1: Updating basic role info - Payload:', basicRolePayload)
+      
+      await api.put(`/api/v1/roles/${roleId}`, basicRolePayload)
+      console.log('✅ Basic role info updated successfully')
 
-      // Update role - adjust endpoint based on your API
-      await api.put(`/api/v1/roles/${roleId}`, payload)
+      // Step 2: Update role permissions and fund mappings
+      const permissionsPayload = transformPermissionsData()
+      console.log('🔍 Step 2: Updating role permissions - Payload:', JSON.stringify(permissionsPayload, null, 2))
+      
+      await api.put(`/api/v1/roles/${roleId}/permissions`, permissionsPayload)
+      console.log('✅ Role permissions updated successfully')
       
       showNotification({
         message: 'Role updated successfully!',
         variant: 'success',
       })
 
-      // Redirect back to roles page
-      router.push('/roles')
+      // Small delay before redirect to ensure update is processed
+      setTimeout(() => {
+        router.push('/roles')
+      }, 500)
     } catch (error) {
-      console.error('Error updating role:', error)
+      console.error('❌ Error updating role:', error)
+      console.error('❌ Error response:', error?.response?.data)
+      console.error('❌ Error status:', error?.response?.status)
+      
       setError(error?.response?.data?.message || 'Failed to update role. Please try again.')
       showNotification({
         message: error?.response?.data?.message || 'Failed to update role.',
