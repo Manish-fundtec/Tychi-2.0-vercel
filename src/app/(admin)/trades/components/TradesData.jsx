@@ -807,7 +807,10 @@ export default function TradesData() {
                     context={{
                       onViewTrade: handleViewTrade,
                       onDeleteTrade: handleSingleDelete,
-                      canDelete: canDelete,
+                      canDelete: canDelete, // Legacy support
+                      permissions: permissions, // New: for permission-based button visibility
+                      moduleKey: 'trade', // New: module key for button permission mapping
+                      fundId: currentFundId, // New: fund ID for permission filtering
                     }}
                     suppressRowClickSelection={false}
                     overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">Loading...</span>' : undefined}

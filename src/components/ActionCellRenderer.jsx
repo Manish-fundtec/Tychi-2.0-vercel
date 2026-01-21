@@ -1,9 +1,17 @@
 'use client';
 import React from 'react';
+import { canButtonAction } from '@/helpers/buttonPermissionMapping';
 
 export default function ActionCellRenderer(props) {
   const trade = props.data;
-  const { onViewTrade, onDeleteTrade, canDelete } = props.context || {};
+  const { 
+    onViewTrade, 
+    onDeleteTrade, 
+    canDelete, // Legacy support - direct boolean
+    permissions, // New: permissions array
+    moduleKey, // New: module key (e.g., 'trade', 'trades')
+    fundId, // New: optional fund ID for permission filtering
+  } = props.context || {};
 
   // Immediate debug log to verify component is being called
   console.log('🔍 ActionCellRenderer Rendered:', {
@@ -12,6 +20,9 @@ export default function ActionCellRenderer(props) {
     tradeId: trade?.trade_id,
     hasContext: !!props.context,
     canDelete,
+    hasPermissions: !!permissions,
+    moduleKey,
+    fundId,
   });
 
   // Debug logging
@@ -19,11 +30,14 @@ export default function ActionCellRenderer(props) {
     console.log('🔍 ActionCellRenderer Debug (useEffect):', {
       hasContext: !!props.context,
       canDelete,
+      hasPermissions: !!permissions,
+      moduleKey,
+      fundId,
       tradeId: trade?.trade_id,
       hasViewHandler: typeof onViewTrade === 'function',
       hasDeleteHandler: typeof onDeleteTrade === 'function',
     });
-  }, [props.context, canDelete, trade, onViewTrade, onDeleteTrade]);
+  }, [props.context, canDelete, permissions, moduleKey, fundId, trade, onViewTrade, onDeleteTrade]);
 
   const handleView = () => {
     if (typeof onViewTrade === 'function') {
@@ -41,9 +55,18 @@ export default function ActionCellRenderer(props) {
     alert('No delete handler provided.');
   };
 
-  // Show delete button unless explicitly set to false
-  // Default behavior: show buttons if canDelete is undefined/null (backward compatibility)
-  const showDelete = canDelete !== false;
+  // Determine if delete button should be shown
+  // Priority: 1) Legacy canDelete prop, 2) Permission-based check, 3) Default to true (backward compatibility)
+  let showDelete = true;
+  
+  if (canDelete !== undefined) {
+    // Legacy support: use canDelete prop if provided
+    showDelete = canDelete !== false;
+  } else if (permissions && Array.isArray(permissions) && permissions.length > 0 && moduleKey) {
+    // New permission-based check using button mapping
+    showDelete = canButtonAction(permissions, moduleKey, 'delete', fundId);
+  }
+  // If neither is provided, default to true (backward compatibility)
 
   // Always render View button, conditionally render Delete button
   // Ensure buttons are always visible for debugging
