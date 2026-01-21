@@ -107,51 +107,28 @@ export default function TradesData() {
   // Default to false when loading or no permissions found (hide buttons by default)
   const hasPermissions = !loadingPermissions && permissions.length > 0
   
-  // Check permissions - try with fundId first, then without fundId (global permissions)
+  // Try with fundId first, if no match and fundId exists, try without fundId (global permissions)
   const canAddWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
-  const canAddGlobal = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', null) : false
-  const canAdd = canAddWithFund || canAddGlobal
+  const canAdd = canAddWithFund || (hasPermissions && currentFundId ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', null) : false)
   
   const canEditWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
-  const canEditGlobal = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', null) : false
-  const canEdit = canEditWithFund || canEditGlobal
+  const canEdit = canEditWithFund || (hasPermissions && currentFundId ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', null) : false)
   
   const canDeleteWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
-  const canDeleteGlobal = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', null) : false
-  const canDelete = canDeleteWithFund || canDeleteGlobal
+  const canDelete = canDeleteWithFund || (hasPermissions && currentFundId ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', null) : false)
   
-  // Debug logging - Detailed
+  // Debug logging
   useEffect(() => {
-    const tradePerms = permissions?.filter(p => {
-      const moduleKey = (p?.module_key || p?.moduleKey || '').toLowerCase()
-      return moduleKey === 'trade' || moduleKey === 'trades'
-    }) || []
-    
     console.log('🔍 Trades Permissions Debug:', {
       permissionsCount: permissions?.length || 0,
       currentFundId,
       loadingPermissions,
       hasPermissions,
-      tradePermissionsFound: tradePerms.length,
-      tradePermissions: tradePerms.map(p => ({
-        module_key: p?.module_key || p?.moduleKey,
-        fund_id: p?.fund_id || p?.fundId,
-        can_add: p?.can_add,
-        can_delete: p?.can_delete,
-      })),
-      canAddWithFund,
-      canAddGlobal,
       canAdd,
-      canDeleteWithFund,
-      canDeleteGlobal,
+      canEdit,
       canDelete,
-      buttonsWillShow: {
-        addButton: canAdd,
-        uploadButton: canAdd,
-        deleteButton: canDelete,
-      }
     })
-  }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions, hasPermissions, canAddWithFund, canAddGlobal, canDeleteWithFund, canDeleteGlobal])
+  }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions, hasPermissions])
   
   // Fetch fund details to get current decimal_precision
   useEffect(() => {

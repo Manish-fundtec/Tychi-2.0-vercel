@@ -18,67 +18,26 @@ const normalize = (s) => (s ?? '').toString().trim().toLowerCase();
  * @param {string|number|null} fundId - optional fund filter
  */
 export function canModuleAction(permissions, moduleKeys, actionKey, fundId = null) {
-  if (!Array.isArray(permissions) || permissions.length === 0) {
-    console.log(`🚫 canModuleAction: No permissions`, { moduleKeys, actionKey, fundId });
-    return false;
-  }
+  if (!Array.isArray(permissions) || permissions.length === 0) return false;
 
   const keys = Array.isArray(moduleKeys) ? moduleKeys : [moduleKeys];
   const normalizedKeys = new Set(keys.map(normalize).filter(Boolean));
-  if (normalizedKeys.size === 0) {
-    console.log(`🚫 canModuleAction: No valid module keys`, { moduleKeys });
-    return false;
-  }
+  if (normalizedKeys.size === 0) return false;
 
-  console.log(`🔍 canModuleAction: Checking`, {
-    moduleKeys: Array.from(normalizedKeys),
-    actionKey,
-    fundId,
-    totalPermissions: permissions.length
-  });
-
-  const result = permissions.some((p) => {
+  return permissions.some((p) => {
     const pFundId = p?.fund_id ?? p?.fundId;
-    const pModuleKey = normalize(p?.module_key ?? p?.moduleKey ?? p?.module);
-    const actionValue = p?.[actionKey];
     
     // If fundId is provided, check if permission matches:
     // - If permission has fund_id, it must match
     // - If permission has no fund_id (null/undefined), it's considered global and matches
     if (fundId != null && pFundId != null && String(pFundId) !== String(fundId)) {
-      console.log(`  ⏭️  Skipped (fund mismatch):`, {
-        module: pModuleKey,
-        permissionFundId: pFundId,
-        requestedFundId: fundId,
-        actionValue
-      });
       return false;
     }
 
-    if (!normalizedKeys.has(pModuleKey)) {
-      console.log(`  ⏭️  Skipped (module mismatch):`, {
-        permissionModule: pModuleKey,
-        requestedModules: Array.from(normalizedKeys),
-        fundId: pFundId
-      });
-      return false;
-    }
+    const pModuleKey = normalize(p?.module_key ?? p?.moduleKey ?? p?.module);
+    if (!normalizedKeys.has(pModuleKey)) return false;
 
-    const isAllowed = truthy(actionValue);
-    console.log(`  ${isAllowed ? '✅' : '❌'} Match found:`, {
-      module: pModuleKey,
-      fundId: pFundId,
-      actionKey,
-      actionValue,
-      isAllowed,
-      rawValue: actionValue,
-      type: typeof actionValue
-    });
-
-    return isAllowed;
+    return truthy(p?.[actionKey]);
   });
-
-  console.log(`🎯 canModuleAction Result: ${result}`, { moduleKeys: Array.from(normalizedKeys), actionKey, fundId });
-  return result;
 }
 
