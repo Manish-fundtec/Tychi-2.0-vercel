@@ -29,10 +29,21 @@ export default function ActionCellRenderer(props) {
     alert('No delete handler provided.');
   };
 
-  // Show edit button only if canEdit is explicitly true
-  // Show delete button only if canDelete is explicitly true
-  const showEdit = canEdit === true;
-  const showDelete = canDelete === true;
+  // Show edit button if canEdit is truthy (true, 1, 'true', etc.)
+  // Show delete button if canDelete is truthy (true, 1, 'true', etc.)
+  const showEdit = canEdit === true || canEdit === 1 || canEdit === '1' || canEdit === 'true';
+  const showDelete = canDelete === true || canDelete === 1 || canDelete === '1' || canDelete === 'true';
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log('🔍 ActionCellRenderer - Permission Check:', {
+      canEdit,
+      canDelete,
+      showEdit,
+      showDelete,
+      tradeId: trade?.trade_id,
+    });
+  }, [canEdit, canDelete, showEdit, showDelete, trade]);
 
   if (!trade) {
     return <div>No trade data</div>
