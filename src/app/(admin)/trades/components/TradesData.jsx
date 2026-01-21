@@ -77,7 +77,6 @@ export default function TradesData() {
     const fetchPermissions = async () => {
       const tokenData = userToken || dashboard
       if (!tokenData) {
-        console.warn('⚠️ Trades - No token data available')
         setLoadingPermissions(false)
         return
       }
@@ -85,34 +84,9 @@ export default function TradesData() {
       try {
         setLoadingPermissions(true)
         const currentFundId = fund_id || fundId
-        
-        console.log('🔐 Trades - Fetching permissions:', {
-          hasTokenData: !!tokenData,
-          currentFundId,
-          userId: tokenData?.user_id || tokenData?.id,
-          roleId: tokenData?.role_id || tokenData?.roleId,
-        })
-        
-        // Try fetching with fund ID first, then without if needed
-        let perms = await getUserRolePermissions(tokenData, currentFundId)
-        
-        // If no permissions with fund filter, try without fund filter
-        if ((!perms || perms.length === 0) && currentFundId) {
-          console.log('🔐 Trades - No permissions with fund filter, trying without fund filter')
-          perms = await getUserRolePermissions(tokenData, null)
-        }
-        
-        const permissionsArray = Array.isArray(perms) ? perms : []
-        setPermissions(permissionsArray)
-        
-        console.log('🔐 Trades - Fetched permissions:', {
-          count: permissionsArray.length,
-          permissions: permissionsArray,
-          tradePermissions: permissionsArray.filter(p => {
-            const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toLowerCase()
-            return moduleKey === 'trade' || moduleKey === 'trades'
-          }),
-        })
+        const perms = await getUserRolePermissions(tokenData, currentFundId)
+        setPermissions(Array.isArray(perms) ? perms : [])
+        console.log('🔐 Trades - Fetched permissions:', perms)
       } catch (error) {
         console.error('❌ Error fetching permissions:', error)
         setPermissions([])
@@ -127,66 +101,28 @@ export default function TradesData() {
   // Permission checks for trade module
   const currentFundId = fund_id || fundId
   
-  // Check permissions - try with and without fund filter
+  // If permissions are still loading OR if no permissions found, default to false (hide buttons)
+  // Only show buttons if explicitly allowed
   const hasPermissions = !loadingPermissions && permissions.length > 0
+  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
+  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
+  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
   
-  // Try matching with fund ID first, then without fund filter (for org-level permissions)
-  const canAddWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
-  const canAddWithoutFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', null) : false
-  const canAdd = canAddWithFund || canAddWithoutFund
-  
-  const canEditWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
-  const canEditWithoutFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', null) : false
-  const canEdit = canEditWithFund || canEditWithoutFund
-  
-  const canDeleteWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
-  const canDeleteWithoutFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', null) : false
-  const canDelete = canDeleteWithFund || canDeleteWithoutFund
-  
-  // TEMPORARY: If permissions are still loading, show buttons (for testing)
-  // Remove this after confirming permissions are working
-  const showButtonsWhileLoading = loadingPermissions
-  const finalCanAdd = showButtonsWhileLoading ? true : canAdd
-  const finalCanEdit = showButtonsWhileLoading ? true : canEdit
-  const finalCanDelete = showButtonsWhileLoading ? true : canDelete
-  
-  // Debug logging with detailed info
+  // Debug logging
   useEffect(() => {
-    const tradePerms = permissions?.filter(p => {
-      const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toLowerCase()
-      return moduleKey === 'trade' || moduleKey === 'trades'
-    }) || []
-    
     console.log('🔍 Trades Permissions Debug:', {
+      permissions,
       permissionsCount: permissions?.length,
-      tradePermissionsCount: tradePerms.length,
       currentFundId,
       loadingPermissions,
       hasPermissions,
       canAdd,
-      canAddWithFund,
-      canAddWithoutFund,
-      finalCanAdd,
       canEdit,
-      canEditWithFund,
-      canEditWithoutFund,
-      finalCanEdit,
       canDelete,
-      canDeleteWithFund,
-      canDeleteWithoutFund,
-      finalCanDelete,
-      showButtonsWhileLoading,
-      tradePermissions: tradePerms.map(p => ({
-        module_key: p?.module_key || p?.moduleKey || p?.module,
-        fund_id: p?.fund_id || p?.fundId,
-        can_add: p?.can_add,
-        can_edit: p?.can_edit,
-        can_delete: p?.can_delete,
-      })),
-      allPermissions: permissions?.map(p => ({
-        module_key: p?.module_key || p?.moduleKey || p?.module,
-        fund_id: p?.fund_id || p?.fundId,
-      })),
+      tradePermissions: permissions?.filter(p => {
+        const moduleKey = (p?.module_key || p?.moduleKey || '').toLowerCase()
+        return moduleKey === 'trade' || moduleKey === 'trades'
+      }),
     })
   }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions, hasPermissions])
   
@@ -799,7 +735,7 @@ export default function TradesData() {
             <CardTitle as="h4">Trades</CardTitle>
             <div className="d-flex gap-2">
               {/* If your modals accept onSuccess, these will refresh both tabs */}
-              {finalCanAdd && (
+              {canAdd && (
                 <>
                   <TradeModal
                     onSuccess={() => {
@@ -837,7 +773,7 @@ export default function TradesData() {
                   <Button variant="outline-secondary" size="sm" onClick={handleClearSelection} disabled={!selectedRows.length}>
                     Clear Selection
                   </Button>
-                  {finalCanDelete && (
+                  {canDelete && (
                     <Button 
                       variant="outline-danger" 
                       size="sm" 
@@ -878,8 +814,8 @@ export default function TradesData() {
                       onViewTrade: handleViewTrade,
                       onEditTrade: handleEditTrade,
                       onDeleteTrade: handleSingleDelete,
-                      canEdit: finalCanEdit,
-                      canDelete: finalCanDelete,
+                      canEdit: canEdit,
+                      canDelete: canDelete,
                     }}
                     suppressRowClickSelection={false}
                     overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">Loading...</span>' : undefined}
