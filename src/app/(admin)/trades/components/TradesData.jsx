@@ -101,12 +101,12 @@ export default function TradesData() {
   // Permission checks for trade module
   const currentFundId = fund_id || fundId
   
-  // If permissions are still loading OR if no permissions found, default to true (show buttons)
-  // This ensures buttons are visible by default and only hidden if explicitly denied
+  // If permissions are still loading OR if no permissions found, default to false (hide buttons)
+  // Only show buttons if explicitly allowed
   const hasPermissions = !loadingPermissions && permissions.length > 0
-  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : true
-  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : true
-  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : true
+  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
+  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
+  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
   
   // Debug logging
   useEffect(() => {
@@ -658,6 +658,12 @@ export default function TradesData() {
     setViewTrade(trade || null)
   }, [])
 
+  const handleEditTrade = useCallback((trade) => {
+    // For now, open view modal - can be extended to edit modal later
+    // Or you can create a separate edit modal
+    setViewTrade(trade || null)
+  }, [])
+
   const closeViewModal = useCallback(() => setViewTrade(null), [])
 
   const selectedCount = selectedRows.length
@@ -806,7 +812,9 @@ export default function TradesData() {
                     }}
                     context={{
                       onViewTrade: handleViewTrade,
+                      onEditTrade: handleEditTrade,
                       onDeleteTrade: handleSingleDelete,
+                      canEdit: canEdit,
                       canDelete: canDelete,
                     }}
                     suppressRowClickSelection={false}
