@@ -100,9 +100,28 @@ export default function TradesData() {
   
   // Permission checks for trade module
   const currentFundId = fund_id || fundId
-  const canAdd = canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId)
-  const canEdit = canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId)
-  const canDelete = canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId)
+  // If permissions are still loading, default to true (show buttons) for backward compatibility
+  // Once permissions are loaded, use the actual permission check
+  const canAdd = loadingPermissions ? true : canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId)
+  const canEdit = loadingPermissions ? true : canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId)
+  const canDelete = loadingPermissions ? true : canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId)
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 Trades Permissions Debug:', {
+      permissions,
+      permissionsCount: permissions?.length,
+      currentFundId,
+      canAdd,
+      canEdit,
+      canDelete,
+      loadingPermissions,
+      tradePermissions: permissions?.filter(p => {
+        const moduleKey = (p?.module_key || p?.moduleKey || '').toLowerCase()
+        return moduleKey === 'trade' || moduleKey === 'trades'
+      }),
+    })
+  }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions])
   
   // Fetch fund details to get current decimal_precision
   useEffect(() => {
