@@ -135,6 +135,20 @@ export default function TradesData() {
   const canAddWithoutFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', null) : false
   const canAdd = canAddWithFund || canAddWithoutFund
   
+  // Debug: Log the permission check results
+  console.log('🔍 Permission Check Results:', {
+    hasPermissions,
+    currentFundId,
+    canAddWithFund,
+    canAddWithoutFund,
+    canAdd,
+    permissionsArray: permissions?.map(p => ({
+      module_key: p?.module_key,
+      fund_id: p?.fund_id,
+      can_add: p?.can_add,
+    })),
+  })
+  
   const canEditWithFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
   const canEditWithoutFund = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', null) : false
   const canEdit = canEditWithFund || canEditWithoutFund
@@ -149,6 +163,18 @@ export default function TradesData() {
   const finalCanAdd = showButtonsWhileLoading ? true : canAdd
   const finalCanEdit = showButtonsWhileLoading ? true : canEdit
   const finalCanDelete = showButtonsWhileLoading ? true : canDelete
+  
+  // Debug: Log final button visibility
+  console.log('🔍 Final Button Visibility:', {
+    loadingPermissions,
+    showButtonsWhileLoading,
+    canAdd,
+    finalCanAdd,
+    canDelete,
+    finalCanDelete,
+    'Will show Add button?': finalCanAdd,
+    'Will show Delete button?': finalCanDelete,
+  })
   
   // Debug logging with detailed info
   useEffect(() => {
