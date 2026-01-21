@@ -186,21 +186,9 @@ export default function TradesData() {
       allPermissions: permissions?.map(p => ({
         module_key: p?.module_key || p?.moduleKey || p?.module,
         fund_id: p?.fund_id || p?.fundId,
-        can_add: p?.can_add,
-        can_edit: p?.can_edit,
-        can_delete: p?.can_delete,
       })),
-      buttonVisibility: {
-        'Add Button (finalCanAdd)': finalCanAdd,
-        'Delete Button (finalCanDelete)': finalCanDelete,
-        'Edit Button (finalCanEdit)': finalCanEdit,
-        'Type of finalCanDelete': typeof finalCanDelete,
-        'Value of finalCanDelete': finalCanDelete,
-        'Type of finalCanAdd': typeof finalCanAdd,
-        'Value of finalCanAdd': finalCanAdd,
-      },
     })
-  }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions, hasPermissions, finalCanAdd, finalCanEdit, finalCanDelete])
+  }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions, hasPermissions])
   
   // Fetch fund details to get current decimal_precision
   useEffect(() => {
