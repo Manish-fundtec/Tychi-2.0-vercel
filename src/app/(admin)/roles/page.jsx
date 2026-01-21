@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Button } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
 import api from '@/lib/api/axios'
+import { useNotificationContext } from '@/context/useNotificationContext'
 
 const AgGridReact = dynamic(
   () => import('ag-grid-react').then((mod) => mod.AgGridReact),
@@ -15,9 +16,11 @@ const AgGridReact = dynamic(
 const RolesPage = () => {
   const router = useRouter()
   const gridApiRef = useRef(null)
+  const { showNotification } = useNotificationContext()
 
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
+  const [deleting, setDeleting] = useState(false)
 
   const refreshRoles = useCallback(async () => {
     setLoading(true)
@@ -98,8 +101,46 @@ const RolesPage = () => {
       { field: 'description', headerName: 'Description', flex: 1 },
       { field: 'status', headerName: 'Status', flex: 1 },
       { field: 'createdAt', headerName: 'Created At', flex: 1 },
+      {
+        headerName: 'Actions',
+        width: 150,
+        pinned: 'right',
+        sortable: false,
+        filter: false,
+        cellRenderer: (params) => {
+          const roleId = params.data?.id
+          const roleName = params.data?.name || 'Role'
+          
+          return (
+            <div className="d-flex gap-2">
+              <Button
+                variant="outline-primary"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleEdit(roleId)
+                }}
+                disabled={deleting}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="outline-danger"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDelete(roleId, roleName)
+                }}
+                disabled={deleting}
+              >
+                Delete
+              </Button>
+            </div>
+          )
+        },
+      },
     ],
-    []
+    [handleEdit, handleDelete, deleting]
   )
 
   useEffect(() => {
@@ -109,6 +150,41 @@ const RolesPage = () => {
   const onGridReady = useCallback((params) => {
     gridApiRef.current = params.api
   }, [])
+
+  // Handle Edit Role
+  const handleEdit = useCallback((roleId) => {
+    router.push(`/roles/edit/${roleId}`)
+  }, [router])
+
+  // Handle Delete Role
+  const handleDelete = useCallback(async (roleId, roleName) => {
+    if (!window.confirm(`Are you sure you want to delete role "${roleName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    setDeleting(true)
+    try {
+      // Try to delete role - adjust endpoint based on your API
+      await api.delete(`/api/v1/roles/${roleId}`)
+      
+      showNotification({
+        message: `Role "${roleName}" deleted successfully`,
+        variant: 'success',
+      })
+      
+      // Refresh roles list
+      refreshRoles()
+    } catch (error) {
+      console.error('Error deleting role:', error)
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to delete role'
+      showNotification({
+        message: errorMessage,
+        variant: 'danger',
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }, [refreshRoles, showNotification])
 
   return (
     <>
