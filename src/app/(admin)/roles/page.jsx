@@ -15,6 +15,7 @@ const AgGridReact = dynamic(
 const RolesPage = () => {
   const router = useRouter()
   const gridApiRef = useRef(null)
+
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
 
