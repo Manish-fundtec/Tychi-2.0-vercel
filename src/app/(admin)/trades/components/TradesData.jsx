@@ -100,11 +100,13 @@ export default function TradesData() {
   
   // Permission checks for trade module
   const currentFundId = fund_id || fundId
-  // If permissions are still loading, default to true (show buttons) for backward compatibility
-  // Once permissions are loaded, use the actual permission check
-  const canAdd = loadingPermissions ? true : canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId)
-  const canEdit = loadingPermissions ? true : canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId)
-  const canDelete = loadingPermissions ? true : canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId)
+  
+  // If permissions are still loading OR if no permissions found, default to true (show buttons)
+  // This ensures buttons are visible by default and only hidden if explicitly denied
+  const hasPermissions = !loadingPermissions && permissions.length > 0
+  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : true
+  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : true
+  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : true
   
   // Debug logging
   useEffect(() => {
@@ -112,16 +114,17 @@ export default function TradesData() {
       permissions,
       permissionsCount: permissions?.length,
       currentFundId,
+      loadingPermissions,
+      hasPermissions,
       canAdd,
       canEdit,
       canDelete,
-      loadingPermissions,
       tradePermissions: permissions?.filter(p => {
         const moduleKey = (p?.module_key || p?.moduleKey || '').toLowerCase()
         return moduleKey === 'trade' || moduleKey === 'trades'
       }),
     })
-  }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions])
+  }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions, hasPermissions])
   
   // Fetch fund details to get current decimal_precision
   useEffect(() => {
@@ -351,6 +354,17 @@ export default function TradesData() {
             const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
+        }
+      }
+
+      // Ensure Action column is properly configured with context
+      if (col?.field === 'action' || col?.headerName === 'Action') {
+        return {
+          ...col,
+          cellRenderer: col.cellRenderer, // Keep the ActionCellRenderer
+          // Ensure it's not filtered out
+          sortable: false,
+          filter: false,
         }
       }
 
