@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Button } from
 import PageTitle from '@/components/PageTitle'
 import api from '@/lib/api/axios'
 import { useNotificationContext } from '@/context/useNotificationContext'
+import RoleActionsCellRenderer from './components/RoleActionsCellRenderer'
 
 const AgGridReact = dynamic(
   () => import('ag-grid-react').then((mod) => mod.AgGridReact),
@@ -93,70 +94,12 @@ const RolesPage = () => {
     }
   }, [])
 
-  const columnDefs = useMemo(
-    () => [
-      { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 80, pinned: 'left' },
-      { field: 'name', headerName: 'Role Name', flex: 1 },
-      { field: 'tag', headerName: 'Tag', flex: 1 },
-      { field: 'description', headerName: 'Description', flex: 1 },
-      { field: 'status', headerName: 'Status', flex: 1 },
-      { field: 'createdAt', headerName: 'Created At', flex: 1 },
-      {
-        headerName: 'Actions',
-        width: 150,
-        pinned: 'right',
-        sortable: false,
-        filter: false,
-        cellRenderer: (params) => {
-          const roleId = params.data?.id
-          const roleName = params.data?.name || 'Role'
-          
-          return (
-            <div className="d-flex gap-2">
-              <Button
-                variant="outline-primary"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleEdit(roleId)
-                }}
-                disabled={deleting}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="outline-danger"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDelete(roleId, roleName)
-                }}
-                disabled={deleting}
-              >
-                Delete
-              </Button>
-            </div>
-          )
-        },
-      },
-    ],
-    [handleEdit, handleDelete, deleting]
-  )
-
-  useEffect(() => {
-    refreshRoles()
-  }, [refreshRoles])
-
-  const onGridReady = useCallback((params) => {
-    gridApiRef.current = params.api
-  }, [])
-
-  // Handle Edit Role
+  // Handle Edit Role - define BEFORE columnDefs
   const handleEdit = useCallback((roleId) => {
     router.push(`/roles/edit/${roleId}`)
   }, [router])
 
-  // Handle Delete Role
+  // Handle Delete Role - define BEFORE columnDefs
   const handleDelete = useCallback(async (roleId, roleName) => {
     if (!window.confirm(`Are you sure you want to delete role "${roleName}"? This action cannot be undone.`)) {
       return
@@ -186,6 +129,34 @@ const RolesPage = () => {
     }
   }, [refreshRoles, showNotification])
 
+  const columnDefs = useMemo(
+    () => [
+      { headerName: 'Sr.No', valueGetter: 'node.rowIndex + 1', width: 80, pinned: 'left' },
+      { field: 'name', headerName: 'Role Name', flex: 1 },
+      { field: 'tag', headerName: 'Tag', flex: 1 },
+      { field: 'description', headerName: 'Description', flex: 1 },
+      { field: 'status', headerName: 'Status', flex: 1 },
+      { field: 'createdAt', headerName: 'Created At', flex: 1 },
+      {
+        headerName: 'Actions',
+        width: 150,
+        pinned: 'right',
+        sortable: false,
+        filter: false,
+        cellRenderer: RoleActionsCellRenderer,
+      },
+    ],
+    [handleEdit, handleDelete, deleting]
+  )
+
+  useEffect(() => {
+    refreshRoles()
+  }, [refreshRoles])
+
+  const onGridReady = useCallback((params) => {
+    gridApiRef.current = params.api
+  }, [])
+
   return (
     <>
       <PageTitle title="Roles" subName="Admin" />
@@ -214,6 +185,11 @@ const RolesPage = () => {
                     paginationPageSize={10}
                     paginationPageSizeSelector={[10, 25, 50]}
                     defaultColDef={{ sortable: true, filter: true, resizable: true }}
+                    context={{
+                      onEdit: handleEdit,
+                      onDelete: handleDelete,
+                      deleting,
+                    }}
                   />
                 </div>
               )}
