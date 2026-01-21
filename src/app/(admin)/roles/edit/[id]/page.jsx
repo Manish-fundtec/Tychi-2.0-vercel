@@ -102,36 +102,56 @@ const EditRolePage = () => {
 
         // Build permissions object
         const permissionsObj = {}
+        const fundIds = []
+        
+        // Extract fund IDs from roleFunds (ensure they're strings for consistent comparison)
         roleFunds.forEach(fund => {
-          const fundId = fund.fund_id || fund.id || fund
-          permissionsObj[fundId] = {}
+          const fundId = String(fund.fund_id || fund.id || fund)
+          if (fundId && fundId !== 'undefined' && fundId !== 'null') {
+            fundIds.push(fundId)
+            permissionsObj[fundId] = {}
+          }
         })
 
+        // Build permissions structure from rolePermissions
         rolePermissions.forEach(perm => {
-          const fundId = perm.fund_id || perm.fundId
+          const fundId = String(perm.fund_id || perm.fundId)
           const moduleKey = perm.module_key || perm.moduleKey
-          if (fundId && moduleKey) {
+          if (fundId && fundId !== 'undefined' && fundId !== 'null' && moduleKey) {
             if (!permissionsObj[fundId]) {
               permissionsObj[fundId] = {}
             }
             permissionsObj[fundId][moduleKey] = {
-              can_view: perm.can_view || false,
-              can_add: perm.can_add || false,
-              can_edit: perm.can_edit || false,
-              can_delete: perm.can_delete || false,
+              can_view: perm.can_view === true || perm.can_view === 1 || perm.can_view === '1' || perm.can_view === 'true',
+              can_add: perm.can_add === true || perm.can_add === 1 || perm.can_add === '1' || perm.can_add === 'true',
+              can_edit: perm.can_edit === true || perm.can_edit === 1 || perm.can_edit === '1' || perm.can_edit === 'true',
+              can_delete: perm.can_delete === true || perm.can_delete === 1 || perm.can_delete === '1' || perm.can_delete === 'true',
             }
           }
         })
 
-        setFormData({
-          role_name: roleData.role_name || roleData.name || '',
-          role_description: roleData.role_description || roleData.description || '',
-          org_id: orgId,
-          funds: roleFunds.map(f => f.fund_id || f.id || f),
-          permissions: permissionsObj,
+        console.log('🔍 Edit Role - Processed data:', {
+          orgId,
+          fundIds,
+          permissionsObj,
+          roleFunds,
+          rolePermissions: rolePermissions.length,
         })
 
+        // Set org_id first so funds can be fetched
+        setFormData(prev => ({
+          ...prev,
+          role_name: roleData.role_name || roleData.name || '',
+          role_description: roleData.role_description || roleData.description || '',
+          org_id: String(orgId),
+          funds: fundIds,
+          permissions: permissionsObj,
+        }))
+
         setLoadingOrgs(false)
+        
+        // After setting org_id, fetch funds for that org
+        // This will be handled by the useEffect that watches formData.org_id
       } catch (error) {
         console.error('Error fetching role data:', error)
         setError('Failed to load role data')
@@ -467,8 +487,8 @@ const EditRolePage = () => {
   // Get selected funds data
   const getSelectedFunds = () => {
     return funds.filter(fund => {
-      const fundId = fund.fund_id || fund.id
-      return formData.funds.includes(fundId)
+      const fundId = String(fund.fund_id || fund.id)
+      return formData.funds?.some(f => String(f) === fundId) || false
     })
   }
 
@@ -603,8 +623,9 @@ const EditRolePage = () => {
                                 </div>
                                 <div className="row g-3">
                                   {funds.map((fund) => {
-                                    const fundId = fund.fund_id || fund.id
-                                    const isChecked = formData.funds?.includes(fundId) || false
+                                    const fundId = String(fund.fund_id || fund.id)
+                                    // Ensure proper comparison by converting both to strings
+                                    const isChecked = formData.funds?.some(f => String(f) === fundId) || false
                                     return (
                                       <Col md={4} key={fundId}>
                                         <FormCheck
