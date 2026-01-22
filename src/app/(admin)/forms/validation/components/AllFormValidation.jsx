@@ -2244,11 +2244,15 @@ export const AddUser = ({ onClose, onCreated }) => {
   const [loadingOrgs, setLoadingOrgs] = useState(false)
 
   const [formData, setFormData] = useState({
+    organization: '',
     firstName: '',
     lastName: '',
     email: '',
+    password: '',
+    phone_number: '',
+    country: '',
+    address: '',
     role: '',
-    organization: '',
     status: 'Active',
   })
 
@@ -2333,6 +2337,10 @@ export const AddUser = ({ onClose, onCreated }) => {
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
+        password: formData.password,
+        phone_number: formData.phone_number,
+        country: formData.country,
+        address: formData.address,
         role: formData.role,
         organization: formData.organization,
         org_id: formData.organization,
@@ -2349,11 +2357,15 @@ export const AddUser = ({ onClose, onCreated }) => {
 
       // Reset form
       setFormData({
+        organization: '',
         firstName: '',
         lastName: '',
         email: '',
+        password: '',
+        phone_number: '',
+        country: '',
+        address: '',
         role: '',
-        organization: '',
         status: 'Active',
       })
       setValidated(false)
@@ -2371,6 +2383,36 @@ export const AddUser = ({ onClose, onCreated }) => {
   return (
     <Form noValidate validated={validated} onSubmit={handleSubmit}>
       <Row>
+        <FormGroup className="col-md-6">
+          <FormLabel>Organization *</FormLabel>
+          {loadingOrgs ? (
+            <div className="d-flex align-items-center gap-2">
+              <Spinner animation="border" size="sm" />
+              <span>Loading organizations...</span>
+            </div>
+          ) : (
+            <FormSelect
+              name="organization"
+              value={formData.organization}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Organization</option>
+              {organizations.map((org) => {
+                const orgId = org.organization_id || org.id
+                const orgName = org.organization_name || org.name || ''
+                if (!orgName) return null
+                return (
+                  <option key={orgId} value={orgId}>
+                    {orgName}
+                  </option>
+                )
+              })}
+            </FormSelect>
+          )}
+          <Feedback type="invalid">Please select an organization.</Feedback>
+        </FormGroup>
+
         <FormGroup className="col-md-6">
           <FormLabel>First Name *</FormLabel>
           <FormControl
@@ -2411,6 +2453,71 @@ export const AddUser = ({ onClose, onCreated }) => {
         </FormGroup>
 
         <FormGroup className="col-md-6">
+          <FormLabel>Password *</FormLabel>
+          <FormControl
+            type="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            placeholder="Enter password"
+          />
+          <Feedback type="invalid">Please provide a password.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Phone Number *</FormLabel>
+          <FormControl
+            type="tel"
+            name="phone_number"
+            value={formData.phone_number}
+            onChange={handleChange}
+            required
+            placeholder="Enter phone number"
+          />
+          <Feedback type="invalid">Please provide a valid phone number.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Country *</FormLabel>
+          <FormControl
+            type="text"
+            name="country"
+            value={formData.country}
+            onChange={handleChange}
+            required
+            placeholder="Enter country"
+          />
+          <Feedback type="invalid">Please provide a country.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Address *</FormLabel>
+          <FormControl
+            type="text"
+            name="address"
+            value={formData.address}
+            onChange={handleChange}
+            required
+            placeholder="Enter address"
+          />
+          <Feedback type="invalid">Please provide an address.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Status *</FormLabel>
+          <FormSelect
+            name="status"
+            value={formData.status}
+            onChange={handleChange}
+            required
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </FormSelect>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
           <FormLabel>Role *</FormLabel>
           <FormSelect
             name="role"
@@ -2437,49 +2544,6 @@ export const AddUser = ({ onClose, onCreated }) => {
             )}
           </FormSelect>
           <Feedback type="invalid">Please select a role.</Feedback>
-        </FormGroup>
-
-        <FormGroup className="col-md-6">
-          <FormLabel>Organization *</FormLabel>
-          {loadingOrgs ? (
-            <div className="d-flex align-items-center gap-2">
-              <Spinner animation="border" size="sm" />
-              <span>Loading organizations...</span>
-            </div>
-          ) : (
-            <FormSelect
-              name="organization"
-              value={formData.organization}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Organization</option>
-              {organizations.map((org) => {
-                const orgId = org.organization_id || org.id
-                const orgName = org.organization_name || org.name || ''
-                if (!orgName) return null
-                return (
-                  <option key={orgId} value={orgId}>
-                    {orgName}
-                  </option>
-                )
-              })}
-            </FormSelect>
-          )}
-          <Feedback type="invalid">Please select an organization.</Feedback>
-        </FormGroup>
-
-        <FormGroup className="col-md-6">
-          <FormLabel>Status *</FormLabel>
-          <FormSelect
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            required
-          >
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </FormSelect>
         </FormGroup>
       </Row>
 
@@ -2511,11 +2575,15 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
   const [loadingOrgs, setLoadingOrgs] = useState(false)
 
   const [formData, setFormData] = useState({
+    organization: user?.organization_id || user?.org_id || user?.organization || '',
     firstName: user?.first_name || '',
     lastName: user?.last_name || '',
     email: user?.email || '',
+    password: '',
+    phone_number: user?.phone_number || user?.phone || '',
+    country: user?.country || '',
+    address: user?.address || '',
     role: user?.role_name || user?.role || '',
-    organization: user?.organization_id || user?.org_id || user?.organization || '',
     status: user?.status || 'Active',
   })
 
@@ -2580,11 +2648,15 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
   useEffect(() => {
     if (user) {
       setFormData({
+        organization: user?.organization_id || user?.org_id || user?.organization || '',
         firstName: user?.first_name || '',
         lastName: user?.last_name || '',
         email: user?.email || '',
+        password: '',
+        phone_number: user?.phone_number || user?.phone || '',
+        country: user?.country || '',
+        address: user?.address || '',
         role: user?.role_name || user?.role || '',
-        organization: user?.organization_id || user?.org_id || user?.organization || '',
         status: user?.status || 'Active',
       })
     }
@@ -2617,6 +2689,10 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
+        password: formData.password || undefined,
+        phone_number: formData.phone_number,
+        country: formData.country,
+        address: formData.address,
         role: formData.role,
         organization: formData.organization,
         org_id: formData.organization,
@@ -2644,6 +2720,36 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
   return (
     <Form noValidate validated={validated} onSubmit={handleSubmit}>
       <Row>
+        <FormGroup className="col-md-6">
+          <FormLabel>Organization *</FormLabel>
+          {loadingOrgs ? (
+            <div className="d-flex align-items-center gap-2">
+              <Spinner animation="border" size="sm" />
+              <span>Loading organizations...</span>
+            </div>
+          ) : (
+            <FormSelect
+              name="organization"
+              value={formData.organization}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Organization</option>
+              {organizations.map((org) => {
+                const orgId = org.organization_id || org.id
+                const orgName = org.organization_name || org.name || ''
+                if (!orgName) return null
+                return (
+                  <option key={orgId} value={orgId}>
+                    {orgName}
+                  </option>
+                )
+              })}
+            </FormSelect>
+          )}
+          <Feedback type="invalid">Please select an organization.</Feedback>
+        </FormGroup>
+
         <FormGroup className="col-md-6">
           <FormLabel>First Name *</FormLabel>
           <FormControl
@@ -2684,6 +2790,70 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
         </FormGroup>
 
         <FormGroup className="col-md-6">
+          <FormLabel>Password</FormLabel>
+          <FormControl
+            type="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            placeholder="Enter new password (leave blank to keep current)"
+          />
+          <Feedback type="invalid">Please provide a valid password.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Phone Number *</FormLabel>
+          <FormControl
+            type="tel"
+            name="phone_number"
+            value={formData.phone_number}
+            onChange={handleChange}
+            required
+            placeholder="Enter phone number"
+          />
+          <Feedback type="invalid">Please provide a valid phone number.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Country *</FormLabel>
+          <FormControl
+            type="text"
+            name="country"
+            value={formData.country}
+            onChange={handleChange}
+            required
+            placeholder="Enter country"
+          />
+          <Feedback type="invalid">Please provide a country.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Address *</FormLabel>
+          <FormControl
+            type="text"
+            name="address"
+            value={formData.address}
+            onChange={handleChange}
+            required
+            placeholder="Enter address"
+          />
+          <Feedback type="invalid">Please provide an address.</Feedback>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
+          <FormLabel>Status *</FormLabel>
+          <FormSelect
+            name="status"
+            value={formData.status}
+            onChange={handleChange}
+            required
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </FormSelect>
+        </FormGroup>
+
+        <FormGroup className="col-md-6">
           <FormLabel>Role *</FormLabel>
           <FormSelect
             name="role"
@@ -2710,49 +2880,6 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
             )}
           </FormSelect>
           <Feedback type="invalid">Please select a role.</Feedback>
-        </FormGroup>
-
-        <FormGroup className="col-md-6">
-          <FormLabel>Organization *</FormLabel>
-          {loadingOrgs ? (
-            <div className="d-flex align-items-center gap-2">
-              <Spinner animation="border" size="sm" />
-              <span>Loading organizations...</span>
-            </div>
-          ) : (
-            <FormSelect
-              name="organization"
-              value={formData.organization}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Organization</option>
-              {organizations.map((org) => {
-                const orgId = org.organization_id || org.id
-                const orgName = org.organization_name || org.name || ''
-                if (!orgName) return null
-                return (
-                  <option key={orgId} value={orgId}>
-                    {orgName}
-                  </option>
-                )
-              })}
-            </FormSelect>
-          )}
-          <Feedback type="invalid">Please select an organization.</Feedback>
-        </FormGroup>
-
-        <FormGroup className="col-md-6">
-          <FormLabel>Status *</FormLabel>
-          <FormSelect
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            required
-          >
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </FormSelect>
         </FormGroup>
       </Row>
 
