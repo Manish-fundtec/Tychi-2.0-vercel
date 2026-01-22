@@ -102,22 +102,11 @@ export default function TradesData() {
   const currentFundId = fund_id || fundId
 
   const tradePermission = useMemo(() => {
-    if (!Array.isArray(permissions) || permissions.length === 0) return null
-    if (!currentFundId) return null
-
-    return permissions.find(p => {
-      // Match module_key (case-insensitive, check multiple field names)
-      const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toString().trim().toLowerCase()
-      const matchesModule = moduleKey === 'trade' || moduleKey === 'trades'
-      if (!matchesModule) return false
-
-      // Match fund_id (handle both field names and type coercion)
-      const pFundId = p?.fund_id ?? p?.fundId
-      if (pFundId == null) return false
-      const matchesFund = String(pFundId) === String(currentFundId)
-      
-      return matchesFund
-    })
+    return permissions.find(p =>
+      ['trade', 'trades'].includes(
+        (p?.module_key || '').toLowerCase()
+      ) && p.fund_id === currentFundId
+    )
   }, [permissions, currentFundId])
 
   // Create STRICT permission flags (default = false for security)
@@ -735,19 +724,7 @@ export default function TradesData() {
   )
 
   // 🚫 PAGE-LEVEL GUARD: Block page if no view permission (after all hooks)
-  if (loadingPermissions) {
-    return (
-      <Row>
-        <Col xl={12}>
-          <Alert variant="info">
-            Loading permissions...
-          </Alert>
-        </Col>
-      </Row>
-    )
-  }
-
-  if (!canView) {
+  if (!loadingPermissions && !canView) {
     return (
       <Row>
         <Col xl={12}>
