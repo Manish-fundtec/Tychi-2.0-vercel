@@ -101,30 +101,23 @@ export default function TradesData() {
   // Permission checks for trade module
   const currentFundId = fund_id || fundId
   
-  // Strict RBAC: Default to false - buttons hidden unless permission explicitly granted
-  // If permissions are still loading OR if no permissions found, default to false (hide buttons)
-  const hasPermissions = !loadingPermissions && permissions.length > 0
-  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
-  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
-  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
+  // Call canModuleAction() directly - it already handles empty arrays, undefined permissions, and fund mismatches
+  // This ensures React re-renders when permissions load (no hasPermissions gate blocking updates)
+  const canAdd = canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId)
+  const canEdit = canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId)
+  const canDelete = canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId)
   
   // Debug logging
   useEffect(() => {
-    console.log('🔐 FINAL RBAC CHECK', {
+    console.log('🔐 FINAL UI PERMISSIONS', {
+      loadingPermissions,
+      permissionsCount: permissions.length,
       canAdd,
       canDelete,
-      permissions,
-      permissionsCount: permissions?.length,
-      currentFundId,
-      loadingPermissions,
-      hasPermissions,
       canEdit,
-      tradePermissions: permissions?.filter(p => {
-        const moduleKey = (p?.module_key || p?.moduleKey || '').toLowerCase()
-        return moduleKey === 'trade' || moduleKey === 'trades'
-      }),
+      currentFundId,
     })
-  }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions, hasPermissions])
+  }, [loadingPermissions, permissions, canAdd, canDelete, canEdit, currentFundId])
   
   // Fetch fund details to get current decimal_precision
   useEffect(() => {
