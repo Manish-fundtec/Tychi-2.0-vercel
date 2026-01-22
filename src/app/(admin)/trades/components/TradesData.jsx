@@ -98,15 +98,21 @@ export default function TradesData() {
     fetchPermissions()
   }, [userToken, dashboard, fund_id, fundId])
   
-  // Permission checks for trade module
+  // Extract Trade permission ONCE
   const currentFundId = fund_id || fundId
-  
-  // If permissions are still loading OR if no permissions found, default to true (show buttons)
-  // This ensures buttons are visible by default and only hidden if explicitly denied
-  const hasPermissions = !loadingPermissions && permissions.length > 0
-  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : true
-  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : true
-  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : true
+
+  const tradePermission = useMemo(() => {
+    return permissions.find(p =>
+      ['trade', 'trades'].includes(
+        (p?.module_key || '').toLowerCase()
+      ) && p.fund_id === currentFundId
+    )
+  }, [permissions, currentFundId])
+
+  // Create STRICT permission flags (default = false for security)
+  const canView = !!tradePermission?.can_view
+  const canAdd = !!tradePermission?.can_add
+  const canDelete = !!tradePermission?.can_delete
   
   // Debug logging
   useEffect(() => {
@@ -115,16 +121,12 @@ export default function TradesData() {
       permissionsCount: permissions?.length,
       currentFundId,
       loadingPermissions,
-      hasPermissions,
+      tradePermission,
+      canView,
       canAdd,
-      canEdit,
       canDelete,
-      tradePermissions: permissions?.filter(p => {
-        const moduleKey = (p?.module_key || p?.moduleKey || '').toLowerCase()
-        return moduleKey === 'trade' || moduleKey === 'trades'
-      }),
     })
-  }, [permissions, currentFundId, canAdd, canEdit, canDelete, loadingPermissions, hasPermissions])
+  }, [permissions, currentFundId, canView, canAdd, canDelete, loadingPermissions, tradePermission])
   
   // Fetch fund details to get current decimal_precision
   useEffect(() => {
@@ -662,6 +664,19 @@ export default function TradesData() {
 
   const selectedCount = selectedRows.length
 
+  // 🚫 PAGE-LEVEL GUARD: Block page if no view permission
+  if (!loadingPermissions && !canView) {
+    return (
+      <Row>
+        <Col xl={12}>
+          <Alert variant="danger">
+            You do not have permission to view Trades.
+          </Alert>
+        </Col>
+      </Row>
+    )
+  }
+
   const historyColDefs = useMemo(
     () => [
       { headerName: 'File ID', field: 'file_id', width: 280 },
@@ -807,7 +822,8 @@ export default function TradesData() {
                     context={{
                       onViewTrade: handleViewTrade,
                       onDeleteTrade: handleSingleDelete,
-                      canDelete: canDelete,
+                      canDelete,
+                      canView,
                     }}
                     suppressRowClickSelection={false}
                     overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">Loading...</span>' : undefined}
