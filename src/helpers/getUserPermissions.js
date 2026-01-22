@@ -63,7 +63,26 @@ export const getUserRolePermissions = async (tokenData, fundId = null) => {
 
         if (userRole && userRole.permissions) {
           let permissions = Array.isArray(userRole.permissions) ? userRole.permissions : [];
-          console.log('🔐 Raw permissions:', permissions);
+          console.log('🔐 Raw permissions (BEFORE filtering):', permissions);
+          
+          // 🔴 CRITICAL: Check TRADE permission structure in raw data
+          const rawTradePerm = permissions.find(p => {
+            const moduleKey = (p?.module_key || p?.moduleKey || '').toString().toLowerCase();
+            return moduleKey === 'trade' || moduleKey === 'trades';
+          });
+          if (rawTradePerm) {
+            console.log('🔴 RAW TRADE PERMISSION (from role, before filter):', {
+              fullObject: rawTradePerm,
+              allKeys: Object.keys(rawTradePerm),
+              can_view: rawTradePerm.can_view,
+              can_add: rawTradePerm.can_add,
+              can_edit: rawTradePerm.can_edit,
+              can_delete: rawTradePerm.can_delete,
+              has_can_add: 'can_add' in rawTradePerm,
+              has_can_edit: 'can_edit' in rawTradePerm,
+              has_can_delete: 'can_delete' in rawTradePerm,
+            });
+          }
           
           // Filter by fund if fundId is provided
           if (fundId) {
@@ -75,12 +94,16 @@ export const getUserRolePermissions = async (tokenData, fundId = null) => {
             console.log('🔐 Filtered permissions for fundId', fundId, ':', permissions);
           }
 
-          // Log each permission's module_key
+          // Log each permission with ALL fields to diagnose missing fields
           permissions.forEach(p => {
-            console.log('📦 Permission:', {
+            console.log('📦 Permission (ALL FIELDS):', {
               module_key: p.module_key || p.moduleKey,
               can_view: p.can_view,
-              fund_id: p.fund_id || p.fundId
+              can_add: p.can_add,
+              can_edit: p.can_edit,
+              can_delete: p.can_delete,
+              fund_id: p.fund_id || p.fundId,
+              allKeys: Object.keys(p), // Show all keys to see what backend actually sends
             });
           });
 
