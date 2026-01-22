@@ -101,24 +101,24 @@ export default function TradesData() {
   // Permission checks for trade module
   const currentFundId = fund_id || fundId
   
-  // If permissions are still loading OR if no permissions found, default to true (show buttons)
-  // This ensures buttons are visible by default and only hidden if explicitly denied
+  // Strict RBAC: Default to false - buttons hidden unless permission explicitly granted
+  // If permissions are still loading OR if no permissions found, default to false (hide buttons)
   const hasPermissions = !loadingPermissions && permissions.length > 0
-  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : true
-  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : true
-  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : true
+  const canAdd = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId) : false
+  const canEdit = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId) : false
+  const canDelete = hasPermissions ? canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId) : false
   
   // Debug logging
   useEffect(() => {
-    console.log('🔍 Trades Permissions Debug:', {
+    console.log('🔐 FINAL RBAC CHECK', {
+      canAdd,
+      canDelete,
       permissions,
       permissionsCount: permissions?.length,
       currentFundId,
       loadingPermissions,
       hasPermissions,
-      canAdd,
       canEdit,
-      canDelete,
       tradePermissions: permissions?.filter(p => {
         const moduleKey = (p?.module_key || p?.moduleKey || '').toLowerCase()
         return moduleKey === 'trade' || moduleKey === 'trades'
