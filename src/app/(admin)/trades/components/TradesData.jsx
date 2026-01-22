@@ -149,15 +149,38 @@ export default function TradesData() {
         } else {
           // Permissions not in token - fetch from API
           source = 'api'
-          console.log('📡 Trades - Calling getUserRolePermissions...')
-          perms = await getUserRolePermissions(tokenData, currentFundId)
-          console.log('✅ Trades - getUserRolePermissions returned:', {
-            source: 'api',
-            count: Array.isArray(perms) ? perms.length : 0,
-            isArray: Array.isArray(perms),
-            permissions: perms,
-            firstPermission: perms?.[0],
+          console.log('📡 Trades - Calling getUserRolePermissions with:', {
+            tokenDataKeys: Object.keys(tokenData || {}),
+            tokenDataSample: {
+              user_id: tokenData?.user_id,
+              id: tokenData?.id,
+              userId: tokenData?.userId,
+              sub: tokenData?.sub,
+              org_id: tokenData?.org_id,
+              organization_id: tokenData?.organization_id,
+              orgId: tokenData?.orgId,
+            },
+            currentFundId,
           })
+          
+          try {
+            perms = await getUserRolePermissions(tokenData, currentFundId)
+            console.log('✅ Trades - getUserRolePermissions SUCCESS:', {
+              source: 'api',
+              count: Array.isArray(perms) ? perms.length : 0,
+              isArray: Array.isArray(perms),
+              permissions: perms,
+              firstPermission: perms?.[0],
+              tradePermission: perms?.find(p => {
+                const moduleKey = (p?.module_key || p?.moduleKey || '').toString().toLowerCase()
+                return moduleKey === 'trade' || moduleKey === 'trades'
+              }),
+            })
+          } catch (permError) {
+            console.error('❌ Trades - getUserRolePermissions ERROR:', permError)
+            console.error('❌ Error details:', permError?.response?.data || permError?.message)
+            perms = []
+          }
         }
         
         // 🔴 CRITICAL: Check if TRADE permission has all required fields
@@ -207,9 +230,28 @@ export default function TradesData() {
           count: Array.isArray(perms) ? perms.length : 0,
           isArray: Array.isArray(perms),
           tradePermissionFound: !!tradePermission,
+          willSetPermissions: Array.isArray(perms) && perms.length > 0,
         })
         
-        setPermissions(Array.isArray(perms) ? perms : [])
+        const permissionsToSet = Array.isArray(perms) ? perms : []
+        console.log('🔐 Trades - About to setPermissions:', {
+          count: permissionsToSet.length,
+          permissions: permissionsToSet,
+          tradePermission: permissionsToSet.find(p => {
+            const moduleKey = (p?.module_key || p?.moduleKey || '').toString().toLowerCase()
+            return moduleKey === 'trade' || moduleKey === 'trades'
+          }),
+        })
+        
+        setPermissions(permissionsToSet)
+        
+        // Verify permissions were set (in next render)
+        setTimeout(() => {
+          console.log('🔐 Trades - Permissions state after set (check):', {
+            // This will show in next render cycle
+            note: 'Check next render for actual state',
+          })
+        }, 100)
       } catch (error) {
         console.error('❌ Trades - Error fetching permissions:', error)
         console.error('❌ Error stack:', error?.stack)
