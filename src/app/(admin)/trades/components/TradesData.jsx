@@ -27,7 +27,7 @@ import { deleteTrade, bulkDeleteTrades } from '@/lib/api/trades'
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
 import { getFundDetails } from '@/lib/api/fund'
 import { useUserToken } from '@/hooks/useUserToken'
-import { getUserRolePermissions, useUserPermissions } from '@/helpers/getUserPermissions'
+import { getUserRolePermissions } from '@/helpers/getUserPermissions'
 import { canModuleAction } from '@/helpers/permissionActions'
 
 // Register all Community features
@@ -98,14 +98,29 @@ export default function TradesData() {
       try {
         setLoadingPermissions(true)
         const currentFundId = fund_id || fundId
-        console.log('📡 Trades - Calling useUserPermissions (checks token first) with:', {
+        console.log('📡 Trades - Fetching permissions with:', {
           currentFundId,
           tokenDataKeys: Object.keys(tokenData || {}),
           hasPermissionsInToken: !!tokenData?.permissions,
         })
         
-        // Try useUserPermissions first (checks token), fallback to getUserRolePermissions
-        const perms = await useUserPermissions(tokenData, currentFundId)
+        // Check if permissions are in token first, otherwise fetch from API
+        let perms = []
+        if (tokenData?.permissions && Array.isArray(tokenData.permissions)) {
+          // Permissions are in token - filter by fundId if provided
+          perms = tokenData.permissions
+          if (currentFundId) {
+            perms = perms.filter(p => {
+              const pFundId = p?.fund_id || p?.fundId
+              return pFundId == currentFundId || String(pFundId) === String(currentFundId)
+            })
+          }
+          console.log('✅ Trades - Using permissions from token:', perms)
+        } else {
+          // Permissions not in token - fetch from API
+          perms = await getUserRolePermissions(tokenData, currentFundId)
+          console.log('✅ Trades - Fetched permissions from API:', perms)
+        }
         
         console.log('🔐 Trades - getUserRolePermissions returned:', {
           permissions: perms,
