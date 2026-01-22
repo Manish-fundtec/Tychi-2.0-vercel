@@ -27,7 +27,7 @@ import { deleteTrade, bulkDeleteTrades } from '@/lib/api/trades'
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
 import { getFundDetails } from '@/lib/api/fund'
 import { useUserToken } from '@/hooks/useUserToken'
-import { getUserRolePermissions } from '@/helpers/getUserPermissions'
+import { getUserRolePermissions, useUserPermissions } from '@/helpers/getUserPermissions'
 import { canModuleAction } from '@/helpers/permissionActions'
 
 // Register all Community features
@@ -76,7 +76,21 @@ export default function TradesData() {
   useEffect(() => {
     const fetchPermissions = async () => {
       const tokenData = userToken || dashboard
+      
+      console.log('🔍 Trades - Permission fetch started:', {
+        hasUserToken: !!userToken,
+        hasDashboard: !!dashboard,
+        tokenData: tokenData ? {
+          user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId,
+          role_id: tokenData?.role_id || tokenData?.roleId,
+          org_id: tokenData?.org_id || tokenData?.organization_id,
+        } : null,
+        fund_id,
+        fundId,
+      })
+      
       if (!tokenData) {
+        console.warn('⚠️ Trades - No tokenData available, skipping permission fetch')
         setLoadingPermissions(false)
         return
       }
@@ -84,11 +98,26 @@ export default function TradesData() {
       try {
         setLoadingPermissions(true)
         const currentFundId = fund_id || fundId
-        const perms = await getUserRolePermissions(tokenData, currentFundId)
+        console.log('📡 Trades - Calling useUserPermissions (checks token first) with:', {
+          currentFundId,
+          tokenDataKeys: Object.keys(tokenData || {}),
+          hasPermissionsInToken: !!tokenData?.permissions,
+        })
+        
+        // Try useUserPermissions first (checks token), fallback to getUserRolePermissions
+        const perms = await useUserPermissions(tokenData, currentFundId)
+        
+        console.log('🔐 Trades - getUserRolePermissions returned:', {
+          permissions: perms,
+          count: Array.isArray(perms) ? perms.length : 0,
+          isArray: Array.isArray(perms),
+        })
+        
         setPermissions(Array.isArray(perms) ? perms : [])
-        console.log('🔐 Trades - Fetched permissions:', perms)
       } catch (error) {
-        console.error('❌ Error fetching permissions:', error)
+        console.error('❌ Trades - Error fetching permissions:', error)
+        console.error('❌ Error stack:', error?.stack)
+        console.error('❌ Error response:', error?.response?.data)
         setPermissions([])
       } finally {
         setLoadingPermissions(false)
@@ -101,21 +130,69 @@ export default function TradesData() {
   // Permission checks for trade module
   const currentFundId = fund_id || fundId
   
+  // Debug: Test canModuleAction with sample data to verify it works
+  const testPermissions = [
+    {
+      module_key: 'TRADE',
+      can_add: true,
+      can_delete: false,
+      can_edit: false,
+      can_view: true,
+      fund_id: currentFundId,
+    }
+  ]
+  const testCanAdd = canModuleAction(testPermissions, ['trade', 'trades'], 'can_add', currentFundId)
+  console.log('🧪 TEST canModuleAction:', {
+    testCanAdd,
+    testPermissions,
+    currentFundId,
+  })
+  
   // Call canModuleAction() directly - it already handles empty arrays, undefined permissions, and fund mismatches
   // This ensures React re-renders when permissions load (no hasPermissions gate blocking updates)
   const canAdd = canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId)
   const canEdit = canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId)
   const canDelete = canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId)
   
-  // Debug logging
+  // Debug: Log what canModuleAction receives
+  console.log('🔍 canModuleAction INPUT:', {
+    permissionsCount: permissions.length,
+    permissions: permissions,
+    moduleKeys: ['trade', 'trades'],
+    actionKey: 'can_add',
+    fundId: currentFundId,
+    result: canAdd,
+  })
+  
+  // Debug logging - detailed permission check
   useEffect(() => {
+    // Find TRADE permissions specifically
+    const tradePermissions = permissions.filter(p => {
+      const moduleKey = (p?.module_key || p?.moduleKey || '').toString().toLowerCase()
+      return moduleKey === 'trade' || moduleKey === 'trades'
+    })
+    
     console.log('🔐 FINAL UI PERMISSIONS', {
       loadingPermissions,
       permissionsCount: permissions.length,
+      currentFundId,
       canAdd,
       canDelete,
       canEdit,
-      currentFundId,
+      tradePermissionsCount: tradePermissions.length,
+      tradePermissions: tradePermissions.map(p => ({
+        module_key: p?.module_key || p?.moduleKey,
+        can_add: p?.can_add,
+        can_delete: p?.can_delete,
+        can_edit: p?.can_edit,
+        can_view: p?.can_view,
+        fund_id: p?.fund_id || p?.fundId,
+      })),
+      allPermissions: permissions.map(p => ({
+        module_key: p?.module_key || p?.moduleKey,
+        can_add: p?.can_add,
+        fund_id: p?.fund_id || p?.fundId,
+      })),
     })
   }, [loadingPermissions, permissions, canAdd, canDelete, canEdit, currentFundId])
   
