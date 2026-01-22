@@ -10,36 +10,63 @@ import { jwtDecode } from 'jwt-decode';
  */
 export const getUserRolePermissions = async (tokenData, fundId = null) => {
   try {
-    // Get user ID and role info from token
-    const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId;
+    // Get user ID and role info from token - check multiple possible field names
+    const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.sub;
     const roleId = tokenData?.role_id || tokenData?.roleId;
-    const orgId = tokenData?.org_id || tokenData?.organization_id;
+    const orgId = tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId;
 
-    console.log('🔍 getUserRolePermissions - Input:', { userId, roleId, orgId, fundId, tokenData });
+    console.log('🔍 getUserRolePermissions - Input:', { 
+      userId, 
+      roleId, 
+      orgId, 
+      fundId,
+      tokenDataKeys: tokenData ? Object.keys(tokenData) : [],
+      tokenDataSample: tokenData ? {
+        user_id: tokenData.user_id,
+        id: tokenData.id,
+        userId: tokenData.userId,
+        sub: tokenData.sub,
+        org_id: tokenData.org_id,
+        organization_id: tokenData.organization_id,
+      } : null,
+    });
 
-    if (!userId && !roleId) {
-      console.warn('⚠️ No user ID or role ID found in token');
-      return [];
-    }
-
-    // First, try to get user details to get role_id (if not in token)
+    // Don't return early - try to fetch user details even if userId/roleId not in token
+    // Many tokens only have user_id, not role_id, so we need to fetch user details
+    let actualUserId = userId;
     let actualRoleId = roleId;
     let actualOrgId = orgId;
 
-    if (userId && !actualRoleId) {
+    // If we have userId but no roleId, fetch user details
+    // OR if we have no userId but have orgId, try to find user by other means
+    if (actualUserId && !actualRoleId) {
       try {
-        console.log('📡 Fetching user details for userId:', userId);
-        const userResponse = await api.get(`/api/v1/users/${userId}`);
+        console.log('📡 Fetching user details for userId:', actualUserId);
+        const userResponse = await api.get(`/api/v1/users/${actualUserId}`);
         const user = userResponse.data?.data || userResponse.data;
         console.log('👤 User details:', user);
         
         actualRoleId = user?.role_id || user?.roleId || user?.role?.role_id || user?.role?.id;
-        actualOrgId = user?.org_id || user?.organization_id || user?.organization?.org_id || orgId;
+        actualOrgId = user?.org_id || user?.organization_id || user?.organization?.org_id || actualOrgId || orgId;
         
         console.log('✅ Extracted role info:', { actualRoleId, actualOrgId });
       } catch (error) {
         console.error('❌ Error fetching user details:', error);
+        // Don't return early - continue to try with available data
       }
+    }
+    
+    // If still no userId but we have orgId, we might need to check tokenData more carefully
+    // But for now, if we don't have roleId and orgId, we can't proceed
+    if (!actualRoleId || !actualOrgId) {
+      console.warn('⚠️ Cannot fetch permissions: missing roleId or orgId', {
+        actualRoleId,
+        actualOrgId,
+        hadUserId: !!actualUserId,
+        hadRoleId: !!roleId,
+        hadOrgId: !!orgId,
+      });
+      return [];
     }
 
     // If we have role ID and org ID, fetch role with permissions

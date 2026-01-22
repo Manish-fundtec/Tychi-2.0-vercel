@@ -75,6 +75,7 @@ export default function TradesData() {
   // Fetch user permissions
   useEffect(() => {
     const fetchPermissions = async () => {
+      // Wait for token to be ready - both userToken and dashboard might be null initially
       const tokenData = userToken || dashboard
       
       console.log('🔍 Trades - Permission fetch started:', {
@@ -84,13 +85,24 @@ export default function TradesData() {
           user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId,
           role_id: tokenData?.role_id || tokenData?.roleId,
           org_id: tokenData?.org_id || tokenData?.organization_id,
+          allKeys: Object.keys(tokenData),
         } : null,
         fund_id,
         fundId,
       })
       
       if (!tokenData) {
-        console.warn('⚠️ Trades - No tokenData available, skipping permission fetch')
+        console.warn('⚠️ Trades - No tokenData available yet, will retry when token loads')
+        // Don't set loading to false - wait for token to load
+        return
+      }
+      
+      // Ensure we have at least user_id or org_id to fetch permissions
+      const hasUserId = !!(tokenData?.user_id || tokenData?.id || tokenData?.userId)
+      const hasOrgId = !!(tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId)
+      
+      if (!hasUserId && !hasOrgId) {
+        console.warn('⚠️ Trades - Token missing user_id and org_id, cannot fetch permissions')
         setLoadingPermissions(false)
         return
       }
@@ -102,6 +114,8 @@ export default function TradesData() {
           currentFundId,
           tokenDataKeys: Object.keys(tokenData || {}),
           hasPermissionsInToken: !!tokenData?.permissions,
+          hasUserId,
+          hasOrgId,
         })
         
         // Check if permissions are in token first, otherwise fetch from API
@@ -135,11 +149,14 @@ export default function TradesData() {
         } else {
           // Permissions not in token - fetch from API
           source = 'api'
+          console.log('📡 Trades - Calling getUserRolePermissions...')
           perms = await getUserRolePermissions(tokenData, currentFundId)
-          console.log('✅ Trades - Fetched permissions from API:', {
+          console.log('✅ Trades - getUserRolePermissions returned:', {
             source: 'api',
             count: Array.isArray(perms) ? perms.length : 0,
+            isArray: Array.isArray(perms),
             permissions: perms,
+            firstPermission: perms?.[0],
           })
         }
         
@@ -860,24 +877,34 @@ export default function TradesData() {
             <CardTitle as="h4">Trades</CardTitle>
             <div className="d-flex gap-2">
               {/* If your modals accept onSuccess, these will refresh both tabs */}
-              {canAdd && (
-                <>
-                  <TradeModal
-                    onSuccess={() => {
-                      //  NEW: refresh after manual add
-                      refreshTrades()
-                      fetchTradeHistory()
-                    }}
-                  />
-                  <UploadTradeModal
-                    onSuccess={() => {
-                      //  NEW: refresh after upload
-                      refreshTrades()
-                      fetchTradeHistory()
-                    }}
-                  />
-                </>
-              )}
+              {/* Explicitly pass canAdd prop to modals for internal permission checks */}
+              {(() => {
+                console.log('🔍 Trades - Rendering buttons section:', {
+                  canAdd,
+                  permissionsCount: permissions.length,
+                  willRenderModals: canAdd === true,
+                })
+                return canAdd && (
+                  <>
+                    <TradeModal
+                      canAdd={canAdd}
+                      onSuccess={() => {
+                        //  NEW: refresh after manual add
+                        refreshTrades()
+                        fetchTradeHistory()
+                      }}
+                    />
+                    <UploadTradeModal
+                      canAdd={canAdd}
+                      onSuccess={() => {
+                        //  NEW: refresh after upload
+                        refreshTrades()
+                        fetchTradeHistory()
+                      }}
+                    />
+                  </>
+                )
+              })()}
             </div>
           </CardHeader>
 

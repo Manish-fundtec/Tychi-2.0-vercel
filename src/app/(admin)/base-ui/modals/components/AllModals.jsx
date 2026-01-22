@@ -421,10 +421,19 @@ export function GLEntryModal({
   )
 }
 
-export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload Trade File', onSave, onClose, onSuccess }) {
+export function UploadTradeModal({ buttonLabel = 'Upload', modalTitle = 'Upload Trade File', onSave, onClose, onSuccess, canAdd = true }) {
   const { isTrue, toggle } = useToggle()
   const [showErrorModal, setShowErrorModal] = useState(false)
   const [errorFileUrl, setErrorFileUrl] = useState('')
+
+  // Debug logging
+  console.log('🧪 UploadTradeModal rendered:', { canAdd, buttonLabel, onSuccess: !!onSuccess })
+
+  // Explicit permission check - if canAdd is not explicitly true, don't render button
+  if (canAdd !== true) {
+    console.log('🚫 UploadTradeModal: canAdd is not true, hiding button', { canAdd })
+    return null
+  }
 
   const handleModalClose = () => {
     if (onClose) onClose()
@@ -2202,8 +2211,17 @@ export const ToggleBetweenModals = ({
   )
 }
 
-export const TradeModal = ({ onSuccess }) => {
+export const TradeModal = ({ onSuccess, canAdd = true }) => {
   const { isOpen, size, className, toggleModal, openModalWithSize } = useModal()
+
+  // Debug logging
+  console.log('🧪 TradeModal rendered:', { canAdd, onSuccess: !!onSuccess })
+
+  // Explicit permission check - if canAdd is not explicitly true, don't render button
+  if (canAdd !== true) {
+    console.log('🚫 TradeModal: canAdd is not true, hiding button', { canAdd })
+    return null
+  }
 
   return (
     <>
