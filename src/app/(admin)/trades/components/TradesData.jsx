@@ -75,17 +75,31 @@ export default function TradesData() {
   // Fetch user permissions
   useEffect(() => {
     const fetchPermissions = async () => {
-      // Wait for token to be ready - both userToken and dashboard might be null initially
-      const tokenData = userToken || dashboard
+      // ✅ PRIORITIZE dashboard token - it has all the fields we need
+      // Use dashboard first, then fallback to userToken
+      const tokenData = dashboard || userToken
       
       console.log('🔍 Trades - Permission fetch started:', {
         hasUserToken: !!userToken,
         hasDashboard: !!dashboard,
+        usingDashboard: !!dashboard,
+        usingUserToken: !dashboard && !!userToken,
+        dashboardKeys: dashboard ? Object.keys(dashboard) : [],
+        userTokenKeys: userToken ? Object.keys(userToken) : [],
         tokenData: tokenData ? {
-          user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId,
-          role_id: tokenData?.role_id || tokenData?.roleId,
-          org_id: tokenData?.org_id || tokenData?.organization_id,
+          // Show ALL fields from tokenData
+          fullTokenData: tokenData,
           allKeys: Object.keys(tokenData),
+          // Extract with all possible variations
+          user_id: tokenData.user_id,
+          id: tokenData.id,
+          userId: tokenData.userId,
+          sub: tokenData.sub,
+          role_id: tokenData.role_id,
+          roleId: tokenData.roleId,
+          org_id: tokenData.org_id,
+          organization_id: tokenData.organization_id,
+          orgId: tokenData.orgId,
         } : null,
         fund_id,
         fundId,
@@ -97,12 +111,32 @@ export default function TradesData() {
         return
       }
       
+      // Extract fields with all possible field name variations
+      // Dashboard token has: user_id, org_id, role_id (confirmed from logs)
+      const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.sub
+      const roleId = tokenData?.role_id || tokenData?.roleId
+      const orgId = tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId
+      
+      console.log('🔍 Trades - Extracted fields:', {
+        userId,
+        roleId,
+        orgId,
+        hasUserId: !!userId,
+        hasRoleId: !!roleId,
+        hasOrgId: !!orgId,
+      })
+      
       // Ensure we have at least user_id or org_id to fetch permissions
-      const hasUserId = !!(tokenData?.user_id || tokenData?.id || tokenData?.userId)
-      const hasOrgId = !!(tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId)
+      const hasUserId = !!userId
+      const hasOrgId = !!orgId
       
       if (!hasUserId && !hasOrgId) {
-        console.warn('⚠️ Trades - Token missing user_id and org_id, cannot fetch permissions')
+        console.warn('⚠️ Trades - Token missing user_id and org_id, cannot fetch permissions', {
+          tokenDataKeys: Object.keys(tokenData),
+          extracted: { userId, roleId, orgId },
+          // Show full token to debug
+          fullTokenData: tokenData,
+        })
         setLoadingPermissions(false)
         return
       }
