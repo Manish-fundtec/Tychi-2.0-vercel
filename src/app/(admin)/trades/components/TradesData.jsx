@@ -664,6 +664,19 @@ export default function TradesData() {
 
   const selectedCount = selectedRows.length
 
+  // 🚫 PAGE-LEVEL GUARD: Block page if no view permission
+  if (!loadingPermissions && !canView) {
+    return (
+      <Row>
+        <Col xl={12}>
+          <Alert variant="danger">
+            You do not have permission to view Trades.
+          </Alert>
+        </Col>
+      </Row>
+    )
+  }
+
   const historyColDefs = useMemo(
     () => [
       { headerName: 'File ID', field: 'file_id', width: 280 },
@@ -722,19 +735,6 @@ export default function TradesData() {
     ],
     [handleDownloadErrorFile],
   )
-
-  // 🚫 PAGE-LEVEL GUARD: Block page if no view permission (after all hooks)
-  if (!loadingPermissions && !canView) {
-    return (
-      <Row>
-        <Col xl={12}>
-          <Alert variant="danger">
-            You do not have permission to view Trades.
-          </Alert>
-        </Col>
-      </Row>
-    )
-  }
 
   return (
     <Row>
