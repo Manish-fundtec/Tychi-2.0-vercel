@@ -98,32 +98,31 @@ export default function TradesData() {
     fetchPermissions()
   }, [userToken, dashboard, fund_id, fundId])
   
-  // Extract Trade permission ONCE
+  // Extract Trade permission ONCE - use canModuleAction helper for consistency
   const currentFundId = fund_id || fundId
 
+  // Use the same helper function that's used elsewhere for consistency
+  const canView = canModuleAction(permissions, ['trade', 'trades'], 'can_view', currentFundId)
+  const canAdd = canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId)
+  const canDelete = canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId)
+
+  // Also find the permission object for debug purposes
   const tradePermission = useMemo(() => {
     if (!Array.isArray(permissions) || permissions.length === 0) return null
-    if (!currentFundId) return null
 
     return permissions.find(p => {
-      // Match module_key (case-insensitive, check multiple field names)
       const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toString().trim().toLowerCase()
       const matchesModule = moduleKey === 'trade' || moduleKey === 'trades'
       if (!matchesModule) return false
 
-      // Match fund_id (handle both field names and type coercion)
       const pFundId = p?.fund_id ?? p?.fundId
-      if (pFundId == null) return false
-      const matchesFund = String(pFundId) === String(currentFundId)
-      
-      return matchesFund
+      if (currentFundId && pFundId != null) {
+        return String(pFundId) === String(currentFundId)
+      }
+      // If no fund_id in permission or no currentFundId, still return it for debug
+      return true
     })
   }, [permissions, currentFundId])
-
-  // Create STRICT permission flags (default = false for security)
-  const canView = !!tradePermission?.can_view
-  const canAdd = !!tradePermission?.can_add
-  const canDelete = !!tradePermission?.can_delete
   
   // Debug logging
   useEffect(() => {
@@ -137,6 +136,29 @@ export default function TradesData() {
       canAdd,
       canDelete,
     })
+    
+    // Detailed permission matching debug
+    if (Array.isArray(permissions) && permissions.length > 0) {
+      console.log('🔍 Checking all permissions for trade module:')
+      permissions.forEach((p, idx) => {
+        const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toString().trim()
+        const pFundId = p?.fund_id ?? p?.fundId
+        const normalizedModuleKey = moduleKey.toLowerCase()
+        const isTradeModule = normalizedModuleKey === 'trade' || normalizedModuleKey === 'trades'
+        const fundMatches = pFundId != null && String(pFundId) === String(currentFundId)
+        
+        console.log(`  Permission ${idx}:`, {
+          module_key: moduleKey,
+          normalized: normalizedModuleKey,
+          isTradeModule,
+          fund_id: pFundId,
+          currentFundId,
+          fundMatches,
+          can_view: p?.can_view,
+          matches: isTradeModule && fundMatches
+        })
+      })
+    }
   }, [permissions, currentFundId, canView, canAdd, canDelete, loadingPermissions, tradePermission])
   
   // Fetch fund details to get current decimal_precision
