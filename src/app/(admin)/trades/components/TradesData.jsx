@@ -106,26 +106,90 @@ export default function TradesData() {
         
         // Check if permissions are in token first, otherwise fetch from API
         let perms = []
+        let source = 'unknown'
+        
         if (tokenData?.permissions && Array.isArray(tokenData.permissions)) {
           // Permissions are in token - filter by fundId if provided
+          source = 'token'
           perms = tokenData.permissions
+          
+          // Log raw token permissions before filtering
+          const tradePermBeforeFilter = perms.find(p => {
+            const moduleKey = (p?.module_key || p?.moduleKey || '').toString().toLowerCase()
+            return moduleKey === 'trade' || moduleKey === 'trades'
+          })
+          console.log('🔍 Trades - TRADE permission from TOKEN (before filter):', tradePermBeforeFilter)
+          
           if (currentFundId) {
             perms = perms.filter(p => {
               const pFundId = p?.fund_id || p?.fundId
               return pFundId == currentFundId || String(pFundId) === String(currentFundId)
             })
           }
-          console.log('✅ Trades - Using permissions from token:', perms)
+          console.log('✅ Trades - Using permissions from TOKEN:', {
+            source: 'token',
+            totalBeforeFilter: tokenData.permissions.length,
+            totalAfterFilter: perms.length,
+            permissions: perms,
+          })
         } else {
           // Permissions not in token - fetch from API
+          source = 'api'
           perms = await getUserRolePermissions(tokenData, currentFundId)
-          console.log('✅ Trades - Fetched permissions from API:', perms)
+          console.log('✅ Trades - Fetched permissions from API:', {
+            source: 'api',
+            count: Array.isArray(perms) ? perms.length : 0,
+            permissions: perms,
+          })
+        }
+        
+        // 🔴 CRITICAL: Check if TRADE permission has all required fields
+        const tradePermission = perms.find(p => {
+          const moduleKey = (p?.module_key || p?.moduleKey || '').toString().toLowerCase()
+          return moduleKey === 'trade' || moduleKey === 'trades'
+        })
+        
+        if (tradePermission) {
+          console.log(`🔴 RAW TRADE PERMISSION FROM ${source.toUpperCase()}:`, tradePermission)
+          console.log('🔴 TRADE PERMISSION FIELDS CHECK:', {
+            source,
+            has_can_view: 'can_view' in tradePermission,
+            can_view: tradePermission.can_view,
+            has_can_add: 'can_add' in tradePermission,
+            can_add: tradePermission.can_add,
+            has_can_edit: 'can_edit' in tradePermission,
+            can_edit: tradePermission.can_edit,
+            has_can_delete: 'can_delete' in tradePermission,
+            can_delete: tradePermission.can_delete,
+            allKeys: Object.keys(tradePermission),
+          })
+          
+          // Warn if required fields are missing
+          const missingFields = []
+          if (!('can_add' in tradePermission)) missingFields.push('can_add')
+          if (!('can_edit' in tradePermission)) missingFields.push('can_edit')
+          if (!('can_delete' in tradePermission)) missingFields.push('can_delete')
+          
+          if (missingFields.length > 0) {
+            console.warn(`⚠️ ${source.toUpperCase()} MISSING PERMISSION FIELDS:`, {
+              source,
+              module: tradePermission.module_key,
+              missingFields,
+              message: `${source === 'api' ? 'Backend API' : 'Token'} must send all permission fields (can_add, can_edit, can_delete) for proper RBAC`,
+              fix: source === 'api' 
+                ? 'Fix backend API to always return all permission fields'
+                : 'Ensure token includes all permission fields when generated',
+            })
+          }
+        } else {
+          console.warn(`⚠️ TRADE permission not found in permissions array (source: ${source})`)
         }
         
         console.log('🔐 Trades - getUserRolePermissions returned:', {
           permissions: perms,
           count: Array.isArray(perms) ? perms.length : 0,
           isArray: Array.isArray(perms),
+          tradePermissionFound: !!tradePermission,
         })
         
         setPermissions(Array.isArray(perms) ? perms : [])
@@ -145,39 +209,21 @@ export default function TradesData() {
   // Permission checks for trade module
   const currentFundId = fund_id || fundId
   
-  // Debug: Test canModuleAction with sample data to verify it works
-  const testPermissions = [
-    {
-      module_key: 'TRADE',
-      can_add: true,
-      can_delete: false,
-      can_edit: false,
-      can_view: true,
-      fund_id: currentFundId,
-    }
-  ]
-  const testCanAdd = canModuleAction(testPermissions, ['trade', 'trades'], 'can_add', currentFundId)
-  console.log('🧪 TEST canModuleAction:', {
-    testCanAdd,
-    testPermissions,
-    currentFundId,
-  })
+  // ⚠️ IMPORTANT: Backend API MUST send all permission fields:
+  // - can_view (required)
+  // - can_add (required) 
+  // - can_edit (required)
+  // - can_delete (required)
+  // If fields are missing, buttons will be hidden (security: deny by default)
+  // 
+  // Current behavior: canModuleAction returns false if field is undefined
+  // This is CORRECT - missing permissions = no access
   
   // Call canModuleAction() directly - it already handles empty arrays, undefined permissions, and fund mismatches
   // This ensures React re-renders when permissions load (no hasPermissions gate blocking updates)
   const canAdd = canModuleAction(permissions, ['trade', 'trades'], 'can_add', currentFundId)
   const canEdit = canModuleAction(permissions, ['trade', 'trades'], 'can_edit', currentFundId)
   const canDelete = canModuleAction(permissions, ['trade', 'trades'], 'can_delete', currentFundId)
-  
-  // Debug: Log what canModuleAction receives
-  console.log('🔍 canModuleAction INPUT:', {
-    permissionsCount: permissions.length,
-    permissions: permissions,
-    moduleKeys: ['trade', 'trades'],
-    actionKey: 'can_add',
-    fundId: currentFundId,
-    result: canAdd,
-  })
   
   // Debug logging - detailed permission check
   useEffect(() => {
