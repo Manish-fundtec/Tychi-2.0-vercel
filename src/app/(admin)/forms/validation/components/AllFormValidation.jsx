@@ -2331,8 +2331,7 @@ export const AddUser = ({ onClose, onCreated }) => {
 
     setIsSaving(true)
     try {
-      // TODO: Replace with actual API endpoint
-      const response = await api.post('/api/v1/users', {
+      const response = await api.post('/user_signup', {
         name: `${formData.firstName} ${formData.lastName}`,
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -2684,7 +2683,7 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
         throw new Error('User ID is missing')
       }
 
-      const response = await api.put(`/api/v1/users/${userId}`, {
+      const response = await api.put(`/users/${userId}`, {
         name: `${formData.firstName} ${formData.lastName}`,
         first_name: formData.firstName,
         last_name: formData.lastName,
