@@ -24,7 +24,7 @@ const AdminUsersPage = () => {
   const refreshUsers = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await api.get('/users')
+      const response = await api.get('/api/v1/users')
       setRowData(response.data?.data || response.data || [])
     } catch (error) {
       console.error('Error fetching users:', error)
@@ -63,7 +63,7 @@ const AdminUsersPage = () => {
     }
 
     try {
-      await api.delete(`/users/${userId}`)
+      await api.delete(`/api/v1/users/${userId}`)
       showNotification({
         message: 'User deleted successfully!',
         variant: 'success',
