@@ -8,6 +8,10 @@ import api from '../../../lib/api/axios'
 import { jwtDecode } from 'jwt-decode'
 import { ModuleRegistry } from 'ag-grid-community'
 import { ClientSideRowModelModule } from 'ag-grid-community'
+import { useDashboardToken } from '@/hooks/useDashboardToken'
+import { useUserToken } from '@/hooks/useUserToken'
+import { getUserRolePermissions } from '@/helpers/getUserPermissions'
+import { canModuleAction } from '@/helpers/permissionActions'
 
 ModuleRegistry.registerModules([ClientSideRowModelModule])
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
@@ -21,6 +25,17 @@ const ReviewsPage = () => {
   const [loading, setLoading] = useState(true)
   const [fundId, setFundId] = useState('')
   const [expandedKeys, setExpandedKeys] = useState(() => new Set())
+
+  // Permissions state
+  const [permissions, setPermissions] = useState([])
+  const [loadingPermissions, setLoadingPermissions] = useState(true)
+
+  // Hooks - must be declared before useEffects that use them
+  const dashboard = useDashboardToken()
+  const userToken = useUserToken()
+  
+  // Derived values from hooks
+  const fund_id = dashboard?.fund_id || fundId || ''
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -37,6 +52,119 @@ const ReviewsPage = () => {
       }
     }
   }, [])
+
+  // Fetch user permissions
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      // Use dashboard first, then fallback to userToken
+      const tokenData = dashboard || userToken;
+      
+      if (!tokenData) {
+        console.warn('⚠️ Chart of Accounts - No tokenData available yet, will retry when token loads');
+        return;
+      }
+      
+      // Extract fields with all possible field name variations
+      const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.sub;
+      const roleId = tokenData?.role_id || tokenData?.roleId;
+      const orgId = tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId;
+      
+      // Ensure we have at least user_id or org_id to fetch permissions
+      const hasUserId = !!userId;
+      const hasOrgId = !!orgId;
+      
+      if (!hasUserId && !hasOrgId) {
+        console.warn('⚠️ Chart of Accounts - Token missing user_id and org_id, cannot fetch permissions');
+        setLoadingPermissions(false);
+        return;
+      }
+      
+      try {
+        setLoadingPermissions(true);
+        const currentFundId = fund_id || fundId;
+        
+        // Check if permissions are in token first, otherwise fetch from API
+        let perms = [];
+        
+        if (tokenData?.permissions && Array.isArray(tokenData.permissions)) {
+          // Permissions are in token - filter by fundId if provided
+          perms = tokenData.permissions;
+          
+          if (currentFundId) {
+            perms = perms.filter(p => {
+              const pFundId = p?.fund_id || p?.fundId;
+              return pFundId == currentFundId || String(pFundId) === String(currentFundId);
+            });
+          }
+        } else {
+          // Permissions not in token - fetch from API
+          try {
+            perms = await getUserRolePermissions(tokenData, currentFundId);
+          } catch (permError) {
+            console.error('❌ Chart of Accounts - getUserRolePermissions ERROR:', permError);
+            perms = [];
+          }
+        }
+        
+        const permissionsToSet = Array.isArray(perms) ? perms : [];
+        setPermissions(permissionsToSet);
+      } catch (error) {
+        console.error('❌ Chart of Accounts - Error fetching permissions:', error);
+        setPermissions([]);
+      } finally {
+        setLoadingPermissions(false);
+      }
+    };
+    
+    fetchPermissions();
+  }, [userToken, dashboard, fund_id, fundId]);
+
+  // Permission checks for chart of accounts module
+  const currentFundId = fund_id || fundId;
+  // Try multiple possible module key variations (normalization handles case-insensitive matching)
+  const canAdd = canModuleAction(permissions, [
+    'CHART_OF_ACCOUNTS',  // Backend sends this in uppercase
+    'chart_of_accounts', 
+    'chartofaccounts', 
+    'chart_of_account', 
+    'coa', 
+    'gl_account',
+    'gl_accounts',
+    'general_ledger',
+    'general_ledger_account'
+  ], 'can_add', currentFundId);
+  
+  // Debug logging
+  useEffect(() => {
+    const chartOfAccountsPerms = permissions.filter(p => {
+      const moduleKey = (p?.module_key || p?.moduleKey || '').toString().toLowerCase();
+      return moduleKey === 'chart_of_accounts' || 
+             moduleKey === 'chartofaccounts' || 
+             moduleKey === 'coa' || 
+             moduleKey === 'gl_account';
+    });
+    
+    console.log('🔐 Chart of Accounts - Permission check:', {
+      loadingPermissions,
+      permissionsCount: permissions.length,
+      currentFundId,
+      canAdd,
+      canAddType: typeof canAdd,
+      willShowButton: !loadingPermissions && canAdd === true,
+      allPermissions: permissions.map(p => ({
+        module_key: p?.module_key || p?.moduleKey,
+        can_add: p?.can_add,
+        can_add_type: typeof p?.can_add,
+        fund_id: p?.fund_id || p?.fundId,
+      })),
+      chartOfAccountsPermissions: chartOfAccountsPerms.map(p => ({
+        module_key: p?.module_key || p?.moduleKey,
+        can_add: p?.can_add,
+        can_add_type: typeof p?.can_add,
+        fund_id: p?.fund_id || p?.fundId,
+      })),
+    });
+  }, [loadingPermissions, permissions, canAdd, currentFundId]);
 
   useEffect(() => {
     if (fundId) {
@@ -163,7 +291,7 @@ const ReviewsPage = () => {
         <Card>
           <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
             <CardTitle as="h4">Chart of Accounts</CardTitle>
-            <GLEntryModal onSaved={handleCoaSaved} />
+            {!loadingPermissions && canAdd === true && <GLEntryModal onSaved={handleCoaSaved} />}
           </CardHeader>
           <CardBody>
             <div>
