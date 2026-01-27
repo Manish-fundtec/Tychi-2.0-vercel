@@ -41,17 +41,36 @@ const FundListPage = () => {
         setLoadingPermissions(true)
 
         // Only use userAuthToken (has user_id, org_id, role_id) - don't fallback to userToken
-        const userAuthToken = Cookies.get('userAuthToken')
-        if (!userAuthToken) {
-          console.warn('⚠️ Fund page - No userAuthToken found in cookies')
-          console.log('📋 Available cookies:', {
+        // Try multiple ways to get the cookie
+        let userAuthToken = Cookies.get('userAuthToken')
+        
+        // If not found, try reading from document.cookie directly
+        if (!userAuthToken && typeof document !== 'undefined') {
+          const cookieString = document.cookie || ''
+          const match = cookieString.match(/(?:^|; )userAuthToken=([^;]*)/)
+          if (match) {
+            userAuthToken = decodeURIComponent(match[1])
+            console.log('✅ Fund page - Found userAuthToken in document.cookie')
+          }
+        }
+
+        // Log all cookies for debugging
+        if (typeof document !== 'undefined') {
+          console.log('📋 All cookies:', document.cookie)
+          console.log('📋 Cookies.get results:', {
             userAuthToken: !!Cookies.get('userAuthToken'),
             userToken: !!Cookies.get('userToken'),
             dashboardToken: !!Cookies.get('dashboardToken'),
           })
+        }
+
+        if (!userAuthToken) {
+          console.warn('⚠️ Fund page - No userAuthToken found in cookies')
           if (!ignore) setPermissions([])
           return
         }
+
+        console.log('✅ Fund page - Found userAuthToken, length:', userAuthToken.length)
 
         // Decode userAuthToken to get user_id, org_id, and role_id
         let tokenData = null
