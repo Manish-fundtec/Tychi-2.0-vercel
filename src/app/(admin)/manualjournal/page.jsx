@@ -36,6 +36,14 @@ const ManualJournalPage = () => {
   const [permissions, setPermissions] = useState([])
   const [loadingPermissions, setLoadingPermissions] = useState(true)
 
+  // Hooks - must be declared before useEffects that use them
+  const dashboard = useDashboardToken()
+  const userToken = useUserToken()
+  
+  // Derived values from hooks
+  const fmt = dashboard?.date_format || 'MM/DD/YYYY'
+  const fund_id = dashboard?.fund_id || fundId || ''
+
   // decode token to get fund_id
   useEffect(() => {
     const token = Cookies.get('dashboardToken')
@@ -113,12 +121,6 @@ const ManualJournalPage = () => {
     
     fetchPermissions();
   }, [userToken, dashboard, fund_id, fundId]);
-
-  // Permission checks for manual journal module
-  const currentFundId = fund_id || fundId;
-  const canAdd = canModuleAction(permissions, ['manual_journal', 'manualjournal', 'journal'], 'can_add', currentFundId);
-  const canEdit = canModuleAction(permissions, ['manual_journal', 'manualjournal', 'journal'], 'can_edit', currentFundId);
-  const canDelete = canModuleAction(permissions, ['manual_journal', 'manualjournal', 'journal'], 'can_delete', currentFundId);
 
   // register AG Grid modules (handles different versions)
   // useEffect(() => {
@@ -282,10 +284,11 @@ const ManualJournalPage = () => {
     }
   }
 
-  const dashboard = useDashboardToken()
-  const userToken = useUserToken()
-  const fmt = dashboard?.date_format || 'MM/DD/YYYY'
-  const fund_id = dashboard?.fund_id || fundId || ''
+  // Permission checks for manual journal module (after hooks are declared)
+  const currentFundId = fund_id || fundId;
+  const canAdd = canModuleAction(permissions, ['manual_journal', 'manualjournal', 'journal'], 'can_add', currentFundId);
+  const canEdit = canModuleAction(permissions, ['manual_journal', 'manualjournal', 'journal'], 'can_edit', currentFundId);
+  const canDelete = canModuleAction(permissions, ['manual_journal', 'manualjournal', 'journal'], 'can_delete', currentFundId);
   
   // Fetch fund details to get current decimal_precision
   useEffect(() => {
