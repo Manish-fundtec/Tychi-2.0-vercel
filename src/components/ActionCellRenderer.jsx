@@ -41,9 +41,9 @@ export default function ActionCellRenderer(props) {
     alert('No delete handler provided.');
   };
 
-  // Show delete button unless explicitly set to false
-  // Default behavior: show buttons if canDelete is undefined/null (backward compatibility)
-  const showDelete = canDelete !== false;
+  // Show delete button ONLY if canDelete is explicitly true
+  // Strict RBAC: buttons hidden by default, only shown when permission exists
+  const showDelete = canDelete === true;
 
   // Always render View button, conditionally render Delete button
   // Ensure buttons are always visible for debugging
