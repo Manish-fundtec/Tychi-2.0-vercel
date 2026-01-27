@@ -133,41 +133,16 @@ export const BrokerageTableColDefs = [
     headerName: 'Actions',
     field: 'actions',
     cellRenderer: (params) => {
-      const { handleEdit, handleDelete, canEdit, canDelete, canView } = params.context || {}
-      
-      // Show buttons only if permissions are explicitly true
-      const showEdit = canEdit === true
-      const showDelete = canDelete === true
-      const showView = canView === true
-      
-      // If no permissions, don't show any buttons
-      if (!showEdit && !showDelete && !showView) {
-        return null
-      }
-      
+      const { handleEdit, handleDelete } = params.context
       return (
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {showView && (
-            <button 
-              className="btn btn-sm btn-outline-primary" 
-              onClick={() => {
-                // View functionality - could open a view modal
-                if (handleEdit) handleEdit(params.data)
-              }}
-            >
-              View
-            </button>
-          )}
-          {showEdit && (
-            <button className="btn btn-sm btn-warning" onClick={() => handleEdit(params.data)}>
-              Edit
-            </button>
-          )}
-          {showDelete && (
-            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(params.data)}>
-              Delete
-            </button>
-          )}
+          <button className="btn btn-sm btn-warning" onClick={() => handleEdit(params.data)}>
+            Edit
+          </button>
+          {/* ✅ pass entire row, not just broker_id */}
+          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(params.data)}>
+            Delete
+          </button>
         </div>
       )
     },
@@ -190,45 +165,21 @@ export const BankTableColDefs = [
     headerName: 'Actions',
     field: 'actions',
     cellRenderer: (params) => {
-      const { handleEdit, handleDelete, canEdit, canDelete, canView } = params.context || {}
-      
-      // Show buttons only if permissions are explicitly true
-      const showEdit = canEdit === true
-      const showDelete = canDelete === true
-      const showView = canView === true
-      
-      // If no permissions, don't show any buttons
-      if (!showEdit && !showDelete && !showView) {
-        return null
-      }
-      
+      const { handleEdit, handleDelete } = params.context
+
       return (
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {showView && (
-            <button 
-              className="btn btn-sm btn-outline-primary" 
-              onClick={() => {
-                // View functionality - could open a view modal
-                if (handleEdit) handleEdit(params.data)
-              }}
-            >
-              View
-            </button>
-          )}
-          {showEdit && (
-            <button
-              className="btn btn-sm btn-warning"
-              onClick={() => {
-                handleEdit(params.data) // ✅ This triggers modal
-              }}>
-              Edit
-            </button>
-          )}
-          {showDelete && (
-            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(params.data.bank_id)}>
-              Delete
-            </button>
-          )}
+          <button
+            className="btn btn-sm btn-warning"
+            onClick={() => {
+              // Edit functionality removed
+              handleEdit(params.data) // ✅ This triggers modal
+            }}>
+            Edit
+          </button>
+          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(params.data.bank_id)}>
+            Delete
+          </button>
         </div>
       )
     },
@@ -251,41 +202,16 @@ export const ExchangeTableColDefs = [
     headerName: 'Actions',
     field: 'actions',
     cellRenderer: (params) => {
-      const { handleEdit, handleDelete, canEdit, canDelete, canView } = params.context || {}
-      
-      // Show buttons only if permissions are explicitly true
-      const showEdit = canEdit === true
-      const showDelete = canDelete === true
-      const showView = canView === true
-      
-      // If no permissions, don't show any buttons
-      if (!showEdit && !showDelete && !showView) {
-        return null
-      }
-      
+      const { handleEdit, handleDelete } = params.context
+
       return (
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {showView && (
-            <button 
-              className="btn btn-sm btn-outline-primary" 
-              onClick={() => {
-                // View functionality - could open a view modal
-                if (handleEdit) handleEdit(params.data)
-              }}
-            >
-              View
-            </button>
-          )}
-          {showEdit && (
-            <button className="btn btn-sm btn-warning" onClick={() => handleEdit(params.data)}>
-              Edit
-            </button>
-          )}
-          {showDelete && (
-            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(params.data.exchange_uid)}>
-              Delete
-            </button>
-          )}
+          <button className="btn btn-sm btn-warning" onClick={() => handleEdit(params.data)}>
+            Edit
+          </button>
+          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(params.data.exchange_uid)}>
+            Delete
+          </button>
         </div>
       )
     },
@@ -348,22 +274,14 @@ export const getAssetTypeColDefs = (handleToggle) => [
     flex: 1,
     sortable: false,
     cellRenderer: (params) => {
-      const { canEdit } = params.context || {}
-      const showToggle = canEdit === true
-      
       const isActive = params.data.status === 'Active'
       const handleClick = () => {
-        if (!showToggle) return
         handleToggle(params.data, !isActive) // Pass row and next status
-      }
-
-      if (!showToggle) {
-        return <span>{isActive ? 'Active' : 'Inactive'}</span>
       }
 
       return (
         <div className="form-check form-switch">
-          <input className="form-check-input" type="checkbox" checked={isActive} onChange={handleClick} id={`switch-${params.data.assettype_id}`} disabled={!showToggle} />
+          <input className="form-check-input" type="checkbox" checked={isActive} onChange={handleClick} id={`switch-${params.data.assettype_id}`} />
           <label className="form-check-label" htmlFor={`switch-${params.data.assettype_id}`}>
             {isActive ? 'Active' : 'Inactive'}
           </label>
@@ -397,41 +315,21 @@ export const symbolColDefs = [
     headerName: 'Actions',
     field: 'actions',
     cellRenderer: (params) => {
-      const { handleEdit, handleDelete, canEdit, canDelete, canView } = params.context || {}
-      
-      // Show buttons only if permissions are explicitly true
-      const showEdit = canEdit === true
-      const showDelete = canDelete === true
-      const showView = canView === true
-      
-      // If no permissions, don't show any buttons
-      if (!showEdit && !showDelete && !showView) {
-        return null
+      const handleEdit = params.context?.handleEdit
+      const handleDelete = params.context?.handleDelete
+
+      if (!handleEdit || !handleDelete) {
+        return <span className="text-danger">⚠️ Missing context</span> // Display missing context error message
       }
 
       return (
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {showView && (
-            <button 
-              className="btn btn-sm btn-outline-primary" 
-              onClick={() => {
-                // View functionality - could open a view modal
-                if (handleEdit) handleEdit(params.data)
-              }}
-            >
-              View
-            </button>
-          )}
-          {showEdit && (
-            <button className="btn btn-sm btn-warning" onClick={() => handleEdit(params.data)}>
-              Edit
-            </button>
-          )}
-          {showDelete && (
-            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(params.data.symbol_uid)}>
-              Delete
-            </button>
-          )}
+          <button className="btn btn-sm btn-warning" onClick={() => handleEdit(params.data)}>
+            Edit
+          </button>
+          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(params.data.symbol_uid)}>
+            Delete
+          </button>
         </div>
       )
     },

@@ -4,11 +4,8 @@ import { AgGridReact } from 'ag-grid-react'
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useSymbolData } from '@/hooks/useSymbolData'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
-import { useUserToken } from '@/hooks/useUserToken'
 import { UploadSymbolModal } from '@/app/(admin)/base-ui/modals/components/ConfigurationModal'
 import { SymbolModal } from '@/app/(admin)/base-ui/modals/components/ConfigurationModal'
-import { getUserRolePermissions } from '@/helpers/getUserPermissions'
-import { canModuleAction } from '@/helpers/permissionActions'
 import {
   Card,
   CardBody,
@@ -34,45 +31,8 @@ const normalizeStatusText = (value) => String(value || '')
   .toLowerCase()
 
 const SymbolTab = () => {
-  const dashboard = useDashboardToken()
-  const userToken = useUserToken()
-  const { fund_id } = dashboard || {}
+  const { fund_id } = useDashboardToken() || {}
   const { symbols, refetchSymbols, editingSymbol, setEditingSymbol, showModal, setShowModal, handleEdit, handleDelete } = useSymbolData(fund_id)
-
-  // Permissions state
-  const [permissions, setPermissions] = useState([])
-  const [loadingPermissions, setLoadingPermissions] = useState(true)
-  
-  // Fetch user permissions
-  useEffect(() => {
-    const fetchPermissions = async () => {
-      const tokenData = dashboard || userToken
-      
-      if (!tokenData) {
-        setLoadingPermissions(false)
-        return
-      }
-      
-      try {
-        setLoadingPermissions(true)
-        const perms = await getUserRolePermissions(tokenData, fund_id)
-        setPermissions(Array.isArray(perms) ? perms : [])
-      } catch (error) {
-        console.error('Error fetching permissions:', error)
-        setPermissions([])
-      } finally {
-        setLoadingPermissions(false)
-      }
-    }
-    
-    fetchPermissions()
-  }, [userToken, dashboard, fund_id])
-  
-  // Permission checks for symbol module
-  const canEdit = canModuleAction(permissions, ['configuration_symbol', 'symbol'], 'can_edit', fund_id)
-  const canDelete = canModuleAction(permissions, ['configuration_symbol', 'symbol'], 'can_delete', fund_id)
-  const canView = canModuleAction(permissions, ['configuration_symbol', 'symbol'], 'can_view', fund_id)
-  const canAdd = canModuleAction(permissions, ['configuration_symbol', 'symbol'], 'can_add', fund_id)
 
   // NEW: local state for "Symbol Loader History"
   const [history, setHistory] = useState([])
@@ -392,23 +352,19 @@ const SymbolTab = () => {
                 }}
               />
               <div className="d-flex gap-2">
-                {canAdd && (
-                  <>
-                    <Button onClick={() => setShowModal(true)} disabled={!fund_id}>
-                      Add
-                    </Button>
-                    <UploadSymbolModal
-                      buttonLabel="Upload"
-                      modalTitle="Upload Symbol"
-                      fundId={fund_id}
-                      onSuccess={() => {
-                        refetchSymbols()
-                        setAnnounceValidation(true)
-                        fetchHistory({ announce: true })
-                      }}
-                    />
-                  </>
-                )}
+                <Button onClick={() => setShowModal(true)} disabled={!fund_id}>
+                  Add
+                </Button>
+                <UploadSymbolModal
+                  buttonLabel="Upload"
+                  modalTitle="Upload Symbol"
+                  fundId={fund_id}
+                  onSuccess={() => {
+                    refetchSymbols()
+                    setAnnounceValidation(true)
+                    fetchHistory({ announce: true })
+                  }}
+                />
               </div>
             </Dropdown>
           </CardHeader>
@@ -436,11 +392,9 @@ const SymbolTab = () => {
                   <Button variant="outline-secondary" size="sm" onClick={handleClearSelection} disabled={!selectedRows.length}>
                     Clear Selection
                   </Button>
-                  {canDelete && (
-                    <Button variant="outline-danger" size="sm" onClick={handleBulkDelete} disabled={!selectedRows.length || bulkActionLoading}>
-                      {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
-                    </Button>
-                  )}
+                  <Button variant="outline-danger" size="sm" onClick={handleBulkDelete} disabled={!selectedRows.length || bulkActionLoading}>
+                    {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
+                  </Button>
                   <span className="text-muted ms-auto">
                     Selected: {selectedCount} / {symbols.length}
                   </span>
@@ -456,7 +410,7 @@ const SymbolTab = () => {
                     rowSelection="multiple"
                     defaultColDef={{ sortable: true, filter: true, resizable: true }}
                     domLayout="autoHeight"
-                    context={{ handleEdit, handleDelete, canEdit, canDelete, canView }}
+                    context={{ handleEdit, handleDelete }}
                     suppressRowClickSelection={false}
                   />
                 </div>

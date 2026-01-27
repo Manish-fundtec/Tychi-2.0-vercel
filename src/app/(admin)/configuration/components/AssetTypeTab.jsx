@@ -1,57 +1,15 @@
-'use client'
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { getAssetTypeColDefs } from '@/assets/tychiData/columnDefs'
 import { useAssetTypeData } from '@/hooks/useAssetTypeData';
 import { AssetTypeModal } from '@/app/(admin)/base-ui/modals/components/ConfigurationModal';
 import { Modal, Button } from 'react-bootstrap';
-import { useDashboardToken } from '@/hooks/useDashboardToken'
-import { useUserToken } from '@/hooks/useUserToken'
-import { getUserRolePermissions } from '@/helpers/getUserPermissions'
-import { canModuleAction } from '@/helpers/permissionActions'
 
 const AssetTypeTab = () => {
-  const dashboard = useDashboardToken()
-  const userToken = useUserToken()
-  const fundId = dashboard?.fund_id
-  
-  // Permissions state
-  const [permissions, setPermissions] = useState([])
-  const [loadingPermissions, setLoadingPermissions] = useState(true)
-  
-  // Fetch user permissions
-  useEffect(() => {
-    const fetchPermissions = async () => {
-      const tokenData = dashboard || userToken
-      
-      if (!tokenData) {
-        setLoadingPermissions(false)
-        return
-      }
-      
-      try {
-        setLoadingPermissions(true)
-        const perms = await getUserRolePermissions(tokenData, fundId)
-        setPermissions(Array.isArray(perms) ? perms : [])
-      } catch (error) {
-        console.error('Error fetching permissions:', error)
-        setPermissions([])
-      } finally {
-        setLoadingPermissions(false)
-      }
-    }
-    
-    fetchPermissions()
-  }, [userToken, dashboard, fundId])
-  
-  // Permission checks for asset type module
-  const canEdit = canModuleAction(permissions, ['configuration_asset_type', 'asset_type'], 'can_edit', fundId)
-  const canDelete = canModuleAction(permissions, ['configuration_asset_type', 'asset_type'], 'can_delete', fundId)
-  const canView = canModuleAction(permissions, ['configuration_asset_type', 'asset_type'], 'can_view', fundId)
-  
   const { assetTypes, toggleAssetTypeStatus, checkAssetTypeHasSymbols, refetchAssetTypes } = useAssetTypeData();
   const [showModal, setShowModal] = useState(false);
   const [selectedAssetType, setSelectedAssetType] = useState(null);
+  const [fundId, setFundId] = useState(null);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [assetToDeactivate, setAssetToDeactivate] = useState(null);
 
@@ -104,7 +62,7 @@ const AssetTypeTab = () => {
         <AgGridReact
           rowData={assetTypes}
           columnDefs={getAssetTypeColDefs(handleToggle)}
-          context={{ canEdit, canDelete, canView }}
+          context={{}}
           getRowId={(params) => params.data.assettype_id}
           defaultColDef={{ sortable: true, filter: true, resizable: true }}
           domLayout="autoHeight"
