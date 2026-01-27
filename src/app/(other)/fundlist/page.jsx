@@ -12,7 +12,6 @@ import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { AddFundModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import { fetchFunds } from '@/lib/api/fund' 
 import { useUserToken } from '@/hooks/useUserToken'
-import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { getUserRolePermissions } from '@/helpers/getUserPermissions'
 import { canModuleAction } from '@/helpers/permissionActions'
 // ----------- AG Grid-related imports -----------
@@ -30,9 +29,8 @@ const FundListPage = () => {
   const [loggingOut, setLoggingOut] = useState(false)
   const router = useRouter()
 
-  // Permissions (same pattern as Trades page)
+  // Permissions (using userToken only, get role_id from userToken)
   const userToken = useUserToken()
-  const dashboardToken = useDashboardToken()
   const [permissions, setPermissions] = useState([])
   const [loadingPermissions, setLoadingPermissions] = useState(true)
 
@@ -43,23 +41,33 @@ const FundListPage = () => {
       try {
         setLoadingPermissions(true)
 
-        const tokenData = userToken || dashboardToken
-        if (!tokenData) {
+        if (!userToken) {
           if (!ignore) setPermissions([])
           return
         }
 
+        // Get role_id from userToken
+        const roleId = userToken?.role_id || userToken?.roleId
+        console.log('🔍 Fund page - userToken data:', {
+          user_id: userToken?.user_id || userToken?.id,
+          role_id: roleId,
+          org_id: userToken?.org_id || userToken?.organization_id,
+        })
+
         // Prefer permissions present in token (if any), otherwise fetch from API
         let perms = []
-        if (Array.isArray(tokenData?.permissions)) {
-          perms = tokenData.permissions
+        if (Array.isArray(userToken?.permissions)) {
+          perms = userToken.permissions
+          console.log('✅ Fund page - Using permissions from userToken:', perms.length)
         } else {
-          perms = await getUserRolePermissions(tokenData)
+          // Fetch permissions using userToken (which contains role_id)
+          perms = await getUserRolePermissions(userToken)
+          console.log('✅ Fund page - Fetched permissions from API:', perms.length)
         }
 
         if (!ignore) setPermissions(Array.isArray(perms) ? perms : [])
       } catch (e) {
-        console.error('Error fetching fund permissions:', e)
+        console.error('❌ Error fetching fund permissions:', e)
         if (!ignore) setPermissions([])
       } finally {
         if (!ignore) setLoadingPermissions(false)
@@ -70,7 +78,7 @@ const FundListPage = () => {
     return () => {
       ignore = true
     }
-  }, [userToken, dashboardToken])
+  }, [userToken])
 
   const canAdd = canModuleAction(permissions, ['fund', 'funds'], 'can_add')
 
