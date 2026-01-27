@@ -50,6 +50,7 @@ const BrokerageTab = () => {
   }, [userToken, dashboard, fundId])
   
   // Permission checks for brokerage module
+  const canAdd = canModuleAction(permissions, ['configuration_brokerage', 'brokerage'], 'can_add', fundId)
   const canEdit = canModuleAction(permissions, ['configuration_brokerage', 'brokerage'], 'can_edit', fundId)
   const canDelete = canModuleAction(permissions, ['configuration_brokerage', 'brokerage'], 'can_delete', fundId)
   const canView = canModuleAction(permissions, ['configuration_brokerage', 'brokerage'], 'can_view', fundId)
@@ -90,23 +91,25 @@ const BrokerageTab = () => {
         <Card>
             <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
               <CardTitle as="h4">Brokerage List</CardTitle>
-              <Dropdown>
-                <BrokerModal
-                  show={showModal}
-                  onClose={() => {
-                    setEditingBroker(null)
-                    setShowModal(false)
-                  }}
-                  broker={editingBroker}
-                  onSuccess={refetchBrokers}
-                  existingBrokers={brokers}
-                />
-                {canModuleAction(permissions, ['configuration_brokerage', 'brokerage'], 'can_add', fundId) && (
-                  <Button variant="primary" onClick={() => setShowModal(true)}>
-                    Add Broker
-                  </Button>
+              <div className="d-flex gap-2">
+                {canAdd && (
+                  <>
+                    <BrokerModal
+                      show={showModal}
+                      onClose={() => {
+                        setEditingBroker(null)
+                        setShowModal(false)
+                      }}
+                      broker={editingBroker}
+                      onSuccess={refetchBrokers}
+                      existingBrokers={brokers}
+                    />
+                    <Button variant="primary" onClick={() => setShowModal(true)}>
+                      Add Broker
+                    </Button>
+                  </>
                 )}
-              </Dropdown>
+              </div>
             </CardHeader>
           <CardBody className="p-2">
             <div style={{ height: '100%', width: '100%' }}>

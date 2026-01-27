@@ -47,6 +47,7 @@ const BankTab = () => {
     }, [userToken, dashboard, fundId])
     
     // Permission checks for bank module
+    const canAdd = canModuleAction(permissions, ['configuration_bank', 'bank'], 'can_add', fundId)
     const canEdit = canModuleAction(permissions, ['configuration_bank', 'bank'], 'can_edit', fundId)
     const canDelete = canModuleAction(permissions, ['configuration_bank', 'bank'], 'can_delete', fundId)
     const canView = canModuleAction(permissions, ['configuration_bank', 'bank'], 'can_view', fundId)
@@ -81,13 +82,25 @@ const BankTab = () => {
         <Card>
             <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
               <CardTitle as="h4">Bank List</CardTitle>
-              <Dropdown>
-                {canModuleAction(permissions, ['configuration_bank', 'bank'], 'can_add', fundId) && (
-                  <Button variant="primary" onClick={() => setShowModal(true)}>
-                    Add Bank
-                  </Button>
+              <div className="d-flex gap-2">
+                {canAdd && (
+                  <>
+                    <BankModal
+                      show={showModal}
+                      onClose={() => {
+                        setEditingBank(null);
+                        setShowModal(false);
+                      }}
+                      bank={editingBank}
+                      onSuccess={refetchBanks}
+                      existingBanks={banks}
+                    />
+                    <Button variant="primary" onClick={() => setShowModal(true)}>
+                      Add Bank
+                    </Button>
+                  </>
                 )}
-              </Dropdown>
+              </div>
             </CardHeader>
           <CardBody className="p-2">
             <div style={{ height: '100%', width: '100%' }}>
@@ -106,16 +119,6 @@ const BankTab = () => {
           </CardBody>
         </Card>
       </Col>
-      <BankModal
-        show={showModal}
-        onClose={() => {
-          setEditingBank(null);
-          setShowModal(false);
-        }}
-        bank={editingBank}
-        onSuccess={refetchBanks}
-        existingBanks={banks}
-      />
     </Row>
   );
 };

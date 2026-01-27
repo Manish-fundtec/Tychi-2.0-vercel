@@ -47,6 +47,7 @@ const ExchangeTab = () => {
   }, [userToken, dashboard, fundId])
   
   // Permission checks for exchange module
+  const canAdd = canModuleAction(permissions, ['configuration_exchange', 'exchange'], 'can_add', fundId)
   const canEdit = canModuleAction(permissions, ['configuration_exchange', 'exchange'], 'can_edit', fundId)
   const canDelete = canModuleAction(permissions, ['configuration_exchange', 'exchange'], 'can_delete', fundId)
   const canView = canModuleAction(permissions, ['configuration_exchange', 'exchange'], 'can_view', fundId)
@@ -65,23 +66,25 @@ const ExchangeTab = () => {
         <Card>
             <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
               <CardTitle as="h4">Exchange List</CardTitle>
-              <Dropdown>
-                <ExchangeModal
-                  show={showModal}
-                  onClose={() => {
-                    setEditingExchange(null)
-                    setShowModal(false)
-                  }}
-                  fundId={fund_id}
-                  exchange={editingExchange}
-                  onSuccess={refetchExchanges}
-                />
-                {canModuleAction(permissions, ['configuration_exchange', 'exchange'], 'can_add', fundId) && (
-                  <Button variant="primary" onClick={() => setShowModal(true)}>
-                    Add Exchange
-                  </Button>
+              <div className="d-flex gap-2">
+                {canAdd && (
+                  <>
+                    <ExchangeModal
+                      show={showModal}
+                      onClose={() => {
+                        setEditingExchange(null)
+                        setShowModal(false)
+                      }}
+                      fundId={fund_id}
+                      exchange={editingExchange}
+                      onSuccess={refetchExchanges}
+                    />
+                    <Button variant="primary" onClick={() => setShowModal(true)}>
+                      Add Exchange
+                    </Button>
+                  </>
                 )}
-              </Dropdown>
+              </div>
             </CardHeader>
           <CardBody className="p-2">
             {!fund_id && (
