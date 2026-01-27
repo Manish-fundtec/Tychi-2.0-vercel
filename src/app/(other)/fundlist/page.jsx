@@ -11,10 +11,9 @@ import PageTitle from '@/components/PageTitle'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { AddFundModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import { fetchFunds } from '@/lib/api/fund' 
-import { useUserToken } from '@/hooks/useUserToken'
-import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { getUserRolePermissions } from '@/helpers/getUserPermissions'
 import { canModuleAction } from '@/helpers/permissionActions'
+import { jwtDecode } from 'jwt-decode'
 // ----------- AG Grid-related imports -----------
 
 // IMPORTANT: import ClientSideRowModelModule
@@ -30,9 +29,7 @@ const FundListPage = () => {
   const [loggingOut, setLoggingOut] = useState(false)
   const router = useRouter()
 
-  // Permissions (same pattern as Trades page)
-  const userToken = useUserToken()
-  const dashboardToken = useDashboardToken()
+  // Permissions (using userAuthToken cookie which has role_id)
   const [permissions, setPermissions] = useState([])
   const [loadingPermissions, setLoadingPermissions] = useState(true)
 
@@ -43,23 +40,48 @@ const FundListPage = () => {
       try {
         setLoadingPermissions(true)
 
-        const tokenData = userToken || dashboardToken
+        // Get userAuthToken from cookies
+        const userAuthToken = Cookies.get('userAuthToken')
+        if (!userAuthToken) {
+          console.warn('⚠️ Fund page - No userAuthToken found in cookies')
+          if (!ignore) setPermissions([])
+          return
+        }
+
+        // Decode userAuthToken to get role_id
+        let tokenData = null
+        try {
+          tokenData = jwtDecode(userAuthToken)
+          console.log('🔍 Fund page - Decoded userAuthToken:', {
+            user_id: tokenData?.user_id || tokenData?.id,
+            role_id: tokenData?.role_id || tokenData?.roleId,
+            org_id: tokenData?.org_id || tokenData?.organization_id,
+          })
+        } catch (decodeError) {
+          console.error('❌ Fund page - Error decoding userAuthToken:', decodeError)
+          if (!ignore) setPermissions([])
+          return
+        }
+
         if (!tokenData) {
           if (!ignore) setPermissions([])
           return
         }
 
-        // Prefer permissions present in token (if any), otherwise fetch from API
+        // Prefer permissions present in token (if any), otherwise fetch from API using role_id
         let perms = []
         if (Array.isArray(tokenData?.permissions)) {
           perms = tokenData.permissions
+          console.log('✅ Fund page - Using permissions from userAuthToken:', perms.length)
         } else {
+          // Fetch permissions using tokenData (which contains role_id from userAuthToken)
           perms = await getUserRolePermissions(tokenData)
+          console.log('✅ Fund page - Fetched permissions from API using role_id:', perms.length)
         }
 
         if (!ignore) setPermissions(Array.isArray(perms) ? perms : [])
       } catch (e) {
-        console.error('Error fetching fund permissions:', e)
+        console.error('❌ Error fetching fund permissions:', e)
         if (!ignore) setPermissions([])
       } finally {
         if (!ignore) setLoadingPermissions(false)
@@ -70,7 +92,7 @@ const FundListPage = () => {
     return () => {
       ignore = true
     }
-  }, [userToken, dashboardToken])
+  }, [])
 
   const canAdd = canModuleAction(permissions, ['fund', 'funds'], 'can_add')
 
