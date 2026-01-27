@@ -10,7 +10,8 @@ import IconifyIcon from '@/components/wrappers/IconifyIcon'
 import PageTitle from '@/components/PageTitle'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { AddFundModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
-import { fetchFunds } from '@/lib/api/fund' 
+import { fetchFunds } from '@/lib/api/fund'
+import { decryptPayload } from '@/lib/utils/decrypt' 
 // ----------- AG Grid-related imports -----------
 
 // IMPORTANT: import ClientSideRowModelModule
@@ -65,15 +66,93 @@ const FundListPage = () => {
   // Make sure this is declared in the same component scope and BEFORE JSX uses it
   const refreshFunds = useCallback(async () => {
     try {
+      console.log('🔄 Refreshing funds list...')
       const data = await fetchFunds()
-      if (data?.funds) {
-        setRowData(data.funds)
+      console.log('📦 Raw API response:', data)
+      
+      // Handle different response structures:
+      // 1. { funds: [...] } - standard structure
+      // 2. [...] - direct array
+      // 3. { data: { funds: [...] } } - nested structure
+      // 4. { data: [...] } - data as array
+      let fundsList = []
+      
+      if (Array.isArray(data)) {
+        fundsList = data
+        console.log('✅ Funds found (direct array):', fundsList.length)
+      } else if (Array.isArray(data?.funds)) {
+        fundsList = data.funds
+        console.log('✅ Funds found (data.funds):', fundsList.length)
+      } else if (Array.isArray(data?.data?.funds)) {
+        fundsList = data.data.funds
+        console.log('✅ Funds found (data.data.funds):', fundsList.length)
+      } else if (Array.isArray(data?.data)) {
+        fundsList = data.data
+        console.log('✅ Funds found (data.data):', fundsList.length)
+      } else if (data?.payload) {
+        // If response has payload property, it might be encrypted
+        console.log('🔐 Attempting to decrypt payload...')
+        
+        // Try to decrypt the payload
+        const decryptedData = decryptPayload(data.payload)
+        
+        if (decryptedData) {
+          console.log('✅ Successfully decrypted payload:', decryptedData)
+          
+          // Check if decrypted data contains funds
+          if (Array.isArray(decryptedData)) {
+            fundsList = decryptedData
+            console.log('✅ Funds found in decrypted payload (direct array):', fundsList.length)
+          } else if (Array.isArray(decryptedData?.funds)) {
+            fundsList = decryptedData.funds
+            console.log('✅ Funds found in decrypted payload (funds property):', fundsList.length)
+          } else if (Array.isArray(decryptedData?.data)) {
+            fundsList = decryptedData.data
+            console.log('✅ Funds found in decrypted payload (data property):', fundsList.length)
+          } else {
+            console.warn('⚠️ Decrypted payload does not contain funds array:', {
+              type: typeof decryptedData,
+              keys: Object.keys(decryptedData || {}),
+              sample: JSON.stringify(decryptedData).substring(0, 200)
+            })
+          }
+        } else {
+          console.error('❌ Failed to decrypt payload')
+          
+          // Fallback: Check if there are other properties that might contain funds
+          const allKeys = Object.keys(data)
+          for (const key of allKeys) {
+            if (key !== 'payload' && Array.isArray(data[key])) {
+              fundsList = data[key]
+              console.log(`✅ Funds found in property "${key}":`, fundsList.length)
+              break
+            }
+          }
+        }
+        
+        if (fundsList.length === 0) {
+          console.error('❌ No funds array found after decryption attempt.')
+        }
       } else {
-        console.error('Unexpected API response structure:', data)
-        setRowData([])
+        console.warn('⚠️ Unexpected API response structure:', {
+          type: typeof data,
+          isArray: Array.isArray(data),
+          keys: data ? Object.keys(data) : 'null/undefined',
+          sample: data ? JSON.stringify(data).substring(0, 200) : 'null',
+          fullResponse: data
+        })
+        fundsList = []
       }
+      
+      console.log('📊 Setting row data with', fundsList.length, 'funds')
+      setRowData(fundsList)
     } catch (error) {
-      console.error('Error fetching funds data:', error)
+      console.error('❌ Error fetching funds data:', error)
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      })
       setRowData([])
     }
   }, [])
@@ -105,8 +184,13 @@ const FundListPage = () => {
               <div className="d-flex gap-2 align-items-center">
                 <Dropdown>
                   <AddFundModal
-                    onFundCreated={() => {
-                      refreshFunds() 
+                    onFundCreated={async (createdFund) => {
+                      console.log('✅ Fund created successfully:', createdFund)
+                      // Add a small delay to ensure backend has processed the new fund
+                      setTimeout(() => {
+                        console.log('🔄 Refreshing funds list after creation...')
+                        refreshFunds()
+                      }, 500)
                     }}
                   />
                 </Dropdown>

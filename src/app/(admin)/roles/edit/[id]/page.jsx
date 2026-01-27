@@ -193,7 +193,17 @@ const EditRolePage = () => {
       try {
         // Fetch all funds from admin endpoint
         const data = await getAllFundsAdmin()
-        const allFunds = data?.funds || data || []
+        // Ensure allFunds is always an array
+        let allFunds = []
+        if (Array.isArray(data)) {
+          allFunds = data
+        } else if (Array.isArray(data?.funds)) {
+          allFunds = data.funds
+        } else if (Array.isArray(data?.data)) {
+          allFunds = data.data
+        } else {
+          allFunds = []
+        }
         
         // Filter funds by organization_id
         const filteredFunds = allFunds.filter(fund => {

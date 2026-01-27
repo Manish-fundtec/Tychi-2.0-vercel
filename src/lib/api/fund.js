@@ -3,12 +3,33 @@ import api from './axios'
 
 
 export const fetchFunds = async () => {
-  const response = await api.get('/api/v1/fund', {
-    params: { t: Date.now() },
-    withCredentials: true,
-
-  })
-  return response.data
+  try {
+    const response = await api.get('/api/v1/fund', {
+      params: { t: Date.now() },
+      withCredentials: true,
+    })
+    
+    // Log response for debugging
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('📡 fetchFunds API response:', {
+        status: response.status,
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : 'no data',
+        dataType: typeof response.data,
+        isArray: Array.isArray(response.data)
+      })
+    }
+    
+    return response.data
+  } catch (error) {
+    console.error('❌ fetchFunds API error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url
+    })
+    throw error
+  }
 }
 export const createFund = async (formData) => {
   const res = await api.post('/api/v1/fund/create', formData)
