@@ -11,6 +11,10 @@ import PageTitle from '@/components/PageTitle'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { AddFundModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import { fetchFunds } from '@/lib/api/fund' 
+import { useUserToken } from '@/hooks/useUserToken'
+import { useDashboardToken } from '@/hooks/useDashboardToken'
+import { getUserRolePermissions } from '@/helpers/getUserPermissions'
+import { canModuleAction } from '@/helpers/permissionActions'
 // ----------- AG Grid-related imports -----------
 
 // IMPORTANT: import ClientSideRowModelModule
@@ -25,6 +29,50 @@ const FundListPage = () => {
   const [funds, setFunds] = useState([])
   const [loggingOut, setLoggingOut] = useState(false)
   const router = useRouter()
+
+  // Permissions (same pattern as Trades page)
+  const userToken = useUserToken()
+  const dashboardToken = useDashboardToken()
+  const [permissions, setPermissions] = useState([])
+  const [loadingPermissions, setLoadingPermissions] = useState(true)
+
+  useEffect(() => {
+    let ignore = false
+
+    const fetchPermissions = async () => {
+      try {
+        setLoadingPermissions(true)
+
+        const tokenData = userToken || dashboardToken
+        if (!tokenData) {
+          if (!ignore) setPermissions([])
+          return
+        }
+
+        // Prefer permissions present in token (if any), otherwise fetch from API
+        let perms = []
+        if (Array.isArray(tokenData?.permissions)) {
+          perms = tokenData.permissions
+        } else {
+          perms = await getUserRolePermissions(tokenData)
+        }
+
+        if (!ignore) setPermissions(Array.isArray(perms) ? perms : [])
+      } catch (e) {
+        console.error('Error fetching fund permissions:', e)
+        if (!ignore) setPermissions([])
+      } finally {
+        if (!ignore) setLoadingPermissions(false)
+      }
+    }
+
+    fetchPermissions()
+    return () => {
+      ignore = true
+    }
+  }, [userToken, dashboardToken])
+
+  const canAdd = canModuleAction(permissions, ['fund', 'funds'], 'can_add')
 
   // Logout handler
   const handleLogout = async () => {
@@ -104,11 +152,13 @@ const FundListPage = () => {
               <CardTitle as="h4">Fundadmin</CardTitle>
               <div className="d-flex gap-2 align-items-center">
                 <Dropdown>
-                  <AddFundModal
-                    onFundCreated={() => {
-                      refreshFunds() 
-                    }}
-                  />
+                  {!loadingPermissions && canAdd && (
+                    <AddFundModal
+                      onFundCreated={() => {
+                        refreshFunds()
+                      }}
+                    />
+                  )}
                 </Dropdown>
                 <Button 
                   variant="danger" 
