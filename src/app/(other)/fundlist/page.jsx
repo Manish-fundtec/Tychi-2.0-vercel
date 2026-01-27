@@ -40,25 +40,36 @@ const FundListPage = () => {
       try {
         setLoadingPermissions(true)
 
-        // Get userAuthToken from cookies
-        const userAuthToken = Cookies.get('userAuthToken')
-        if (!userAuthToken) {
-          console.warn('⚠️ Fund page - No userAuthToken found in cookies')
+        // Try to get userAuthToken from cookies, with fallback to userToken
+        let authToken = Cookies.get('userAuthToken')
+        if (!authToken) {
+          // Fallback to userToken if userAuthToken not found
+          authToken = Cookies.get('userToken')
+          console.log('⚠️ Fund page - userAuthToken not found, trying userToken')
+        }
+
+        if (!authToken) {
+          console.warn('⚠️ Fund page - No userAuthToken or userToken found in cookies')
+          console.log('📋 Available cookies:', {
+            userAuthToken: !!Cookies.get('userAuthToken'),
+            userToken: !!Cookies.get('userToken'),
+            dashboardToken: !!Cookies.get('dashboardToken'),
+          })
           if (!ignore) setPermissions([])
           return
         }
 
-        // Decode userAuthToken to get role_id
+        // Decode token to get role_id
         let tokenData = null
         try {
-          tokenData = jwtDecode(userAuthToken)
-          console.log('🔍 Fund page - Decoded userAuthToken:', {
+          tokenData = jwtDecode(authToken)
+          console.log('🔍 Fund page - Decoded token:', {
             user_id: tokenData?.user_id || tokenData?.id,
             role_id: tokenData?.role_id || tokenData?.roleId,
             org_id: tokenData?.org_id || tokenData?.organization_id,
           })
         } catch (decodeError) {
-          console.error('❌ Fund page - Error decoding userAuthToken:', decodeError)
+          console.error('❌ Fund page - Error decoding token:', decodeError)
           if (!ignore) setPermissions([])
           return
         }
@@ -72,9 +83,9 @@ const FundListPage = () => {
         let perms = []
         if (Array.isArray(tokenData?.permissions)) {
           perms = tokenData.permissions
-          console.log('✅ Fund page - Using permissions from userAuthToken:', perms.length)
+          console.log('✅ Fund page - Using permissions from token:', perms.length)
         } else {
-          // Fetch permissions using tokenData (which contains role_id from userAuthToken)
+          // Fetch permissions using tokenData (which contains role_id)
           perms = await getUserRolePermissions(tokenData)
           console.log('✅ Fund page - Fetched permissions from API using role_id:', perms.length)
         }

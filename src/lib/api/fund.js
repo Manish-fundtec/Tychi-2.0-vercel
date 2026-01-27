@@ -3,8 +3,14 @@ import api from './axios'
 import Cookies from 'js-cookie'
 
 export const fetchFunds = async () => {
-  const token = Cookies.get('userAuthToken')
-  if (!token) throw new Error('Missing userAuthToken')
+  // Try userAuthToken first, fallback to userToken
+  let token = Cookies.get('userAuthToken')
+  if (!token) {
+    token = Cookies.get('userToken')
+  }
+  if (!token) {
+    throw new Error('Missing userAuthToken or userToken')
+  }
   const response = await api.get('/api/v1/fund', {
     params: { t: Date.now() },
     withCredentials: true,
