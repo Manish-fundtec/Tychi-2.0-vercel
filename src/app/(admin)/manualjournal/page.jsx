@@ -10,9 +10,12 @@ import { jwtDecode } from 'jwt-decode'
 import api from '@/lib/api/axios'
 import { formatYmd } from '@/lib/dateFormat'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
+import { useUserToken } from '@/hooks/useUserToken'
 import { AddManualJournal } from '../forms/validation/components/AllFormValidation'
 import currencies from 'currency-formatter/currencies'
 import { getFundDetails } from '@/lib/api/fund'
+import { getUserRolePermissions } from '@/helpers/getUserPermissions'
+import { canModuleAction } from '@/helpers/permissionActions'
 
 const ManualJournalPage = () => {
   const [fundId, setFundId] = useState(null)
@@ -29,6 +32,10 @@ const ManualJournalPage = () => {
   const [activeTab, setActiveTab] = useState('list')
   const [fundDetails, setFundDetails] = useState(null)
 
+  // Permissions state
+  const [permissions, setPermissions] = useState([])
+  const [loadingPermissions, setLoadingPermissions] = useState(true)
+
   // decode token to get fund_id
   useEffect(() => {
     const token = Cookies.get('dashboardToken')
@@ -40,6 +47,78 @@ const ManualJournalPage = () => {
       console.error('jwt decode failed', e)
     }
   }, [])
+
+  // Fetch user permissions
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      // Use dashboard first, then fallback to userToken
+      const tokenData = dashboard || userToken;
+      
+      if (!tokenData) {
+        console.warn('⚠️ Manual Journal - No tokenData available yet, will retry when token loads');
+        return;
+      }
+      
+      // Extract fields with all possible field name variations
+      const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.sub;
+      const roleId = tokenData?.role_id || tokenData?.roleId;
+      const orgId = tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId;
+      
+      // Ensure we have at least user_id or org_id to fetch permissions
+      const hasUserId = !!userId;
+      const hasOrgId = !!orgId;
+      
+      if (!hasUserId && !hasOrgId) {
+        console.warn('⚠️ Manual Journal - Token missing user_id and org_id, cannot fetch permissions');
+        setLoadingPermissions(false);
+        return;
+      }
+      
+      try {
+        setLoadingPermissions(true);
+        const currentFundId = fund_id || fundId;
+        
+        // Check if permissions are in token first, otherwise fetch from API
+        let perms = [];
+        
+        if (tokenData?.permissions && Array.isArray(tokenData.permissions)) {
+          // Permissions are in token - filter by fundId if provided
+          perms = tokenData.permissions;
+          
+          if (currentFundId) {
+            perms = perms.filter(p => {
+              const pFundId = p?.fund_id || p?.fundId;
+              return pFundId == currentFundId || String(pFundId) === String(currentFundId);
+            });
+          }
+        } else {
+          // Permissions not in token - fetch from API
+          try {
+            perms = await getUserRolePermissions(tokenData, currentFundId);
+          } catch (permError) {
+            console.error('❌ Manual Journal - getUserRolePermissions ERROR:', permError);
+            perms = [];
+          }
+        }
+        
+        const permissionsToSet = Array.isArray(perms) ? perms : [];
+        setPermissions(permissionsToSet);
+      } catch (error) {
+        console.error('❌ Manual Journal - Error fetching permissions:', error);
+        setPermissions([]);
+      } finally {
+        setLoadingPermissions(false);
+      }
+    };
+    
+    fetchPermissions();
+  }, [userToken, dashboard, fund_id, fundId]);
+
+  // Permission checks for manual journal module
+  const currentFundId = fund_id || fundId;
+  const canAdd = canModuleAction(permissions, ['manual_journal', 'manualjournal', 'journal'], 'can_add', currentFundId);
+  const canEdit = canModuleAction(permissions, ['manual_journal', 'manualjournal', 'journal'], 'can_edit', currentFundId);
+  const canDelete = canModuleAction(permissions, ['manual_journal', 'manualjournal', 'journal'], 'can_delete', currentFundId);
 
   // register AG Grid modules (handles different versions)
   // useEffect(() => {
@@ -204,7 +283,9 @@ const ManualJournalPage = () => {
   }
 
   const dashboard = useDashboardToken()
+  const userToken = useUserToken()
   const fmt = dashboard?.date_format || 'MM/DD/YYYY'
+  const fund_id = dashboard?.fund_id || fundId || ''
   
   // Fetch fund details to get current decimal_precision
   useEffect(() => {
@@ -288,15 +369,21 @@ const ManualJournalPage = () => {
           const { data, context } = params
           const handleEditRow = context?.handleEdit
           const handleDeleteRow = context?.handleDelete
+          const canEdit = context?.canEdit === true
+          const canDelete = context?.canDelete === true
 
           return (
             <div className="d-flex gap-2">
-              <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => handleEditRow?.(data)}>
-                Edit
-              </button>
-              <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteRow?.(data)}>
-                Delete
-              </button>
+              {canEdit && (
+                <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => handleEditRow?.(data)}>
+                  Edit
+                </button>
+              )}
+              {canDelete && (
+                <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteRow?.(data)}>
+                  Delete
+                </button>
+              )}
             </div>
           )
         },
@@ -327,34 +414,36 @@ const ManualJournalPage = () => {
     <Row>
       <Col xl={12}>
         <Card>
-          <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
-            <CardTitle as="h4">Manual Journal</CardTitle>
-            <div className="d-flex gap-2">
-              <Button variant="primary" onClick={openCreateModal}>
-                Add
-              </Button>
-              <UploadManualJournalModal
-                onClose={() => {
-                  if (fundId) {
-                    api
-                      .get(`/api/v1/manualjournal/${fundId}`)
-                      .then((res) => {
-                        const data = Array.isArray(res.data?.data) ? res.data.data : res.data || []
-                        setRows(data)
-                      })
-                      .catch((error) => {
-                        console.error('fetch manual journals failed:', error)
-                        setRows([])
-                      })
+            <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
+              <CardTitle as="h4">Manual Journal</CardTitle>
+              {canAdd && (
+                <div className="d-flex gap-2">
+                  <Button variant="primary" onClick={openCreateModal}>
+                    Add
+                  </Button>
+                  <UploadManualJournalModal
+                    onClose={() => {
+                      if (fundId) {
+                        api
+                          .get(`/api/v1/manualjournal/${fundId}`)
+                          .then((res) => {
+                            const data = Array.isArray(res.data?.data) ? res.data.data : res.data || []
+                            setRows(data)
+                          })
+                          .catch((error) => {
+                            console.error('fetch manual journals failed:', error)
+                            setRows([])
+                          })
 
-                    if (activeTab === 'history') {
-                      fetchHistory()
-                    }
-                  }
-                }}
-              />
-            </div>
-          </CardHeader>
+                        if (activeTab === 'history') {
+                          fetchHistory()
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </CardHeader>
           <Tabs
             activeKey={activeTab}
             id="manual-journal-tabs"
@@ -380,7 +469,12 @@ const ManualJournalPage = () => {
                       pagination={true}
                       paginationPageSize={pageSize}
                       defaultColDef={{ sortable: true, filter: true, resizable: true }}
-                      context={{ handleEdit: openEditModal, handleDelete }}
+                      context={{ 
+                        handleEdit: openEditModal, 
+                        handleDelete,
+                        canEdit: canEdit,
+                        canDelete: canDelete,
+                      }}
                     />
                   ) : (
                     <div className="d-flex justify-content-center align-items-center h-100">Loading grid…</div>
