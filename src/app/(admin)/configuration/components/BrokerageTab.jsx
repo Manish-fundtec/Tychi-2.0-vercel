@@ -49,11 +49,52 @@ const BrokerageTab = () => {
     fetchPermissions()
   }, [userToken, dashboard, fundId])
   
-  // Permission checks for brokerage module
-  const canAdd = canModuleAction(permissions, ['configuration_brokerage', 'brokerage'], 'can_add', fundId)
-  const canEdit = canModuleAction(permissions, ['configuration_brokerage', 'brokerage'], 'can_edit', fundId)
-  const canDelete = canModuleAction(permissions, ['configuration_brokerage', 'brokerage'], 'can_delete', fundId)
-  const canView = canModuleAction(permissions, ['configuration_brokerage', 'brokerage'], 'can_view', fundId)
+  // Permission checks for brokerage module - check multiple variations like trade page
+  // Trade page uses: ['trade', 'trades'] - we'll use similar pattern
+  // canModuleAction normalizes to lowercase, so we can pass any case
+  const canAdd = canModuleAction(permissions, ['configuration_brokerage', 'brokerage', 'brokerage_account'], 'can_add', fundId)
+  const canEdit = canModuleAction(permissions, ['configuration_brokerage', 'brokerage', 'brokerage_account'], 'can_edit', fundId)
+  const canDelete = canModuleAction(permissions, ['configuration_brokerage', 'brokerage', 'brokerage_account'], 'can_delete', fundId)
+  const canView = canModuleAction(permissions, ['configuration_brokerage', 'brokerage', 'brokerage_account'], 'can_view', fundId)
+  
+  // Debug logging like trade page - to help identify permission issues
+  useEffect(() => {
+    // Find BROKERAGE permissions specifically - like trade page does
+    const brokeragePerms = permissions.filter(p => {
+      const moduleKey = (p?.module_key || p?.moduleKey || '').toString().toLowerCase()
+      return moduleKey === 'brokerage' || 
+             moduleKey === 'brokerage_account' || 
+             moduleKey === 'configuration_brokerage' ||
+             moduleKey.includes('brokerage')
+    })
+    
+    console.log('🔐 BrokerageTab - FINAL UI PERMISSIONS', {
+      loadingPermissions,
+      permissionsCount: permissions.length,
+      fundId,
+      canAdd,
+      canEdit,
+      canDelete,
+      canView,
+      brokeragePermissionsCount: brokeragePerms.length,
+      brokeragePermissions: brokeragePerms.map(p => ({
+        module_key: p?.module_key || p?.moduleKey,
+        can_add: p?.can_add,
+        can_edit: p?.can_edit,
+        can_delete: p?.can_delete,
+        can_view: p?.can_view,
+        fund_id: p?.fund_id || p?.fundId,
+      })),
+      allPermissions: permissions.map(p => ({
+        module_key: p?.module_key || p?.moduleKey,
+        can_add: p?.can_add,
+        can_edit: p?.can_edit,
+        can_delete: p?.can_delete,
+        can_view: p?.can_view,
+        fund_id: p?.fund_id || p?.fundId,
+      })),
+    })
+  }, [loadingPermissions, permissions, canAdd, canEdit, canDelete, canView, fundId])
   
   // Optional UX: show a lightweight state until token is ready
   // define columnDefs here (NOT inside JSX)
