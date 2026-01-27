@@ -6,12 +6,51 @@ import { Card, CardBody, CardHeader, CardTitle, Col, Dropdown, Button, Row } fro
 import { BankTableColDefs } from '@/assets/tychiData/columnDefs';
 import { formatYmd } from '../../../../../src/lib/dateFormat'
 import { useDashboardToken } from '@/hooks/useDashboardToken'
-import { useMemo } from 'react'
+import { useUserToken } from '@/hooks/useUserToken'
+import { useMemo, useEffect, useState } from 'react'
+import { getUserRolePermissions } from '@/helpers/getUserPermissions'
+import { canModuleAction } from '@/helpers/permissionActions'
 
 const BankTab = () => {
     const dashboard = useDashboardToken()
+    const userToken = useUserToken()
     const fundId = dashboard?.fund_id
     const fmt = dashboard?.date_format || 'MM/DD/YYYY'
+    
+    // Permissions state
+    const [permissions, setPermissions] = useState([])
+    const [loadingPermissions, setLoadingPermissions] = useState(true)
+    
+    // Fetch user permissions
+    useEffect(() => {
+      const fetchPermissions = async () => {
+        const tokenData = dashboard || userToken
+        
+        if (!tokenData) {
+          setLoadingPermissions(false)
+          return
+        }
+        
+        try {
+          setLoadingPermissions(true)
+          const perms = await getUserRolePermissions(tokenData, fundId)
+          setPermissions(Array.isArray(perms) ? perms : [])
+        } catch (error) {
+          console.error('Error fetching permissions:', error)
+          setPermissions([])
+        } finally {
+          setLoadingPermissions(false)
+        }
+      }
+      
+      fetchPermissions()
+    }, [userToken, dashboard, fundId])
+    
+    // Permission checks for bank module
+    const canEdit = canModuleAction(permissions, ['configuration_bank', 'bank'], 'can_edit', fundId)
+    const canDelete = canModuleAction(permissions, ['configuration_bank', 'bank'], 'can_delete', fundId)
+    const canView = canModuleAction(permissions, ['configuration_bank', 'bank'], 'can_view', fundId)
+    
     // Optional UX: show a lightweight state until token is ready
     // define columnDefs here (NOT inside JSX)
     const columnDefs = useMemo(() => {
@@ -40,14 +79,16 @@ const BankTab = () => {
     <Row>
       <Col xl={12}>
         <Card>
-          <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
-            <CardTitle as="h4">Bank List</CardTitle>
-            <Dropdown>
-              <Button variant="primary" onClick={() => setShowModal(true)}>
-                Add Bank
-              </Button>
-            </Dropdown>
-          </CardHeader>
+            <CardHeader className="d-flex justify-content-between align-items-center border-bottom">
+              <CardTitle as="h4">Bank List</CardTitle>
+              <Dropdown>
+                {canModuleAction(permissions, ['configuration_bank', 'bank'], 'can_add', fundId) && (
+                  <Button variant="primary" onClick={() => setShowModal(true)}>
+                    Add Bank
+                  </Button>
+                )}
+              </Dropdown>
+            </CardHeader>
           <CardBody className="p-2">
             <div style={{ height: '100%', width: '100%' }}>
               <AgGridReact
@@ -57,7 +98,7 @@ const BankTab = () => {
                 paginationPageSize={10}
                 defaultColDef={{ sortable: true, filter: true, resizable: true }}
                 domLayout="autoHeight"
-                context={{ handleEdit, handleDelete }}
+                context={{ handleEdit, handleDelete, canEdit, canDelete, canView }}
                 getRowId={(p) => p.data.bank_id}        // :white_check_mark: stable row ids
                 onGridReady={() => refetchBanks()}       // :white_check_mark: ensures fresh load
               />
