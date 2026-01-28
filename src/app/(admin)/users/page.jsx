@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Button } from 'react-bootstrap'
+import { Card, CardBody, CardHeader, CardTitle, Col, Row, Spinner, Button, Modal, Form } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
 import { AddUserModal, EditUserModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import api from '@/lib/api/axios'
@@ -19,6 +19,10 @@ const AdminUsersPage = () => {
   const [loading, setLoading] = useState(true)
   const [rowData, setRowData] = useState([])
   const [editingUser, setEditingUser] = useState(null)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [confirmEmail, setConfirmEmail] = useState('')
+  const [confirmCode, setConfirmCode] = useState('')
+  const [confirming, setConfirming] = useState(false)
   const { showNotification } = useNotificationContext()
 
   const refreshUsers = useCallback(async () => {
@@ -143,6 +147,45 @@ const AdminUsersPage = () => {
     gridApiRef.current = params.api
   }, [])
 
+  const closeConfirmModal = useCallback(() => {
+    setShowConfirmModal(false)
+    setConfirmEmail('')
+    setConfirmCode('')
+  }, [])
+
+  const handleConfirmUser = useCallback(async () => {
+    const email = String(confirmEmail || '').trim()
+    const code = String(confirmCode || '').trim()
+
+    if (!email || !code) {
+      showNotification({
+        message: 'Email and code are required.',
+        variant: 'danger',
+      })
+      return
+    }
+
+    setConfirming(true)
+    try {
+      // NOTE: If your backend uses a different endpoint, update this path.
+      await api.post('/api/v1/users/confirm', { email, code })
+      showNotification({
+        message: 'User confirmed successfully!',
+        variant: 'success',
+      })
+      closeConfirmModal()
+      refreshUsers()
+    } catch (error) {
+      console.error('Error confirming user:', error)
+      showNotification({
+        message: error?.response?.data?.message || error?.response?.data?.error || 'Failed to confirm user.',
+        variant: 'danger',
+      })
+    } finally {
+      setConfirming(false)
+    }
+  }, [closeConfirmModal, confirmCode, confirmEmail, refreshUsers, showNotification])
+
   return (
     <>
       <PageTitle title="Admin Users" subName="Admin" />
@@ -151,7 +194,12 @@ const AdminUsersPage = () => {
           <Card>
             <CardHeader className="border-bottom d-flex justify-content-between align-items-center">
               <CardTitle as="h4">Admin Users</CardTitle>
-              <AddUserModal onSuccess={refreshUsers} />
+              <div className="d-flex gap-2">
+                <AddUserModal onSuccess={refreshUsers} />
+                <Button variant="outline-primary" onClick={() => setShowConfirmModal(true)}>
+                  Confirm User
+                </Button>
+              </div>
             </CardHeader>
             <EditUserModal
               user={editingUser}
@@ -192,6 +240,46 @@ const AdminUsersPage = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* Confirm User Modal */}
+      <Modal show={showConfirmModal} onHide={closeConfirmModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirm User</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group className="mb-3">
+              <Form.Label>Email</Form.Label>
+              <Form.Control
+                type="email"
+                value={confirmEmail}
+                onChange={(e) => setConfirmEmail(e.target.value)}
+                placeholder="Enter user email"
+                autoComplete="email"
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Code</Form.Label>
+              <Form.Control
+                type="text"
+                value={confirmCode}
+                onChange={(e) => setConfirmCode(e.target.value)}
+                placeholder="Enter confirmation code"
+                autoComplete="one-time-code"
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={closeConfirmModal} disabled={confirming}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleConfirmUser} disabled={confirming}>
+            {confirming ? 'Submitting…' : 'Submit'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </>
   )
 }
