@@ -2519,8 +2519,8 @@ export const AddUser = ({ onClose, onCreated }) => {
         <FormGroup className="col-md-6">
           <FormLabel>Role *</FormLabel>
           <FormSelect
-            name="role"
-            value={formData.role}
+            name="role_id"
+            value={formData.role_id}
             onChange={handleChange}
             required
           >
@@ -2531,11 +2531,11 @@ export const AddUser = ({ onClose, onCreated }) => {
               </option>
             ) : (
               roles.map((r) => {
-                const key = r.role_id || r.id || r.role_name
+                const roleId = r.role_id || r.id
                 const name = r.role_name || r.name || r.role || ''
-                if (!name) return null
+                if (!name || !roleId) return null
                 return (
-                  <option key={key} value={name}>
+                  <option key={roleId} value={roleId}>
                     {name}
                   </option>
                 )
