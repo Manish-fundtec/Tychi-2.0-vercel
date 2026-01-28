@@ -168,7 +168,7 @@ const AdminUsersPage = () => {
     setConfirming(true)
     try {
       // NOTE: If your backend uses a different endpoint, update this path.
-      await api.post('/api/v1/users/confirm', { email, code })
+      await api.post('/api/v1/users/user_confirm', { email, code })
       showNotification({
         message: 'User confirmed successfully!',
         variant: 'success',
