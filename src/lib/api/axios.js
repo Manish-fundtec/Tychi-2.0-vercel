@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { looksEncrypted } from '@/lib/utils/decrypt'
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
@@ -24,7 +25,9 @@ api.interceptors.request.use((config) => {
     let token = null;
     let tokenType = null;
     if (typeof window !== 'undefined') {
-      // Prefer legacy cookie tokens first (aligns with hooks)
+      // ✅ IMPORTANT: Read from client-side cookies (set by frontend JS, httpOnly: false)
+      // Backend may set httpOnly cookies that JS can't read due to CORS/sameSite restrictions
+      // Frontend always reads tokens from response body and saves them client-side
       const cookieString = document.cookie || '';
       const getCookie = (name) => {
         const match = cookieString.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
@@ -76,6 +79,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => {
     const isSignInRequest = response.config?.url?.includes('user_signin') || response.config?.url?.includes('login');
+    const isEncDebugEnabled =
+      process.env.NODE_ENV !== 'production' &&
+      String(process.env.NEXT_PUBLIC_DEBUG_ENCRYPTION || '').trim() === '1'
     
     if (response.config.metadata) {
       const duration = performance.now() - response.config.metadata.startTime;
@@ -95,6 +101,41 @@ api.interceptors.response.use(
           console.error(`🚨 CRITICAL: Request took ${(duration / 1000).toFixed(2)}s - This is VERY SLOW!`);
         }
         console.log(`==========================================\n`);
+      }
+    }
+
+    // 🔐 Encryption debugging (opt-in)
+    // ELI5: we only log "does it look encrypted?" + lengths, not the full data.
+    if (isEncDebugEnabled && typeof window !== 'undefined') {
+      try {
+        const url = response.config?.url || ''
+        const data = response.data
+
+        // Focus on fund endpoints (your issue)
+        const isFundRequest = url.includes('/fund')
+        if (isFundRequest) {
+          const candidates = [
+            ['payload', data?.payload],
+            ['encryptedPayload', data?.encryptedPayload],
+            ['cipher', data?.cipher],
+            ['ciphertext', data?.ciphertext],
+            ['data', data?.data],
+          ]
+          const hit = candidates.find(([, v]) => typeof v === 'string' && looksEncrypted(v))
+
+          // eslint-disable-next-line no-console
+          console.debug('[axios][enc-debug] response', {
+            url,
+            status: response.status,
+            dataType: typeof data,
+            isArray: Array.isArray(data),
+            keys: data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : null,
+            encryptedField: hit ? hit[0] : null,
+            encryptedLen: hit ? hit[1].length : null,
+          })
+        }
+      } catch (_) {
+        // ignore debug errors
       }
     }
     

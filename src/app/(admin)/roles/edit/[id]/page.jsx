@@ -183,42 +183,62 @@ const EditRolePage = () => {
 
   // Fetch funds when organization is selected
   useEffect(() => {
+    const getFundOrgId = (fund) => {
+      const v = fund.organization?.org_id ?? fund.organization?.organization_id ?? fund.organization?.id
+        ?? fund.organization_id ?? fund.org_id
+      return v != null ? String(v) : null
+    }
+
     const fetchFundsForOrg = async () => {
       if (!formData.org_id) {
         setFunds([])
         return
       }
 
+      const orgId = String(formData.org_id)
       setLoadingFunds(true)
       try {
-        // Fetch all funds from admin endpoint
+        // Fetch all funds from admin endpoint (decryption handled in getAllFundsAdmin)
         const data = await getAllFundsAdmin()
-        // Ensure allFunds is always an array
+        // Normalize response: array, { funds }, { data }, or { data: { funds } }
         let allFunds = []
         if (Array.isArray(data)) {
           allFunds = data
         } else if (Array.isArray(data?.funds)) {
           allFunds = data.funds
+        } else if (Array.isArray(data?.data?.funds)) {
+          allFunds = data.data.funds
         } else if (Array.isArray(data?.data)) {
           allFunds = data.data
         } else {
           allFunds = []
         }
-        
-        // Filter funds by organization_id
-        const filteredFunds = allFunds.filter(fund => {
-          if (fund.organization?.org_id) {
-            return fund.organization.org_id === formData.org_id
-          }
-          if (fund.organization_id) {
-            return fund.organization_id === formData.org_id
-          }
-          if (fund.org_id) {
-            return fund.org_id === formData.org_id
-          }
-          return false
-        })
-        
+
+        if (process.env.NODE_ENV !== 'production') {
+          const sample = allFunds[0]
+          console.log('Edit Role – funds fetch:', {
+            dataKeys: data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : null,
+            isArray: Array.isArray(data),
+            allFundsCount: allFunds.length,
+            orgId,
+            sampleFundOrgKeys: sample ? {
+              'organization?.org_id': sample.organization?.org_id,
+              'organization?.organization_id': sample.organization?.organization_id,
+              'organization?.id': sample.organization?.id,
+              organization_id: sample.organization_id,
+              org_id: sample.org_id,
+              getFundOrgId: getFundOrgId(sample),
+            } : null,
+          })
+        }
+
+        // Filter funds by organization (check all common org id shapes)
+        const filteredFunds = allFunds.filter((fund) => getFundOrgId(fund) === orgId)
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('Edit Role – filtered funds count:', filteredFunds.length)
+        }
+
         setFunds(filteredFunds)
       } catch (error) {
         console.error('Error fetching funds:', error)

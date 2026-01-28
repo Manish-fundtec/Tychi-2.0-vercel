@@ -92,42 +92,39 @@ const AddRolePage = () => {
 
   // Fetch funds when organization is selected
   useEffect(() => {
+    const getFundOrgId = (fund) => {
+      const v = fund.organization?.org_id ?? fund.organization?.organization_id ?? fund.organization?.id
+        ?? fund.organization_id ?? fund.org_id
+      return v != null ? String(v) : null
+    }
+
     const fetchFundsForOrg = async () => {
       if (!formData.org_id) {
         setFunds([])
         return
       }
 
+      const orgId = String(formData.org_id)
       setLoadingFunds(true)
       try {
-        // Fetch all funds from admin endpoint
+        // Fetch all funds from admin endpoint (decryption handled in getAllFundsAdmin)
         const data = await getAllFundsAdmin()
-        // Ensure allFunds is always an array
+        // Normalize: array, { funds }, { data }, or { data: { funds } }
         let allFunds = []
         if (Array.isArray(data)) {
           allFunds = data
         } else if (Array.isArray(data?.funds)) {
           allFunds = data.funds
+        } else if (Array.isArray(data?.data?.funds)) {
+          allFunds = data.data.funds
         } else if (Array.isArray(data?.data)) {
           allFunds = data.data
         } else {
           allFunds = []
         }
-        
-        // Filter funds by organization_id
-        const filteredFunds = allFunds.filter(fund => {
-          if (fund.organization?.org_id) {
-            return fund.organization.org_id === formData.org_id
-          }
-          if (fund.organization_id) {
-            return fund.organization_id === formData.org_id
-          }
-          if (fund.org_id) {
-            return fund.org_id === formData.org_id
-          }
-          return false
-        })
-        
+
+        // Filter funds by organization (all common org id shapes)
+        const filteredFunds = allFunds.filter((fund) => getFundOrgId(fund) === orgId)
         setFunds(filteredFunds)
       } catch (error) {
         console.error('Error fetching funds:', error)
