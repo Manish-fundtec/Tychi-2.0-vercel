@@ -31,6 +31,7 @@ import { getFundDetails } from '@/lib/api/fund'
 import { useSearchParams } from 'next/navigation'
 import { createBroker, updateBroker } from '@/lib/api/broker'
 import { createBank, updateBank } from '@/lib/api/bank'
+import { encryptPayload } from '@/lib/utils/encrypt'
 import { createExchange, updateExchange } from '@/lib/api/exchange'
 import { createSymbol, updateSymbol, getSymbolsByFundId } from '@/lib/api/symbol'
 import { getExchangesByFundId } from '@/lib/api/exchange'
@@ -1311,7 +1312,8 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
     // Check for duplicate bank name (case-insensitive)
     if (name === 'bank_name' && value.trim()) {
       const trimmedValue = value.trim().toLowerCase()
-      const isDuplicate = existingBanks.some((b) => {
+      const list = Array.isArray(existingBanks) ? existingBanks : []
+      const isDuplicate = list.some((b) => {
         // For edit, exclude current bank from check
         if (isEdit && bank?.bank_id === b.bank_id) return false
         return b.bank_name?.toLowerCase() === trimmedValue
@@ -1364,8 +1366,10 @@ export const BankForm = ({ bank, onSuccess, onClose, reportingStartDate, existin
       const token = Cookies.get('dashboardToken')
       const decoded = jwtDecode(token)
 
+      // Encrypt bank_name for API (DB stores BYTEA / encrypted buffer)
       const payload = {
         ...form,
+        bank_name: form.bank_name ? encryptPayload(form.bank_name) : form.bank_name,
         user_id: decoded.user_id,
         org_id: decoded.org_id,
         fund_id: decoded.fund_id,
