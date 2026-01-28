@@ -2252,7 +2252,7 @@ export const AddUser = ({ onClose, onCreated }) => {
     phone_number: '',
     country: '',
     address: '',
-    role: '',
+    role_id: '', // Changed from 'role' to 'role_id' to store UUID
     status: 'Active',
   })
 
@@ -2341,10 +2341,9 @@ export const AddUser = ({ onClose, onCreated }) => {
         phone_number: formData.phone_number,
         country: formData.country,
         address: formData.address,
-        role: formData.role,
-        organization: formData.organization,
-        org_id: formData.organization,
-        status: formData.status,
+        role_id: formData.role_id, // Send role_id (UUID) instead of role name
+        organization_id: formData.organization, // Use organization_id instead of organization
+        status: formData.status.toLowerCase(), // Backend expects lowercase
       })
 
       showNotification({
@@ -2365,7 +2364,7 @@ export const AddUser = ({ onClose, onCreated }) => {
         phone_number: '',
         country: '',
         address: '',
-        role: '',
+        role_id: '',
         status: 'Active',
       })
       setValidated(false)
@@ -2583,7 +2582,7 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
     phone_number: user?.phone_number || user?.phone || '',
     country: user?.country || '',
     address: user?.address || '',
-    role: user?.role_name || user?.role || '',
+    role_id: user?.role_id || user?.role?.role_id || '', // Changed to store role_id (UUID)
     status: user?.status || 'Active',
   })
 
@@ -2656,7 +2655,7 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
         phone_number: user?.phone_number || user?.phone || '',
         country: user?.country || '',
         address: user?.address || '',
-        role: user?.role_name || user?.role || '',
+        role_id: user?.role_id || user?.role?.role_id || '', // Changed to store role_id (UUID)
         status: user?.status || 'Active',
       })
     }
@@ -2693,10 +2692,9 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
         phone_number: formData.phone_number,
         country: formData.country,
         address: formData.address,
-        role: formData.role,
-        organization: formData.organization,
-        org_id: formData.organization,
-        status: formData.status,
+        role_id: formData.role_id, // Send role_id (UUID) instead of role name
+        organization_id: formData.organization, // Use organization_id instead of organization
+        status: formData.status.toLowerCase(), // Backend expects lowercase
       })
 
       showNotification({
@@ -2856,8 +2854,8 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
         <FormGroup className="col-md-6">
           <FormLabel>Role *</FormLabel>
           <FormSelect
-            name="role"
-            value={formData.role}
+            name="role_id"
+            value={formData.role_id}
             onChange={handleChange}
             required
           >
@@ -2868,11 +2866,11 @@ export const EditUser = ({ onClose, onUpdated, user }) => {
               </option>
             ) : (
               roles.map((r) => {
-                const key = r.role_id || r.id || r.role_name
+                const roleId = r.role_id || r.id
                 const name = r.role_name || r.name || r.role || ''
-                if (!name) return null
+                if (!name || !roleId) return null
                 return (
-                  <option key={key} value={name}>
+                  <option key={roleId} value={roleId}>
                     {name}
                   </option>
                 )
