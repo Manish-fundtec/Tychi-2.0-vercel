@@ -551,6 +551,21 @@ export default function TradesData() {
         }
       }
 
+      // Format Updated Amount (Trade Amount) column - same as Gross Amount - use currency symbol at front
+      if (col?.field === 'updated_amount') {
+        return {
+          ...col,
+          valueFormatter: (p) => {
+            const value = p?.value
+            if (value === null || value === undefined || value === '') return '—'
+            const num = Number(value)
+            if (Number.isNaN(num)) return value
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            return currencySymbol ? `${currencySymbol}${formatted}` : formatted
+          },
+        }
+      }
+
       // Format Gross Amount column - use currency symbol at front
       if (col?.field === 'gross_amount') {
         return {
