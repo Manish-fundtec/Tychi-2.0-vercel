@@ -6,7 +6,10 @@ import Cookies from 'js-cookie';
 import { Card, CardBody, CardHeader, CardTitle, Col, Dropdown, Modal, Row, Button } from 'react-bootstrap';
 import { Eye, RotateCcw } from 'lucide-react';
 import { useDashboardToken } from '@/hooks/useDashboardToken';
+import { useUserToken } from '@/hooks/useUserToken';
 import { formatYmd } from '@/lib/dateFormat';
+import { getUserRolePermissions } from '@/helpers/getUserPermissions';
+import { canModuleAction } from '@/helpers/permissionActions';
 
 // Toggle (upload/manual)
 const ToggleBetweenModals = dynamic(
@@ -34,6 +37,9 @@ function ActionsRenderer(props) {
 
   const isLatestCompleted =
     !!context?.latestCompletedDate && data?.date === context.latestCompletedDate;
+  
+  // Check if user has can_delete permission to show revert icon
+  const canDelete = context?.canDelete === true;
 
   return (
     <div className="d-inline-flex align-items-center gap-2">
@@ -43,7 +49,7 @@ function ActionsRenderer(props) {
         title="View Symbols"
         onClick={() => context?.handleViewSymbols?.(data)}
       />
-      {isLatestCompleted ? (
+      {isLatestCompleted && canDelete ? (
         <RotateCcw
           size={18}
           className="text-primary cursor-pointer"
@@ -79,6 +85,11 @@ export default function ReviewsPage() {
 
   // Get dashboard token for onboarding mode and reporting start date
   const dashboard = useDashboardToken();
+  const userToken = useUserToken();
+
+  // Permissions state
+  const [permissions, setPermissions] = useState([]);
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
 
   // symbols modal
   const [showModal, setShowModal] = useState(false);
@@ -88,8 +99,8 @@ export default function ReviewsPage() {
   const [symbolErr, setSymbolErr] = useState('');
 
   // Get date format from dashboard token
-  // const dashboard = useDashboardToken();
   const dateFormat = dashboard?.date_format || 'MM/DD/YYYY';
+  const fund_id = dashboard?.fund_id || fundId || '';
 
   // set up columns with date formatting
   const columnDefsMemo = useMemo(() => {
@@ -149,6 +160,77 @@ export default function ReviewsPage() {
   useEffect(() => {
     setFundId(getFundIdFromCookie());
   }, []);
+
+  // Fetch user permissions
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      // Use dashboard first, then fallback to userToken
+      const tokenData = dashboard || userToken;
+      
+      if (!tokenData) {
+        console.warn('⚠️ Valuation - No tokenData available yet, will retry when token loads');
+        return;
+      }
+      
+      // Extract fields with all possible field name variations
+      const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.sub;
+      const roleId = tokenData?.role_id || tokenData?.roleId;
+      const orgId = tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId;
+      
+      // Ensure we have at least user_id or org_id to fetch permissions
+      const hasUserId = !!userId;
+      const hasOrgId = !!orgId;
+      
+      if (!hasUserId && !hasOrgId) {
+        console.warn('⚠️ Valuation - Token missing user_id and org_id, cannot fetch permissions');
+        setLoadingPermissions(false);
+        return;
+      }
+      
+      try {
+        setLoadingPermissions(true);
+        const currentFundId = fund_id || fundId;
+        
+        // Check if permissions are in token first, otherwise fetch from API
+        let perms = [];
+        
+        if (tokenData?.permissions && Array.isArray(tokenData.permissions)) {
+          // Permissions are in token - filter by fundId if provided
+          perms = tokenData.permissions;
+          
+          if (currentFundId) {
+            perms = perms.filter(p => {
+              const pFundId = p?.fund_id || p?.fundId;
+              return pFundId == currentFundId || String(pFundId) === String(currentFundId);
+            });
+          }
+        } else {
+          // Permissions not in token - fetch from API
+          try {
+            perms = await getUserRolePermissions(tokenData, currentFundId);
+          } catch (permError) {
+            console.error('❌ Valuation - getUserRolePermissions ERROR:', permError);
+            perms = [];
+          }
+        }
+        
+        const permissionsToSet = Array.isArray(perms) ? perms : [];
+        setPermissions(permissionsToSet);
+      } catch (error) {
+        console.error('❌ Valuation - Error fetching permissions:', error);
+        setPermissions([]);
+      } finally {
+        setLoadingPermissions(false);
+      }
+    };
+    
+    fetchPermissions();
+  }, [userToken, dashboard, fund_id, fundId]);
+
+  // Permission checks for valuation/pricing module
+  const currentFundId = fund_id || fundId;
+  const canAdd = canModuleAction(permissions, ['valuation', 'pricing', 'pricing_period'], 'can_add', currentFundId);
+  const canDelete = canModuleAction(permissions, ['valuation', 'pricing', 'pricing_period'], 'can_delete', currentFundId);
 
   const fetchReportingPeriods = useCallback(async () => {
     if (!fundId) return;
@@ -476,12 +558,14 @@ export default function ReviewsPage() {
           <Card className="shadow-sm">
             <CardHeader className="d-flex justify-content-between align-items-center bg-light">
               <CardTitle as="h4">Valuation</CardTitle>
-              <Dropdown>
-                <ToggleBetweenModals
-                  apiBase={apiBase}
-                  onPricingRefresh={fetchReportingPeriods}
-                />
-              </Dropdown>
+              {canAdd && (
+                <Dropdown>
+                  <ToggleBetweenModals
+                    apiBase={apiBase}
+                    onPricingRefresh={fetchReportingPeriods}
+                  />
+                </Dropdown>
+              )}
             </CardHeader>
 
             <CardBody className="p-2">
@@ -501,6 +585,7 @@ export default function ReviewsPage() {
                     handleViewSymbols,
                     handleRevert,
                     latestCompletedDate: latestCompletedDateRef.current,
+                    canDelete: canDelete,
                   }}
                   components={{ ActionsRenderer }}
                 />

@@ -172,8 +172,11 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
       const token = Cookies.get('dashboardToken')
       const decoded = jwtDecode(token)
 
+      // Send plain broker_name: backend compares it to decrypted DB values for lookup/validation,
+      // then encrypts before storing in BYTEA. Do not encrypt here or lookup will fail.
       const payload = {
         ...form,
+        broker_name: form.broker_name ? String(form.broker_name).trim() : form.broker_name,
         user_id: decoded.user_id,
         org_id: decoded.org_id,
         fund_id: decoded.fund_id,

@@ -10,8 +10,12 @@ import IconifyIcon from '@/components/wrappers/IconifyIcon'
 import PageTitle from '@/components/PageTitle'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { AddFundModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
-import { fetchFunds } from '@/lib/api/fund'
+// import { fetchFunds } from '@/lib/api/fund'
 import { decryptPayload } from '@/lib/utils/decrypt' 
+import { fetchFunds } from '@/lib/api/fund' 
+import { getUserRolePermissions } from '@/helpers/getUserPermissions'
+import { canModuleAction } from '@/helpers/permissionActions'
+import { jwtDecode } from 'jwt-decode'
 // ----------- AG Grid-related imports -----------
 
 // IMPORTANT: import ClientSideRowModelModule
@@ -26,6 +30,114 @@ const FundListPage = () => {
   const [funds, setFunds] = useState([])
   const [loggingOut, setLoggingOut] = useState(false)
   const router = useRouter()
+
+  // Permissions (using userAuthToken cookie which has role_id)
+  const [permissions, setPermissions] = useState([])
+  const [loadingPermissions, setLoadingPermissions] = useState(true)
+
+  useEffect(() => {
+    let ignore = false
+
+    const fetchPermissions = async () => {
+      try {
+        setLoadingPermissions(true)
+
+        // Only use userAuthToken (has user_id, org_id, role_id) - don't fallback to userToken
+        // Try multiple ways to get the cookie
+        let userAuthToken = Cookies.get('userAuthToken')
+        
+        // If not found, try reading from document.cookie directly
+        if (!userAuthToken && typeof document !== 'undefined') {
+          const cookieString = document.cookie || ''
+          const match = cookieString.match(/(?:^|; )userAuthToken=([^;]*)/)
+          if (match) {
+            userAuthToken = decodeURIComponent(match[1])
+            console.log('✅ Fund page - Found userAuthToken in document.cookie')
+          }
+        }
+
+        // Log all cookies for debugging
+        if (typeof document !== 'undefined') {
+          console.log('📋 All cookies:', document.cookie)
+          console.log('📋 Cookies.get results:', {
+            userAuthToken: !!Cookies.get('userAuthToken'),
+            userToken: !!Cookies.get('userToken'),
+            dashboardToken: !!Cookies.get('dashboardToken'),
+          })
+        }
+
+        if (!userAuthToken) {
+          console.warn('⚠️ Fund page - No userAuthToken found in cookies')
+          if (!ignore) setPermissions([])
+          return
+        }
+
+        console.log('✅ Fund page - Found userAuthToken, length:', userAuthToken.length)
+
+        // Decode userAuthToken to get user_id, org_id, and role_id
+        let tokenData = null
+        try {
+          tokenData = jwtDecode(userAuthToken)
+          console.log('🔍 Fund page - Decoded userAuthToken:', {
+            user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId,
+            role_id: tokenData?.role_id || tokenData?.roleId,
+            org_id: tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId,
+            allKeys: Object.keys(tokenData || {}), // Show all keys for debugging
+          })
+        } catch (decodeError) {
+          console.error('❌ Fund page - Error decoding userAuthToken:', decodeError)
+          if (!ignore) setPermissions([])
+          return
+        }
+
+        if (!tokenData) {
+          if (!ignore) setPermissions([])
+          return
+        }
+
+        // Verify we have required fields (user_id, org_id, role_id)
+        const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId
+        const roleId = tokenData?.role_id || tokenData?.roleId
+        const orgId = tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId
+
+        if (!roleId || !orgId) {
+          console.warn('⚠️ Fund page - userAuthToken missing required fields:', {
+            hasUserId: !!userId,
+            hasRoleId: !!roleId,
+            hasOrgId: !!orgId,
+            tokenData,
+          })
+          if (!ignore) setPermissions([])
+          return
+        }
+
+        // Prefer permissions present in token (if any), otherwise fetch from API using role_id and org_id
+        let perms = []
+        if (Array.isArray(tokenData?.permissions)) {
+          perms = tokenData.permissions
+          console.log('✅ Fund page - Using permissions from userAuthToken:', perms.length)
+        } else {
+          // Fetch permissions using tokenData (which contains role_id and org_id from userAuthToken)
+          perms = await getUserRolePermissions(tokenData)
+          console.log('✅ Fund page - Fetched permissions from API using role_id and org_id:', perms.length)
+        }
+
+        if (!ignore) setPermissions(Array.isArray(perms) ? perms : [])
+      } catch (e) {
+        console.error('❌ Error fetching fund permissions:', e)
+        if (!ignore) setPermissions([])
+      } finally {
+        if (!ignore) setLoadingPermissions(false)
+      }
+    }
+
+    fetchPermissions()
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const canAdd = canModuleAction(permissions, ['fund', 'funds'], 'can_add')
 
   // Logout handler
   const handleLogout = async () => {
@@ -183,16 +295,13 @@ const FundListPage = () => {
               <CardTitle as="h4">Fundadmin</CardTitle>
               <div className="d-flex gap-2 align-items-center">
                 <Dropdown>
-                  <AddFundModal
-                    onFundCreated={async (createdFund) => {
-                      console.log('✅ Fund created successfully:', createdFund)
-                      // Add a small delay to ensure backend has processed the new fund
-                      setTimeout(() => {
-                        console.log('🔄 Refreshing funds list after creation...')
+                  {!loadingPermissions && canAdd && (
+                    <AddFundModal
+                      onFundCreated={() => {
                         refreshFunds()
-                      }, 500)
-                    }}
-                  />
+                      }}
+                    />
+                  )}
                 </Dropdown>
                 <Button 
                   variant="danger" 
