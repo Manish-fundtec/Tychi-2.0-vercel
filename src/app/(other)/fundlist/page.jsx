@@ -107,65 +107,8 @@ const FundListPage = () => {
           return
         }
 
-        console.log('📡 Fund page - Fetching user data for userId:', userId)
+        console.log('📡 Fund page - Fetching user data and permissions')
 
-        // Step 1: Fetch user details to get role_id and org_id
-        let userData = null
-        let roleId = null
-        let orgId = null
-
-        try {
-          // Try to fetch user by ID
-          const userResponse = await api.get(`/api/v1/users/${userId}`)
-          userData = userResponse.data?.data || userResponse.data
-          console.log('✅ Fund page - Fetched user data:', userData)
-          
-          roleId = userData?.role_id || userData?.roleId || userData?.role?.role_id || userData?.role?.id
-          orgId = userData?.org_id || userData?.organization_id || userData?.organization?.org_id
-          
-          console.log('✅ Fund page - Extracted role_id and org_id:', { roleId, orgId })
-        } catch (userError) {
-          console.error('❌ Fund page - Error fetching user data:', userError)
-          console.error('Error details:', userError.response?.data || userError.message)
-          
-          // If direct user fetch fails, try to get all users and find the one matching userId
-          try {
-            console.log('📡 Fund page - Trying to fetch all users and filter by userId')
-            const allUsersResponse = await api.get('/api/v1/users')
-            const allUsers = allUsersResponse.data?.data || allUsersResponse.data || []
-            
-            // Find user by matching userId with various field names
-            userData = allUsers.find(u => {
-              const uId = u.user_id || u.id || u.userId || u.username || u.sub
-              return uId === userId || String(uId) === String(userId)
-            })
-            
-            if (userData) {
-              roleId = userData?.role_id || userData?.roleId || userData?.role?.role_id || userData?.role?.id
-              orgId = userData?.org_id || userData?.organization_id || userData?.organization?.org_id
-              console.log('✅ Fund page - Found user in all users list:', { roleId, orgId })
-            } else {
-              console.warn('⚠️ Fund page - User not found in all users list')
-            }
-          } catch (allUsersError) {
-            console.error('❌ Fund page - Error fetching all users:', allUsersError)
-          }
-        }
-
-        if (!roleId || !orgId) {
-          console.warn('⚠️ Fund page - Cannot fetch permissions: missing roleId or orgId', {
-            roleId,
-            orgId,
-            userId,
-          })
-          if (!ignore) {
-            setPermissions([])
-            setLoadingPermissions(false)
-          }
-          return
-        }
-
-        // Step 2: Fetch permissions using role_id and org_id
         let perms = []
         
         // Check if permissions are in token first
@@ -173,33 +116,59 @@ const FundListPage = () => {
           perms = tokenData.permissions
           console.log('✅ Fund page - Using permissions from token:', perms.length)
         } else {
-          // Fetch permissions from API using role_id and org_id
+          // Step 1: Use /api/v1/users/me to get current user's role_id and org_id
+          let roleId = null
+          let orgId = null
+          
           try {
-            console.log('📡 Fund page - Fetching role permissions for roleId:', roleId, 'orgId:', orgId)
-            const rolesResponse = await api.get(`/api/v1/roles/org/${orgId}/with-permissions`)
-            const roles = rolesResponse.data?.data || rolesResponse.data || []
+            console.log('📡 Fund page - Fetching current user data from /api/v1/users/me')
+            const userResponse = await api.get('/api/v1/users/me')
+            const userData = userResponse.data?.data || userResponse.data
+            console.log('✅ Fund page - Fetched user data:', userData)
             
-            // Find the user's role
-            const userRole = Array.isArray(roles) 
-              ? roles.find(r => {
-                  const rId = r.role_id || r.id
-                  return rId == roleId || String(rId) === String(roleId)
-                })
-              : null
+            roleId = userData?.role_id || userData?.roleId || userData?.role?.role_id || userData?.role?.id
+            orgId = userData?.org_id || userData?.organization_id || userData?.organization?.org_id
+            
+            console.log('✅ Fund page - Extracted role_id and org_id:', { roleId, orgId })
+          } catch (userError) {
+            console.error('❌ Fund page - Error fetching user data from /api/v1/users/me:', userError)
+            console.error('Error details:', userError.response?.data || userError.message)
+          }
 
-            if (userRole && userRole.permissions) {
-              perms = Array.isArray(userRole.permissions) ? userRole.permissions : []
-              console.log('✅ Fund page - Fetched permissions from API:', {
-                count: perms.length,
-                permissions: perms,
-              })
-            } else {
-              console.warn('⚠️ Fund page - User role found but no permissions:', userRole)
+          // Step 2: Fetch permissions using role_id and org_id
+          if (roleId && orgId) {
+            try {
+              console.log('📡 Fund page - Fetching role permissions for roleId:', roleId, 'orgId:', orgId)
+              const rolesResponse = await api.get(`/api/v1/roles/org/${orgId}/with-permissions`)
+              const roles = rolesResponse.data?.data || rolesResponse.data || []
+              
+              // Find the user's role
+              const userRole = Array.isArray(roles) 
+                ? roles.find(r => {
+                    const rId = r.role_id || r.id
+                    return rId == roleId || String(rId) === String(roleId)
+                  })
+                : null
+
+              if (userRole && userRole.permissions) {
+                perms = Array.isArray(userRole.permissions) ? userRole.permissions : []
+                console.log('✅ Fund page - Fetched permissions from API:', {
+                  count: perms.length,
+                  permissions: perms,
+                })
+              } else {
+                console.warn('⚠️ Fund page - User role found but no permissions:', userRole)
+              }
+            } catch (permError) {
+              console.error('❌ Fund page - Error fetching permissions:', permError)
+              console.error('Error details:', permError?.response?.data || permError?.message)
+              perms = []
             }
-          } catch (permError) {
-            console.error('❌ Fund page - Error fetching permissions:', permError)
-            console.error('Error details:', permError?.response?.data || permError?.message)
-            perms = []
+          } else {
+            console.warn('⚠️ Fund page - Cannot fetch permissions: missing roleId or orgId', {
+              roleId,
+              orgId,
+            })
           }
         }
 
