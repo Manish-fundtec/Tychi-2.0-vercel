@@ -122,7 +122,7 @@ const FundListPage = () => {
           
           try {
             console.log('📡 Fund page - Fetching current user data from /api/v1/users/me')
-            const userResponse = await api.get('/api/v1/users/me')
+            const userResponse = await api.get('/api/v1/me')
             const userData = userResponse.data?.data || userResponse.data
             console.log('✅ Fund page - Fetched user data:', userData)
             
