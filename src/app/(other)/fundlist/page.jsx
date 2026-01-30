@@ -11,7 +11,8 @@ import PageTitle from '@/components/PageTitle'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { AddFundModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import { fetchFunds } from '@/lib/api/fund' 
-import api from '@/lib/api/axios'
+import { getUserRolePermissions } from '@/helpers/getUserPermissions'
+import { canModuleAction } from '@/helpers/permissionActions'
 import { jwtDecode } from 'jwt-decode'
 // ----------- AG Grid-related imports -----------
 
@@ -29,7 +30,7 @@ const FundListPage = () => {
   const router = useRouter()
 
   // Permissions state
-  const [canAdd, setCanAdd] = useState(false)
+  const [permissions, setPermissions] = useState([])
   const [loadingPermissions, setLoadingPermissions] = useState(true)
 
   useEffect(() => {
@@ -55,7 +56,7 @@ const FundListPage = () => {
         if (!userAuthToken) {
           console.warn('⚠️ Fund page - No userAuthToken found in cookies')
           if (!ignore) {
-            setCanAdd(false)
+            setPermissions([])
             setLoadingPermissions(false)
           }
           return
@@ -76,7 +77,7 @@ const FundListPage = () => {
         } catch (decodeError) {
           console.error('❌ Fund page - Error decoding userAuthToken:', decodeError)
           if (!ignore) {
-            setCanAdd(false)
+            setPermissions([])
             setLoadingPermissions(false)
           }
           return
@@ -84,7 +85,7 @@ const FundListPage = () => {
 
         if (!tokenData) {
           if (!ignore) {
-            setCanAdd(false)
+            setPermissions([])
             setLoadingPermissions(false)
           }
           return
@@ -99,7 +100,7 @@ const FundListPage = () => {
             tokenData,
           })
           if (!ignore) {
-            setCanAdd(false)
+            setPermissions([])
             setLoadingPermissions(false)
           }
           return
@@ -107,59 +108,39 @@ const FundListPage = () => {
 
         console.log('📡 Fund page - Fetching permissions for userId:', userId)
 
-        // Call /api/v1/users/me/permissions to get permissions
-        // This endpoint internally uses the authenticated user's token to get role_id and permissions
-        let permissionsData = null
-        try {
-          const permissionsResponse = await api.get('/api/v1/users/me/permissions', {
-            withCredentials: true,
-          })
-          permissionsData = permissionsResponse.data?.data || permissionsResponse.data
-          console.log('✅ Fund page - Fetched permissions from /api/v1/users/me/permissions:', permissionsData)
-        } catch (permissionsError) {
-          console.error('❌ Fund page - Error fetching permissions from /api/v1/users/me/permissions:', permissionsError)
-          console.error('Error details:', permissionsError.response?.data || permissionsError.message)
-          if (!ignore) {
-            setCanAdd(false)
-            setLoadingPermissions(false)
+        // Use the same approach as trades module - getUserRolePermissions helper
+        // This helper internally:
+        // 1. Calls /api/v1/users/${userId} to get role_id from database
+        // 2. Calls /api/v1/roles/org/${orgId}/with-permissions to get permissions
+        let perms = []
+        
+        // Check if permissions are in token first
+        if (tokenData?.permissions && Array.isArray(tokenData.permissions)) {
+          perms = tokenData.permissions
+          console.log('✅ Fund page - Using permissions from token:', perms.length)
+        } else {
+          // Fetch permissions from API using getUserRolePermissions
+          try {
+            perms = await getUserRolePermissions(tokenData, null)
+            console.log('✅ Fund page - Fetched permissions from API:', {
+              count: Array.isArray(perms) ? perms.length : 0,
+              permissions: perms,
+            })
+          } catch (permError) {
+            console.error('❌ Fund page - Error fetching permissions:', permError)
+            console.error('Error details:', permError?.response?.data || permError?.message)
+            perms = []
           }
-          return
         }
 
-        if (!permissionsData) {
-          console.warn('⚠️ Fund page - No permissions data returned from /api/v1/users/me/permissions')
-          if (!ignore) {
-            setCanAdd(false)
-            setLoadingPermissions(false)
-          }
-          return
-        }
-
-        // Check if the user has can_add permission for the 'fund' or 'funds' module
-        // The permissions endpoint should return a structure like:
-        // { modules: { fund: { can_add: true, ... }, funds: { can_add: true, ... } } }
-        const modules = permissionsData?.modules || permissionsData
-        const fundModule = modules?.fund || modules?.Fund
-        const fundsModule = modules?.funds || modules?.Funds
-
-        const hasCanAdd = 
-          (fundModule && (fundModule.can_add === true || fundModule.can_add === 1 || fundModule.can_add === '1' || fundModule.can_add === 'true')) ||
-          (fundsModule && (fundsModule.can_add === true || fundsModule.can_add === 1 || fundsModule.can_add === '1' || fundsModule.can_add === 'true'))
-
-        console.log('🔍 Fund page - Permission check:', {
-          modules: Object.keys(modules || {}),
-          fundModule: fundModule ? { can_add: fundModule.can_add } : null,
-          fundsModule: fundsModule ? { can_add: fundsModule.can_add } : null,
-          hasCanAdd,
-        })
-
+        // Set permissions array
         if (!ignore) {
-          setCanAdd(hasCanAdd)
+          setPermissions(Array.isArray(perms) ? perms : [])
         }
       } catch (e) {
         console.error('❌ Fund page - Error fetching permissions:', e)
         if (!ignore) {
-          setCanAdd(false)
+          setPermissions([])
         }
       } finally {
         if (!ignore) {
@@ -173,6 +154,9 @@ const FundListPage = () => {
       ignore = true
     }
   }, [])
+
+  // Check if user has can_add permission for fund/funds module
+  const canAdd = canModuleAction(permissions, ['fund', 'funds'], 'can_add')
 
   // Logout handler
   const handleLogout = async () => {
