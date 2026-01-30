@@ -1,12 +1,18 @@
 // import axios from '@/lib/api/axios';
 import api from './axios'
+import Cookies from 'js-cookie'
 
 
 export const fetchFunds = async () => {
+  // Get userAuthToken from cookie (contains role_id for permissions)
+  const userAuthToken = Cookies.get('userAuthToken')
+  
   const response = await api.get('/api/v1/fund', {
     params: { t: Date.now() },
     withCredentials: true,
-
+    headers: {
+      ...(userAuthToken && { 'userAuthToken': userAuthToken }),
+    },
   })
   return response.data
 }
