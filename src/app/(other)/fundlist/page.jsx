@@ -68,7 +68,9 @@ const FundListPage = () => {
         try {
           tokenData = jwtDecode(userAuthToken)
           console.log('🔍 Fund page - Decoded userAuthToken:', {
-            user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId,
+            user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.username || tokenData?.sub,
+            username: tokenData?.username,
+            sub: tokenData?.sub,
             allKeys: Object.keys(tokenData || {}),
           })
         } catch (decodeError) {
@@ -88,8 +90,9 @@ const FundListPage = () => {
           return
         }
 
-        // Extract user_id from token
-        const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId
+        // Extract user_id from token - check username and sub fields as well
+        // In Cognito tokens, username or sub often contains the user identifier
+        const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.username || tokenData?.sub
 
         if (!userId) {
           console.warn('⚠️ Fund page - userAuthToken missing user_id:', {
