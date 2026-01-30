@@ -105,39 +105,10 @@ const FundListPage = () => {
           return
         }
 
-        console.log('📡 Fund page - Fetching user data for userId:', userId)
+        console.log('📡 Fund page - Fetching permissions for userId:', userId)
 
-        // Step 1: Call /api/v1/users/me to fetch the latest role_id from the database
-        let userData = null
-        try {
-          const userResponse = await api.get('/api/v1/users/me', {
-            withCredentials: true,
-          })
-          userData = userResponse.data?.data || userResponse.data
-          console.log('✅ Fund page - Fetched user data from /api/v1/users/me:', {
-            user_id: userData?.user_id || userData?.id,
-            role_id: userData?.role_id || userData?.roleId,
-          })
-        } catch (userError) {
-          console.error('❌ Fund page - Error fetching user data from /api/v1/users/me:', userError)
-          console.error('Error details:', userError.response?.data || userError.message)
-          if (!ignore) {
-            setCanAdd(false)
-            setLoadingPermissions(false)
-          }
-          return
-        }
-
-        if (!userData) {
-          console.warn('⚠️ Fund page - No user data returned from /api/v1/users/me')
-          if (!ignore) {
-            setCanAdd(false)
-            setLoadingPermissions(false)
-          }
-          return
-        }
-
-        // Step 2: Call /api/v1/users/me/permissions to get permissions based on role_id
+        // Call /api/v1/users/me/permissions to get permissions
+        // This endpoint internally uses the authenticated user's token to get role_id and permissions
         let permissionsData = null
         try {
           const permissionsResponse = await api.get('/api/v1/users/me/permissions', {
@@ -164,7 +135,7 @@ const FundListPage = () => {
           return
         }
 
-        // Step 3: Check if the user has can_add permission for the 'fund' or 'funds' module
+        // Check if the user has can_add permission for the 'fund' or 'funds' module
         // The permissions endpoint should return a structure like:
         // { modules: { fund: { can_add: true, ... }, funds: { can_add: true, ... } } }
         const modules = permissionsData?.modules || permissionsData
