@@ -14,6 +14,7 @@ import { fetchFunds } from '@/lib/api/fund'
 import { getUserRolePermissions } from '@/helpers/getUserPermissions'
 import { canModuleAction } from '@/helpers/permissionActions'
 import { jwtDecode } from 'jwt-decode'
+import api from '@/lib/api/axios'
 // ----------- AG Grid-related imports -----------
 
 // IMPORTANT: import ClientSideRowModelModule
@@ -76,12 +77,8 @@ const FundListPage = () => {
         let tokenData = null
         try {
           tokenData = jwtDecode(userAuthToken)
-          console.log('🔍 Fund page - Decoded userAuthToken:', {
-            user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId,
-            role_id: tokenData?.role_id || tokenData?.roleId,
-            org_id: tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId,
-            allKeys: Object.keys(tokenData || {}), // Show all keys for debugging
-          })
+          console.log('🔍 Fund page - Decoded userAuthToken (FULL):', tokenData)
+          console.log('🔍 Fund page - All token keys:', Object.keys(tokenData || {}))
         } catch (decodeError) {
           console.error('❌ Fund page - Error decoding userAuthToken:', decodeError)
           if (!ignore) setPermissions([])
@@ -93,18 +90,78 @@ const FundListPage = () => {
           return
         }
 
-        // Verify we have required fields (user_id, org_id, role_id)
-        const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId
-        const roleId = tokenData?.role_id || tokenData?.roleId
-        const orgId = tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId
+        // Extract user_id, role_id, org_id from token (check multiple possible field names)
+        // sub field often contains user_id in JWT tokens
+        let userId = tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.sub
+        let roleId = tokenData?.role_id || tokenData?.roleId
+        let orgId = tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId
 
+        console.log('🔍 Fund page - Extracted from token:', {
+          userId,
+          roleId,
+          orgId,
+          hasSub: !!tokenData?.sub,
+          subValue: tokenData?.sub,
+        })
+
+        // If we have userId but no roleId/orgId, fetch user details from API
+        if (userId && (!roleId || !orgId)) {
+          try {
+            console.log('📡 Fetching user details for userId:', userId)
+            const userResponse = await api.get(`/api/v1/users/${userId}`, {
+              headers: {
+                'userAuthToken': userAuthToken,
+              },
+            })
+            
+            const user = userResponse.data?.data || userResponse.data
+            
+            console.log('👤 User details from API:', user)
+            
+            // Extract role_id and org_id from user data
+            roleId = roleId || user?.role_id || user?.roleId || user?.role?.role_id || user?.role?.id
+            orgId = orgId || user?.org_id || user?.organization_id || user?.organization?.org_id
+            
+            console.log('✅ Extracted from user API:', {
+              userId,
+              roleId,
+              orgId,
+            })
+          } catch (error) {
+            console.error('❌ Error fetching user details:', error)
+          }
+        }
+
+        // Verify we have required fields (user_id, org_id, role_id)
         if (!roleId || !orgId) {
-          console.warn('⚠️ Fund page - userAuthToken missing required fields:', {
+          console.warn('⚠️ Fund page - userAuthToken missing required fields after API fetch:', {
             hasUserId: !!userId,
             hasRoleId: !!roleId,
             hasOrgId: !!orgId,
             tokenData,
           })
+          
+          // Try /me/permissions endpoint as last resort
+          if (!ignore) {
+            try {
+              console.log('📡 Trying /me/permissions endpoint as fallback')
+              const meResponse = await api.get('/api/v1/me/permissions', {
+                headers: {
+                  'userAuthToken': userAuthToken,
+                },
+              })
+              
+              const perms = meResponse.data?.data || meResponse.data?.permissions || meResponse.data || []
+              if (Array.isArray(perms) && perms.length > 0) {
+                console.log('✅ Got permissions from /me/permissions:', perms.length)
+                if (!ignore) setPermissions(perms)
+                return
+              }
+            } catch (error) {
+              console.error('❌ Error fetching /me/permissions:', error)
+            }
+          }
+          
           if (!ignore) setPermissions([])
           return
         }
