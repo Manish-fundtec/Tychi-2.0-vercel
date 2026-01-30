@@ -11,8 +11,7 @@ import PageTitle from '@/components/PageTitle'
 import ComponentContainerCard from '@/components/ComponentContainerCard'
 import { AddFundModal } from '@/app/(admin)/base-ui/modals/components/AllModals'
 import { fetchFunds } from '@/lib/api/fund' 
-import { getUserRolePermissions } from '@/helpers/getUserPermissions'
-import { canModuleAction } from '@/helpers/permissionActions'
+import api from '@/lib/api/axios'
 import { jwtDecode } from 'jwt-decode'
 // ----------- AG Grid-related imports -----------
 
@@ -29,8 +28,8 @@ const FundListPage = () => {
   const [loggingOut, setLoggingOut] = useState(false)
   const router = useRouter()
 
-  // Permissions (using userAuthToken cookie which has role_id)
-  const [permissions, setPermissions] = useState([])
+  // Permissions state
+  const [canAdd, setCanAdd] = useState(false)
   const [loadingPermissions, setLoadingPermissions] = useState(true)
 
   useEffect(() => {
@@ -40,8 +39,7 @@ const FundListPage = () => {
       try {
         setLoadingPermissions(true)
 
-        // Only use userAuthToken (has user_id, org_id, role_id) - don't fallback to userToken
-        // Try multiple ways to get the cookie
+        // Extract userAuthToken from cookies
         let userAuthToken = Cookies.get('userAuthToken')
         
         // If not found, try reading from document.cookie directly
@@ -54,78 +52,145 @@ const FundListPage = () => {
           }
         }
 
-        // Log all cookies for debugging
-        if (typeof document !== 'undefined') {
-          console.log('📋 All cookies:', document.cookie)
-          console.log('📋 Cookies.get results:', {
-            userAuthToken: !!Cookies.get('userAuthToken'),
-            userToken: !!Cookies.get('userToken'),
-            dashboardToken: !!Cookies.get('dashboardToken'),
-          })
-        }
-
         if (!userAuthToken) {
           console.warn('⚠️ Fund page - No userAuthToken found in cookies')
-          if (!ignore) setPermissions([])
+          if (!ignore) {
+            setCanAdd(false)
+            setLoadingPermissions(false)
+          }
           return
         }
 
         console.log('✅ Fund page - Found userAuthToken, length:', userAuthToken.length)
 
-        // Decode userAuthToken to get user_id, org_id, and role_id
+        // Decode userAuthToken to get user_id
         let tokenData = null
         try {
           tokenData = jwtDecode(userAuthToken)
           console.log('🔍 Fund page - Decoded userAuthToken:', {
             user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId,
-            role_id: tokenData?.role_id || tokenData?.roleId,
-            org_id: tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId,
-            allKeys: Object.keys(tokenData || {}), // Show all keys for debugging
+            allKeys: Object.keys(tokenData || {}),
           })
         } catch (decodeError) {
           console.error('❌ Fund page - Error decoding userAuthToken:', decodeError)
-          if (!ignore) setPermissions([])
+          if (!ignore) {
+            setCanAdd(false)
+            setLoadingPermissions(false)
+          }
           return
         }
 
         if (!tokenData) {
-          if (!ignore) setPermissions([])
+          if (!ignore) {
+            setCanAdd(false)
+            setLoadingPermissions(false)
+          }
           return
         }
 
-        // Verify we have required fields (user_id, org_id, role_id)
+        // Extract user_id from token
         const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId
-        const roleId = tokenData?.role_id || tokenData?.roleId
-        const orgId = tokenData?.org_id || tokenData?.organization_id || tokenData?.orgId
 
-        if (!roleId || !orgId) {
-          console.warn('⚠️ Fund page - userAuthToken missing required fields:', {
-            hasUserId: !!userId,
-            hasRoleId: !!roleId,
-            hasOrgId: !!orgId,
+        if (!userId) {
+          console.warn('⚠️ Fund page - userAuthToken missing user_id:', {
             tokenData,
           })
-          if (!ignore) setPermissions([])
+          if (!ignore) {
+            setCanAdd(false)
+            setLoadingPermissions(false)
+          }
           return
         }
 
-        // Prefer permissions present in token (if any), otherwise fetch from API using role_id and org_id
-        let perms = []
-        if (Array.isArray(tokenData?.permissions)) {
-          perms = tokenData.permissions
-          console.log('✅ Fund page - Using permissions from userAuthToken:', perms.length)
-        } else {
-          // Fetch permissions using tokenData (which contains role_id and org_id from userAuthToken)
-          perms = await getUserRolePermissions(tokenData)
-          console.log('✅ Fund page - Fetched permissions from API using role_id and org_id:', perms.length)
+        console.log('📡 Fund page - Fetching user data for userId:', userId)
+
+        // Step 1: Call /api/v1/users/me to fetch the latest role_id from the database
+        let userData = null
+        try {
+          const userResponse = await api.get('/api/v1/users/me', {
+            withCredentials: true,
+          })
+          userData = userResponse.data?.data || userResponse.data
+          console.log('✅ Fund page - Fetched user data from /api/v1/users/me:', {
+            user_id: userData?.user_id || userData?.id,
+            role_id: userData?.role_id || userData?.roleId,
+          })
+        } catch (userError) {
+          console.error('❌ Fund page - Error fetching user data from /api/v1/users/me:', userError)
+          console.error('Error details:', userError.response?.data || userError.message)
+          if (!ignore) {
+            setCanAdd(false)
+            setLoadingPermissions(false)
+          }
+          return
         }
 
-        if (!ignore) setPermissions(Array.isArray(perms) ? perms : [])
+        if (!userData) {
+          console.warn('⚠️ Fund page - No user data returned from /api/v1/users/me')
+          if (!ignore) {
+            setCanAdd(false)
+            setLoadingPermissions(false)
+          }
+          return
+        }
+
+        // Step 2: Call /api/v1/users/me/permissions to get permissions based on role_id
+        let permissionsData = null
+        try {
+          const permissionsResponse = await api.get('/api/v1/users/me/permissions', {
+            withCredentials: true,
+          })
+          permissionsData = permissionsResponse.data?.data || permissionsResponse.data
+          console.log('✅ Fund page - Fetched permissions from /api/v1/users/me/permissions:', permissionsData)
+        } catch (permissionsError) {
+          console.error('❌ Fund page - Error fetching permissions from /api/v1/users/me/permissions:', permissionsError)
+          console.error('Error details:', permissionsError.response?.data || permissionsError.message)
+          if (!ignore) {
+            setCanAdd(false)
+            setLoadingPermissions(false)
+          }
+          return
+        }
+
+        if (!permissionsData) {
+          console.warn('⚠️ Fund page - No permissions data returned from /api/v1/users/me/permissions')
+          if (!ignore) {
+            setCanAdd(false)
+            setLoadingPermissions(false)
+          }
+          return
+        }
+
+        // Step 3: Check if the user has can_add permission for the 'fund' or 'funds' module
+        // The permissions endpoint should return a structure like:
+        // { modules: { fund: { can_add: true, ... }, funds: { can_add: true, ... } } }
+        const modules = permissionsData?.modules || permissionsData
+        const fundModule = modules?.fund || modules?.Fund
+        const fundsModule = modules?.funds || modules?.Funds
+
+        const hasCanAdd = 
+          (fundModule && (fundModule.can_add === true || fundModule.can_add === 1 || fundModule.can_add === '1' || fundModule.can_add === 'true')) ||
+          (fundsModule && (fundsModule.can_add === true || fundsModule.can_add === 1 || fundsModule.can_add === '1' || fundsModule.can_add === 'true'))
+
+        console.log('🔍 Fund page - Permission check:', {
+          modules: Object.keys(modules || {}),
+          fundModule: fundModule ? { can_add: fundModule.can_add } : null,
+          fundsModule: fundsModule ? { can_add: fundsModule.can_add } : null,
+          hasCanAdd,
+        })
+
+        if (!ignore) {
+          setCanAdd(hasCanAdd)
+        }
       } catch (e) {
-        console.error('❌ Error fetching fund permissions:', e)
-        if (!ignore) setPermissions([])
+        console.error('❌ Fund page - Error fetching permissions:', e)
+        if (!ignore) {
+          setCanAdd(false)
+        }
       } finally {
-        if (!ignore) setLoadingPermissions(false)
+        if (!ignore) {
+          setLoadingPermissions(false)
+        }
       }
     }
 
@@ -134,8 +199,6 @@ const FundListPage = () => {
       ignore = true
     }
   }, [])
-
-  const canAdd = canModuleAction(permissions, ['fund', 'funds'], 'can_add')
 
   // Logout handler
   const handleLogout = async () => {
