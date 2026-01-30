@@ -41,11 +41,38 @@ const useSignIn = () => {
         password: values.password,
       });
 
-      const { accessToken, user, dashboardToken } = response.data;
+      const { accessToken, user, dashboardToken, userAuthToken } = response.data;
 
       if (accessToken) {
         // ✅ Store token in cookie for backend to read
         Cookies.set('userToken', accessToken, {
+          path: '/',
+          sameSite: 'Lax',
+          secure: process.env.NODE_ENV === 'production',
+        });
+
+        // ✅ Store userAuthToken (contains role_id for permissions)
+        // If backend sends userAuthToken, use it; otherwise try to fetch it
+        let authToken = userAuthToken;
+        
+        // If backend doesn't send userAuthToken, try to fetch it from backend
+        if (!authToken) {
+          try {
+            // Try to get userAuthToken from backend using accessToken
+            const authResponse = await axios.get('/api/v1/user/auth-token', {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+              },
+            });
+            authToken = authResponse.data?.userAuthToken || authResponse.data?.token;
+          } catch (err) {
+            console.warn('Could not fetch userAuthToken from backend, using accessToken:', err);
+            // Fallback to accessToken if backend doesn't provide userAuthToken
+            authToken = accessToken;
+          }
+        }
+        
+        Cookies.set('userAuthToken', authToken, {
           path: '/',
           sameSite: 'Lax',
           secure: process.env.NODE_ENV === 'production',
