@@ -53,7 +53,12 @@ const AddRolePage = () => {
     role_description: '',
     org_id: '',
     funds: [], // Array of selected fund IDs
-    permissions: {} // { fundId: { moduleKey: { can_view, can_add, can_edit, can_delete } } }
+    permissions: {}, // { fundId: { moduleKey: { can_view, can_add, can_edit, can_delete } } }
+    fundModulePermissions: { // Fund module permissions (applies globally, not fund-specific)
+      can_add: false,
+      can_edit: false,
+      can_delete: false
+    }
   })
 
   // Fetch organizations on mount
@@ -235,6 +240,17 @@ const AddRolePage = () => {
     })
   }
 
+  // Handle fund module permission changes
+  const handleFundModulePermissionChange = (permissionType, checked) => {
+    setFormData(prev => ({
+      ...prev,
+      fundModulePermissions: {
+        ...prev.fundModulePermissions,
+        [permissionType]: checked
+      }
+    }))
+  }
+
   // Handle permission checkbox changes - fund-specific
   const handlePermissionChange = (fundId, moduleKey, permissionType, checked) => {
     setFormData(prev => ({
@@ -303,13 +319,34 @@ const AddRolePage = () => {
 
   // Transform form data to API format (matching guide)
   const transformFormDataForAPI = () => {
-    const { role_name, role_description, org_id, funds, permissions } = formData
+    const { role_name, role_description, org_id, funds, permissions, fundModulePermissions } = formData
     
     // Build permissions array
     const permissionsArray = []
     
+    // Add fund module permissions (apply to all funds or use null/0 for global)
+    // Since permissions require fund_id, we'll apply fund module permissions to all selected funds
+    if (funds.length > 0) {
+      funds.forEach(fundId => {
+        if (fundModulePermissions.can_add || fundModulePermissions.can_edit || fundModulePermissions.can_delete) {
+          permissionsArray.push({
+            fund_id: fundId,
+            module_key: 'fund', // Use 'fund' as module_key for fund module
+            can_view: true, // Always true since fundlist is always visible
+            can_add: fundModulePermissions.can_add || false,
+            can_edit: fundModulePermissions.can_edit || false,
+            can_delete: fundModulePermissions.can_delete || false
+          })
+        }
+      })
+    }
+    
+    // Add other module permissions
     funds.forEach(fundId => {
       Object.keys(permissions[fundId] || {}).forEach(moduleKey => {
+        // Skip 'fund' module_key if it exists in permissions (we handle it separately above)
+        if (moduleKey.toLowerCase() === 'fund') return
+        
         const perm = permissions[fundId][moduleKey]
         permissionsArray.push({
           fund_id: fundId,
@@ -352,18 +389,27 @@ const AddRolePage = () => {
       return
     }
 
-    // Check if at least one permission is set
+    // Check if at least one permission is set (including fund module permissions)
     let hasPermission = false
-    formData.funds.forEach(fundId => {
-      if (formData.permissions[fundId]) {
-        Object.keys(formData.permissions[fundId]).forEach(moduleKey => {
-          const perm = formData.permissions[fundId][moduleKey]
-          if (perm.can_view || perm.can_add || perm.can_edit || perm.can_delete) {
-            hasPermission = true
-          }
-        })
-      }
-    })
+    
+    // Check fund module permissions
+    if (formData.fundModulePermissions.can_add || formData.fundModulePermissions.can_edit || formData.fundModulePermissions.can_delete) {
+      hasPermission = true
+    }
+    
+    // Check other module permissions
+    if (!hasPermission) {
+      formData.funds.forEach(fundId => {
+        if (formData.permissions[fundId]) {
+          Object.keys(formData.permissions[fundId]).forEach(moduleKey => {
+            const perm = formData.permissions[fundId][moduleKey]
+            if (perm.can_view || perm.can_add || perm.can_edit || perm.can_delete) {
+              hasPermission = true
+            }
+          })
+        }
+      })
+    }
 
     if (!hasPermission) {
       setError('Please set at least one permission')
@@ -579,6 +625,64 @@ const AddRolePage = () => {
                         onChange={handleChange}
                         placeholder="Enter role description"
                       />
+                    </FormGroup>
+                  </Col>
+                </Row>
+
+                {/* Fund Module Permissions - Before Organization */}
+                <Row>
+                  <Col md={12}>
+                    <FormGroup className="mb-3">
+                      <FormLabel className="fw-bold">Fund Module - Can User Add Fund?</FormLabel>
+                      <Card className="mt-2">
+                        <CardBody>
+                          <div className="table-responsive">
+                            <table className="table table-bordered">
+                              <thead>
+                                <tr>
+                                  <th>Permission</th>
+                                  <th className="text-center">Allow</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td className="fw-semibold">Can Add Fund</td>
+                                  <td className="text-center">
+                                    <FormCheck
+                                      type="checkbox"
+                                      checked={formData.fundModulePermissions.can_add || false}
+                                      onChange={(e) => handleFundModulePermissionChange('can_add', e.target.checked)}
+                                    />
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="fw-semibold">Can Edit Fund</td>
+                                  <td className="text-center">
+                                    <FormCheck
+                                      type="checkbox"
+                                      checked={formData.fundModulePermissions.can_edit || false}
+                                      onChange={(e) => handleFundModulePermissionChange('can_edit', e.target.checked)}
+                                    />
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="fw-semibold">Can Delete Fund</td>
+                                  <td className="text-center">
+                                    <FormCheck
+                                      type="checkbox"
+                                      checked={formData.fundModulePermissions.can_delete || false}
+                                      onChange={(e) => handleFundModulePermissionChange('can_delete', e.target.checked)}
+                                    />
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                          <small className="text-muted">
+                            Note: Fund list view is always available. These permissions control add/edit/delete actions.
+                          </small>
+                        </CardBody>
+                      </Card>
                     </FormGroup>
                   </Col>
                 </Row>
