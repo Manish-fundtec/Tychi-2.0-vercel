@@ -14,6 +14,7 @@ import { fetchFunds } from '@/lib/api/fund'
 import { getUserRolePermissions } from '@/helpers/getUserPermissions'
 import { canModuleAction } from '@/helpers/permissionActions'
 import api from '@/lib/api/axios'
+import { jwtDecode } from 'jwt-decode'
 // ----------- AG Grid-related imports -----------
 
 // IMPORTANT: import ClientSideRowModelModule
