@@ -57,40 +57,15 @@ export const getUserRolePermissions = async (tokenData, fundId = null) => {
     }
     
     // If still no userId but we have orgId, we might need to check tokenData more carefully
-    // But for now, if we don't have roleId and orgId, try /me/permissions endpoint as fallback
+    // But for now, if we don't have roleId and orgId, we can't proceed
     if (!actualRoleId || !actualOrgId) {
-      console.warn('⚠️ Cannot fetch permissions: missing roleId or orgId, trying /me/permissions endpoint', {
+      console.warn('⚠️ Cannot fetch permissions: missing roleId or orgId', {
         actualRoleId,
         actualOrgId,
         hadUserId: !!actualUserId,
         hadRoleId: !!roleId,
         hadOrgId: !!orgId,
       });
-      
-      // Try /me/permissions endpoint as fallback (directly gets current user's permissions)
-      try {
-        console.log('📡 Trying /me/permissions endpoint as fallback');
-        const mePermissionsResponse = await api.get('/api/v1/me/permissions');
-        const permissions = mePermissionsResponse.data?.data || mePermissionsResponse.data?.permissions || mePermissionsResponse.data || [];
-        
-        if (Array.isArray(permissions) && permissions.length > 0) {
-          console.log('✅ Got permissions from /me/permissions endpoint:', permissions.length);
-          
-          // Filter by fund if fundId is provided
-          if (fundId) {
-            const filtered = permissions.filter(p => {
-              const pFundId = p.fund_id || p.fundId;
-              return pFundId == fundId || String(pFundId) === String(fundId);
-            });
-            return filtered;
-          }
-          
-          return permissions;
-        }
-      } catch (error) {
-        console.error('❌ Error fetching permissions from /me/permissions endpoint:', error);
-      }
-      
       return [];
     }
 

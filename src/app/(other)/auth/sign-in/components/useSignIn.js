@@ -52,56 +52,22 @@ const useSignIn = () => {
         });
 
         // ✅ Store userAuthToken (contains role_id for permissions)
-        // Check multiple sources: response body, response headers (Set-Cookie), or fetch from /me
+        // If backend sends userAuthToken, use it; otherwise try to fetch it
         let authToken = userAuthToken;
         
-        // Check if backend set userAuthToken as cookie in response headers
-        if (!authToken && response.headers?.['set-cookie']) {
-          const setCookieHeaders = Array.isArray(response.headers['set-cookie']) 
-            ? response.headers['set-cookie'] 
-            : [response.headers['set-cookie']];
-          
-          for (const cookieHeader of setCookieHeaders) {
-            if (cookieHeader && cookieHeader.includes('userAuthToken=')) {
-              const match = cookieHeader.match(/userAuthToken=([^;]+)/);
-              if (match) {
-                authToken = decodeURIComponent(match[1]);
-                console.log('✅ Found userAuthToken in response Set-Cookie header');
-                break;
-              }
-            }
-          }
-        }
-        
-        // If backend doesn't send userAuthToken, try to fetch user details from /me endpoint
+        // If backend doesn't send userAuthToken, try to fetch it from backend
         if (!authToken) {
           try {
-            // Fetch current user details from /me endpoint to get role_id
-            const meResponse = await axios.get('/api/v1/me', {
+            // Try to get userAuthToken from backend using accessToken
+            const authResponse = await axios.get('/api/v1/user/auth-token', {
               headers: {
                 'Authorization': `Bearer ${accessToken}`,
               },
             });
-            const userData = meResponse.data?.data || meResponse.data;
-            
-            // Check if /me response has userAuthToken
-            authToken = userData?.userAuthToken || userData?.token;
-            
-            // If still no userAuthToken, check if user object from signin has role_id
-            // and we can use accessToken (assuming it contains role_id)
-            if (!authToken && (user?.role_id || userData?.role_id)) {
-              // If user has role_id, use accessToken as userAuthToken
-              // (assuming backend accessToken includes role_id for authenticated users)
-              authToken = accessToken;
-              console.log('✅ Using accessToken as userAuthToken (user has role_id)');
-            } else if (!authToken) {
-              // Final fallback to accessToken
-              authToken = accessToken;
-              console.warn('⚠️ No userAuthToken found, using accessToken as fallback');
-            }
+            authToken = authResponse.data?.userAuthToken || authResponse.data?.token;
           } catch (err) {
-            console.warn('Could not fetch user details from /me endpoint, using accessToken:', err);
-            // Fallback to accessToken if /me endpoint fails
+            console.warn('Could not fetch userAuthToken from backend, using accessToken:', err);
+            // Fallback to accessToken if backend doesn't provide userAuthToken
             authToken = accessToken;
           }
         }
@@ -111,8 +77,6 @@ const useSignIn = () => {
           sameSite: 'Lax',
           secure: process.env.NODE_ENV === 'production',
         });
-        
-        console.log('✅ userAuthToken set in cookie:', !!authToken);
 
         // 🚀 Check if user is admin and redirect accordingly
         const isAdmin = user?.isAdmin || 
