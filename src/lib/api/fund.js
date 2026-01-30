@@ -1,7 +1,7 @@
 // import axios from '@/lib/api/axios';
 import api from './axios'
 import Cookies from 'js-cookie'
-import { decodeJwtPayload } from '@/lib/jwt'
+
 
 export const fetchFunds = async () => {
   const token = Cookies.get('userAuthToken');
@@ -9,14 +9,7 @@ export const fetchFunds = async () => {
     throw new Error('Missing userAuthToken')
   }
   
-  // Decode org_id from token if not provided
-  const payload_decoded = decodeJwtPayload(token)
-  const tokenRoleId = payload_decoded?.role_id || payload_decoded?.roleId || ''
-  
-  const body = {
-    role_id: tokenRoleId,
-  }
-  const response = await api.get('/api/v1/fund', body, {
+  const response = await api.get('/api/v1/fund', {
     headers: {
       'userAuthToken': token,
     },
