@@ -734,7 +734,7 @@ const AddRolePage = () => {
                                 
                                 return (
                                   <>
-                                    {/* Module Group 1: Configuration, Trade, Valuation, Reports */}
+                                    {/* Module Group 1: Operations */}
                                     {group1.length > 0 && (
                                       <Card className="mb-3">
                                         <CardHeader 
@@ -743,7 +743,7 @@ const AddRolePage = () => {
                                         >
                                           <div className="d-flex justify-content-between align-items-center">
                                             <CardTitle as="h5" className="mb-0">
-                                              Configuration, Trade, Valuation, Reports
+                                              Operations
                                             </CardTitle>
                                             <span>
                                               {isModuleGroupExpanded(fundId, 'group1') ? '▼' : '▶'}
@@ -795,7 +795,7 @@ const AddRolePage = () => {
                                       </Card>
                                     )}
 
-                                    {/* Module Group 2: General Ledger, Manual Journal, Journal, Chart of Accounts, Reconciliation, Bookclosure */}
+                                    {/* Module Group 2: General Ledger */}
                                     {group2.length > 0 && (
                                       <Card className="mb-3">
                                         <CardHeader 
@@ -804,7 +804,7 @@ const AddRolePage = () => {
                                         >
                                           <div className="d-flex justify-content-between align-items-center">
                                             <CardTitle as="h5" className="mb-0">
-                                              General Ledger, Manual Journal, Journal, Chart of Accounts, Reconciliation, Bookclosure
+                                              General Ledger
                                             </CardTitle>
                                             <span>
                                               {isModuleGroupExpanded(fundId, 'group2') ? '▼' : '▶'}
