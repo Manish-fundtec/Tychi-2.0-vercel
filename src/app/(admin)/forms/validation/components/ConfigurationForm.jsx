@@ -172,11 +172,10 @@ export const BrokerForm = ({ broker, onSuccess, onClose, reportingStartDate, exi
       const token = Cookies.get('dashboardToken')
       const decoded = jwtDecode(token)
 
-      // Send plain broker_name: backend compares it to decrypted DB values for lookup/validation,
-      // then encrypts before storing in BYTEA. Do not encrypt here or lookup will fail.
+      // Encrypt broker_name for API (DB stores BYTEA / encrypted buffer)
       const payload = {
         ...form,
-        broker_name: form.broker_name ? String(form.broker_name).trim() : form.broker_name,
+        broker_name: form.broker_name ? encryptPayload(form.broker_name) : form.broker_name,
         user_id: decoded.user_id,
         org_id: decoded.org_id,
         fund_id: decoded.fund_id,
@@ -1543,6 +1542,8 @@ export const ExchangeForm = ({ exchange, onSuccess, onClose }) => {
           user_id: decoded.user_id,
           org_id: decoded.org_id,
           fund_id: decoded.fund_id,
+          // Encrypt exchange_name for API (same as broker_name / bank_name)
+          exchange_name: form.exchange_name ? encryptPayload(form.exchange_name) : form.exchange_name,
         }
 
         if (isEdit) {
@@ -1736,13 +1737,14 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
       const token = Cookies.get('dashboardToken')
       const decoded = jwtDecode(token)
 
-      // Prepare payload - set CUSIP and ISIN to null if empty (ignore them)
+      // Encrypt symbol columns for API (DB stores BYTEA / encrypted) — same pattern as broker_name
       const payload = {
         ...form,
         fund_id: decoded.fund_id,
-        // Set CUSIP and ISIN to null if empty - ignore them, don't validate
-        cusip: form.cusip?.trim() || null,
-        isin: form.isin?.trim() || null,
+        symbol_id: form.symbol_id ? encryptPayload(form.symbol_id) : form.symbol_id,
+        symbol_name: form.symbol_name ? encryptPayload(form.symbol_name) : form.symbol_name,
+        isin: form.isin?.trim() ? encryptPayload(form.isin.trim()) : null,
+        cusip: form.cusip?.trim() ? encryptPayload(form.cusip.trim()) : null,
       }
 
       try {
