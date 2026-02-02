@@ -12,11 +12,37 @@ import { useDashboardToken } from '@/hooks/useDashboardToken'
 import { useUserToken } from '@/hooks/useUserToken'
 import { getUserRolePermissions } from '@/helpers/getUserPermissions'
 import { canModuleAction } from '@/helpers/permissionActions'
+import { looksEncrypted, decryptPayload } from '@/lib/utils/decrypt'
 
 ModuleRegistry.registerModules([ClientSideRowModelModule])
 const AgGridReact = dynamic(() => import('ag-grid-react').then((mod) => mod.AgGridReact), { ssr: false })
 const GLEntryModal = dynamic(() => import('@/app/(admin)/base-ui/modals/components/AllModals').then((mod) => mod.GLEntryModal), { ssr: false })
 AgGridReact.prototype.modules = [ClientSideRowModelModule]
+
+/** Decrypt gl_name when it's stored encrypted (e.g. bank/broker account names). */
+function decryptGlName(value) {
+  if (value == null) return ''
+  if (typeof value === 'string') {
+    const dec = looksEncrypted(value) ? decryptPayload(value) : null
+    return dec != null ? (typeof dec === 'string' ? dec : String(dec)) : value
+  }
+  if (value && value.type === 'Buffer' && Array.isArray(value.data)) {
+    const base64 = btoa(String.fromCharCode.apply(null, value.data))
+    const dec = decryptPayload(base64)
+    return dec != null ? (typeof dec === 'string' ? dec : String(dec)) : ''
+  }
+  return ''
+}
+
+/** Recursively normalize tree so every node has decrypted gl_name for display. */
+function normalizeChartOfAccountsTree(nodes) {
+  if (!Array.isArray(nodes)) return []
+  return nodes.map((n) => ({
+    ...n,
+    gl_name: decryptGlName(n.gl_name) ?? n.gl_name ?? '',
+    children: n.children?.length ? normalizeChartOfAccountsTree(n.children) : n.children,
+  }))
+}
 
 const ReviewsPage = () => {
   const gridRef = useRef(null)
@@ -181,7 +207,7 @@ const ReviewsPage = () => {
             console.log('No data found or empty array returned')
           }
 
-          setChartOfAccountsData(data)
+          setChartOfAccountsData(normalizeChartOfAccountsTree(data || []))
         } catch (error) {
           console.error('Error fetching chart of accounts:', error)
         } finally {
@@ -262,7 +288,7 @@ const ReviewsPage = () => {
     setLoading(true)
     try {
       const res = await api.get(`/api/v1/chart-of-accounts/fund/${fundId}`)
-      setChartOfAccountsData(res.data?.data || [])
+      setChartOfAccountsData(normalizeChartOfAccountsTree(res.data?.data || []))
     } finally {
       setLoading(false)
     }
