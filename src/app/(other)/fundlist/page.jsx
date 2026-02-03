@@ -156,8 +156,67 @@ const FundListPage = () => {
                   count: perms.length,
                   permissions: perms,
                 })
+                
+                // Log all module keys to see what's available (with case)
+                const moduleKeys = perms.map(p => p?.module_key || p?.moduleKey || p?.module).filter(Boolean)
+                console.log('📋 Fund page - Available module keys (with case):', moduleKeys)
+                console.log('📋 Fund page - Available module keys (lowercase):', moduleKeys.map(k => k?.toLowerCase()))
+                
+                // Log first few permissions to see structure
+                if (perms.length > 0) {
+                  console.log('📦 Fund page - First 3 permissions structure:', perms.slice(0, 3).map(p => ({
+                    module_key: p?.module_key || p?.moduleKey || p?.module,
+                    can_add: p?.can_add,
+                    can_view: p?.can_view,
+                    can_edit: p?.can_edit,
+                    can_delete: p?.can_delete,
+                    fund_id: p?.fund_id || p?.fundId,
+                    allKeys: Object.keys(p || {}),
+                  })))
+                }
+                
+                // Check specifically for fund/funds module (case-insensitive)
+                const fundPerms = perms.filter(p => {
+                  const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toString().toLowerCase()
+                  return moduleKey === 'fund' || moduleKey === 'funds'
+                })
+                console.log('🔍 Fund page - Fund module permissions found:', fundPerms.length)
+                if (fundPerms.length > 0) {
+                  console.log('✅ Fund page - Fund permissions details:', fundPerms.map(p => ({
+                    module_key: p?.module_key || p?.moduleKey,
+                    can_add: p?.can_add,
+                    can_view: p?.can_view,
+                    can_edit: p?.can_edit,
+                    can_delete: p?.can_delete,
+                    fund_id: p?.fund_id || p?.fundId,
+                  })))
+                }
+                
+                // If no fund module found, check role structure for organization-level permissions
+                if (fundPerms.length === 0) {
+                  console.log('⚠️ Fund page - No fund module found in permissions. Checking role structure:', {
+                    role: userRole,
+                    roleKeys: Object.keys(userRole || {}),
+                    hasOrgPermissions: !!userRole?.organization_permissions,
+                    hasOrgLevel: !!userRole?.org_level,
+                  })
+                  
+                  // Check for organization-level permissions (permissions without fund_id)
+                  const orgLevelPerms = perms.filter(p => {
+                    const hasNoFundId = !p?.fund_id && !p?.fundId
+                    const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toString().toLowerCase()
+                    return hasNoFundId && (moduleKey === 'fund' || moduleKey === 'funds')
+                  })
+                  console.log('🔍 Fund page - Organization-level fund permissions:', orgLevelPerms.length, orgLevelPerms)
+                }
               } else {
                 console.warn('⚠️ Fund page - User role found but no permissions:', userRole)
+                console.log('🔍 Fund page - Full role structure:', {
+                  role: userRole,
+                  roleKeys: Object.keys(userRole || {}),
+                  hasPermissions: !!userRole?.permissions,
+                  permissionsType: typeof userRole?.permissions,
+                })
               }
             } catch (permError) {
               console.error('❌ Fund page - Error fetching permissions:', permError)
@@ -195,7 +254,27 @@ const FundListPage = () => {
   }, [])
 
   // Check if user has can_add permission for fund/funds module
-  const canAdd = canModuleAction(permissions, ['fund', 'funds'], 'can_add')
+  // Also check if permission might be at organization level (fund_id is null/undefined)
+  const canAdd = canModuleAction(permissions, ['fund', 'funds'], 'can_add', null) || 
+                 canModuleAction(permissions, ['fund', 'funds'], 'can_add')
+  
+  // Log permission check for debugging
+  if (permissions.length > 0) {
+    const fundPerms = permissions.filter(p => {
+      const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toString().toLowerCase()
+      return moduleKey === 'fund' || moduleKey === 'funds'
+    })
+    console.log('🔍 Fund page - Permission check result:', {
+      canAdd,
+      totalPermissions: permissions.length,
+      fundPermissions: fundPerms.length,
+      fundPermsDetails: fundPerms.map(p => ({
+        module_key: p?.module_key || p?.moduleKey,
+        can_add: p?.can_add,
+        fund_id: p?.fund_id || p?.fundId,
+      })),
+    })
+  }
 
   // Logout handler
   const handleLogout = async () => {
