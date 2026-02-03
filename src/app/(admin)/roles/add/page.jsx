@@ -18,7 +18,6 @@ import {
   Button,
   Spinner,
   Alert,
-  Collapse,
 } from 'react-bootstrap'
 import PageTitle from '@/components/PageTitle'
 import api from '@/lib/api/axios'
@@ -45,7 +44,6 @@ const AddRolePage = () => {
   const [loadingFunds, setLoadingFunds] = useState(false)
   const [loadingModules, setLoadingModules] = useState(true)
   const [error, setError] = useState('')
-  const [expandedModules, setExpandedModules] = useState({}) // Track expanded/collapsed state for each fund's module groups
 
   // Form state - matching guide structure
   const [formData, setFormData] = useState({
@@ -449,81 +447,6 @@ const AddRolePage = () => {
     })
   }
 
-  // Categorize modules into groups
-  const categorizeModules = (modulesList) => {
-    const group1 = [] // Configuration, Trade, Valuation, Reports
-    const group2 = [] // General Ledger, Manual Journal, Journal, Chart of Accounts, Reconciliation, Bookclosure
-    
-    modulesList.forEach(module => {
-      const moduleKey = (module.module_key || module.key || '').toLowerCase().trim()
-      const moduleName = (module.module_name || module.name || '').toLowerCase().trim()
-      
-      // Normalize the key/name for comparison
-      const normalizedKey = moduleKey.replace(/[_\s-]/g, '')
-      const normalizedName = moduleName.replace(/[_\s-]/g, '')
-      
-      // Group 2 keywords (check first to avoid conflicts)
-      const group2Patterns = [
-        'generalledger', 'general ledger', 'general_ledger',
-        'manualjournal', 'manual journal', 'manual_journal',
-        'journal', 'journals', // but not if it's part of "manual journal"
-        'chartofaccounts', 'chart of accounts', 'chart_of_accounts',
-        'reconciliation',
-        'bookclosure', 'book closure', 'book_closure'
-      ]
-      
-      // Group 1 keywords
-      const group1Patterns = [
-        'configuration', 'config',
-        'trade', 'trades',
-        'valuation',
-        'reports', 'report'
-      ]
-      
-      // Check if module belongs to group 2 (check first)
-      const isGroup2 = group2Patterns.some(pattern => {
-        const normalizedPattern = pattern.replace(/[_\s-]/g, '')
-        return normalizedKey === normalizedPattern || 
-               normalizedName === normalizedPattern ||
-               normalizedKey.includes(normalizedPattern) ||
-               normalizedName.includes(normalizedPattern)
-      })
-      
-      // Check if module belongs to group 1
-      const isGroup1 = !isGroup2 && group1Patterns.some(pattern => {
-        const normalizedPattern = pattern.replace(/[_\s-]/g, '')
-        return normalizedKey === normalizedPattern || 
-               normalizedName === normalizedPattern ||
-               normalizedKey.includes(normalizedPattern) ||
-               normalizedName.includes(normalizedPattern)
-      })
-      
-      if (isGroup2) {
-        group2.push(module)
-      } else if (isGroup1) {
-        group1.push(module)
-      } else {
-        // If module doesn't match any group, add to group 1 by default
-        group1.push(module)
-      }
-    })
-    
-    return { group1, group2 }
-  }
-
-  // Toggle module group collapse state
-  const toggleModuleGroup = (fundId, groupKey) => {
-    setExpandedModules(prev => ({
-      ...prev,
-      [`${fundId}-${groupKey}`]: !prev[`${fundId}-${groupKey}`]
-    }))
-  }
-
-  // Check if module group is expanded
-  const isModuleGroupExpanded = (fundId, groupKey) => {
-    return expandedModules[`${fundId}-${groupKey}`] !== false // Default to expanded (true)
-  }
-
   return (
     <>
       <PageTitle title="Add Role" subName="Admin" />
@@ -773,137 +696,48 @@ const AddRolePage = () => {
                                 )}
                               </div>
                             </div>
-                            <div className="mt-3">
-                              {(() => {
-                                const { group1, group2 } = categorizeModules(modules)
-                                
-                                return (
-                                  <>
-                                    {/* Module Group 1: Configuration, Trade, Valuation, Reports */}
-                                    {group1.length > 0 && (
-                                      <Card className="mb-3">
-                                        <CardHeader 
-                                          onClick={() => toggleModuleGroup(fundId, 'group1')}
-                                          style={{ cursor: 'pointer', userSelect: 'none' }}
-                                        >
-                                          <div className="d-flex justify-content-between align-items-center">
-                                            <CardTitle as="h5" className="mb-0">
-                                              Configuration, Trade, Valuation, Reports
-                                            </CardTitle>
-                                            <span>
-                                              {isModuleGroupExpanded(fundId, 'group1') ? '▼' : '▶'}
-                                            </span>
-                                          </div>
-                                        </CardHeader>
-                                        <Collapse in={isModuleGroupExpanded(fundId, 'group1')}>
-                                          <CardBody>
-                                            <div className="table-responsive">
-                                              <table className="table table-bordered">
-                                                <thead>
-                                                  <tr>
-                                                    <th>Module</th>
-                                                    {PERMISSION_TYPES.map(perm => (
-                                                      <th key={perm.key} className="text-center">
-                                                        {perm.label}
-                                                      </th>
-                                                    ))}
-                                                  </tr>
-                                                </thead>
-                                                <tbody>
-                                                  {group1.map((module) => {
-                                                    const moduleKey = module.module_key || module.key
-                                                    const moduleName = module.module_name || module.name || moduleKey
-                                                    const perm = formData.permissions[fundId]?.[moduleKey] || {}
-                                                    
-                                                    return (
-                                                      <tr key={module.module_id || module.id}>
-                                                        <td className="fw-semibold">{moduleName}</td>
-                                                        {PERMISSION_TYPES.map((permissionType) => (
-                                                          <td key={permissionType.key} className="text-center">
-                                                            <FormCheck
-                                                              type="checkbox"
-                                                              checked={perm[permissionType.key] || false}
-                                                              onChange={(e) =>
-                                                                handlePermissionChange(fundId, moduleKey, permissionType.key, e.target.checked)
-                                                              }
-                                                            />
-                                                          </td>
-                                                        ))}
-                                                      </tr>
-                                                    )
-                                                  })}
-                                                </tbody>
-                                              </table>
-                                            </div>
-                                          </CardBody>
-                                        </Collapse>
-                                      </Card>
-                                    )}
-
-                                    {/* Module Group 2: General Ledger, Manual Journal, Journal, Chart of Accounts, Reconciliation, Bookclosure */}
-                                    {group2.length > 0 && (
-                                      <Card className="mb-3">
-                                        <CardHeader 
-                                          onClick={() => toggleModuleGroup(fundId, 'group2')}
-                                          style={{ cursor: 'pointer', userSelect: 'none' }}
-                                        >
-                                          <div className="d-flex justify-content-between align-items-center">
-                                            <CardTitle as="h5" className="mb-0">
-                                              General Ledger, Manual Journal, Journal, Chart of Accounts, Reconciliation, Bookclosure
-                                            </CardTitle>
-                                            <span>
-                                              {isModuleGroupExpanded(fundId, 'group2') ? '▼' : '▶'}
-                                            </span>
-                                          </div>
-                                        </CardHeader>
-                                        <Collapse in={isModuleGroupExpanded(fundId, 'group2')}>
-                                          <CardBody>
-                                            <div className="table-responsive">
-                                              <table className="table table-bordered">
-                                                <thead>
-                                                  <tr>
-                                                    <th>Module</th>
-                                                    {PERMISSION_TYPES.map(perm => (
-                                                      <th key={perm.key} className="text-center">
-                                                        {perm.label}
-                                                      </th>
-                                                    ))}
-                                                  </tr>
-                                                </thead>
-                                                <tbody>
-                                                  {group2.map((module) => {
-                                                    const moduleKey = module.module_key || module.key
-                                                    const moduleName = module.module_name || module.name || moduleKey
-                                                    const perm = formData.permissions[fundId]?.[moduleKey] || {}
-                                                    
-                                                    return (
-                                                      <tr key={module.module_id || module.id}>
-                                                        <td className="fw-semibold">{moduleName}</td>
-                                                        {PERMISSION_TYPES.map((permissionType) => (
-                                                          <td key={permissionType.key} className="text-center">
-                                                            <FormCheck
-                                                              type="checkbox"
-                                                              checked={perm[permissionType.key] || false}
-                                                              onChange={(e) =>
-                                                                handlePermissionChange(fundId, moduleKey, permissionType.key, e.target.checked)
-                                                              }
-                                                            />
-                                                          </td>
-                                                        ))}
-                                                      </tr>
-                                                    )
-                                                  })}
-                                                </tbody>
-                                              </table>
-                                            </div>
-                                          </CardBody>
-                                        </Collapse>
-                                      </Card>
-                                    )}
-                                  </>
-                                )
-                              })()}
-                            </div>
+                            <Card className="mt-2">
+                              <CardBody>
+                                <div className="table-responsive">
+                                  <table className="table table-bordered">
+                                    <thead>
+                                      <tr>
+                                        <th>Module</th>
+                                        {PERMISSION_TYPES.map(perm => (
+                                          <th key={perm.key} className="text-center">
+                                            {perm.label}
+                                          </th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {modules.map((module) => {
+                                        const moduleKey = module.module_key || module.key
+                                        const moduleName = module.module_name || module.name || moduleKey
+                                        const perm = formData.permissions[fundId]?.[moduleKey] || {}
+                                        
+                                        return (
+                                          <tr key={module.module_id || module.id}>
+                                            <td className="fw-semibold">{moduleName}</td>
+                                            {PERMISSION_TYPES.map((permissionType) => (
+                                              <td key={permissionType.key} className="text-center">
+                                                <FormCheck
+                                                  type="checkbox"
+                                                  checked={perm[permissionType.key] || false}
+                                                  onChange={(e) =>
+                                                    handlePermissionChange(fundId, moduleKey, permissionType.key, e.target.checked)
+                                                  }
+                                                />
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </CardBody>
+                            </Card>
                           </FormGroup>
                         </Col>
                       </Row>
