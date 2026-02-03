@@ -1737,14 +1737,13 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
       const token = Cookies.get('dashboardToken')
       const decoded = jwtDecode(token)
 
-      // Encrypt symbol columns for API (DB stores BYTEA / encrypted) — same pattern as broker_name
       const payload = {
         ...form,
         fund_id: decoded.fund_id,
-        symbol_id: form.symbol_id ? encryptPayload(form.symbol_id) : form.symbol_id,
-        symbol_name: form.symbol_name ? encryptPayload(form.symbol_name) : form.symbol_name,
-        isin: form.isin?.trim() ? encryptPayload(form.isin.trim()) : null,
-        cusip: form.cusip?.trim() ? encryptPayload(form.cusip.trim()) : null,
+        symbol_id: form.symbol_id || null,
+        symbol_name: form.symbol_name || null,
+        isin: form.isin?.trim() || null,
+        cusip: form.cusip?.trim() || null,
       }
 
       try {
