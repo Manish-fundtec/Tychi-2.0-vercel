@@ -216,10 +216,8 @@ const AddRolePage = () => {
       }
       
       if (checked) {
-        // Filter out configuration sub-modules first
-        const filteredModules = filterConfigurationSubModules(modules)
-        // Select all filtered modules with all permissions
-        filteredModules.forEach(module => {
+        // Select all modules with all permissions
+        modules.forEach(module => {
           const moduleKey = module.module_key || module.key
           newPermissions[fundId][moduleKey] = {
             can_view: true,
@@ -448,58 +446,6 @@ const AddRolePage = () => {
     return funds.filter(fund => {
       const fundId = fund.fund_id || fund.id
       return formData.funds.includes(fundId)
-    })
-  }
-
-  // Filter out configuration sub-modules (these are tabs within configuration)
-  const filterConfigurationSubModules = (modulesList) => {
-    const excludedModules = [
-      'dashboard', 'dashboards',
-      'fund', 'funds',
-      'bank', 'banks',
-      'basic',
-      'broker', 'brokers', 'brokerage',
-      'mapping', 'mappings',
-      'symbol', 'symbols',
-      'assettype', 'asset type', 'asset_type',
-      'exchange', 'exchanges'
-    ]
-    
-    // Also exclude configuration_ prefixed sub-modules
-    const excludedConfigPrefixes = [
-      'configuration_basic', 'configurationbasic',
-      'configuration_brokerage', 'configurationbrokerage',
-      'configuration_bank', 'configurationbank',
-      'configuration_exchange', 'configurationexchange',
-      'configuration_asset_type', 'configurationassettype',
-      'configuration_symbol', 'configurationsymbol',
-      'configuration_mapping', 'configurationmapping'
-    ]
-    
-    return modulesList.filter(module => {
-      const moduleKey = (module.module_key || module.key || '').toLowerCase().trim()
-      const moduleName = (module.module_name || module.name || '').toLowerCase().trim()
-      
-      // Normalize the key/name for comparison
-      const normalizedKey = moduleKey.replace(/[_\s-]/g, '')
-      const normalizedName = moduleName.replace(/[_\s-]/g, '')
-      
-      // Check if module should be excluded (standalone or with configuration_ prefix)
-      const shouldExclude = excludedModules.some(excluded => {
-        const normalizedExcluded = excluded.replace(/[_\s-]/g, '')
-        return normalizedKey === normalizedExcluded || 
-               normalizedName === normalizedExcluded ||
-               normalizedKey.includes(normalizedExcluded) ||
-               normalizedName.includes(normalizedExcluded)
-      }) || excludedConfigPrefixes.some(excluded => {
-        const normalizedExcluded = excluded.replace(/[_\s-]/g, '')
-        return normalizedKey === normalizedExcluded || 
-               normalizedName === normalizedExcluded ||
-               normalizedKey.includes(normalizedExcluded) ||
-               normalizedName.includes(normalizedExcluded)
-      })
-      
-      return !shouldExclude
     })
   }
 
@@ -807,14 +753,11 @@ const AddRolePage = () => {
                                   type="checkbox"
                                   id={`select-all-modules-${fundId}`}
                                   label="Select All Modules"
-                                  checked={(() => {
-                                    const filteredModules = filterConfigurationSubModules(modules)
-                                    return filteredModules.length > 0 && filteredModules.every(module => {
-                                      const moduleKey = module.module_key || module.key
-                                      const perm = formData.permissions[fundId]?.[moduleKey]
-                                      return perm && perm.can_view && perm.can_add && perm.can_edit && perm.can_delete
-                                    })
-                                  })()}
+                                  checked={modules.length > 0 && modules.every(module => {
+                                    const moduleKey = module.module_key || module.key
+                                    const perm = formData.permissions[fundId]?.[moduleKey]
+                                    return perm && perm.can_view && perm.can_add && perm.can_edit && perm.can_delete
+                                  })}
                                   onChange={(e) => handleSelectAllModules(fundId, e.target.checked)}
                                   className="fw-semibold"
                                 />
@@ -832,9 +775,7 @@ const AddRolePage = () => {
                             </div>
                             <div className="mt-3">
                               {(() => {
-                                // Filter out configuration sub-modules first
-                                const filteredModules = filterConfigurationSubModules(modules)
-                                const { group1, group2 } = categorizeModules(filteredModules)
+                                const { group1, group2 } = categorizeModules(modules)
                                 
                                 return (
                                   <>
