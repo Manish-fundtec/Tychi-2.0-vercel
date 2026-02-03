@@ -327,7 +327,7 @@ const AddRolePage = () => {
         if (fundModulePermissions.can_add || fundModulePermissions.can_edit || fundModulePermissions.can_delete) {
           permissionsArray.push({
             fund_id: fundId,
-            module_key: 'fund', // Use 'fund' as module_key for fund module
+            module_key: 'FUND', // Use 'FUND' (uppercase) to match database module_key
             can_view: true, // Always true since fundlist is always visible
             can_add: fundModulePermissions.can_add || false,
             can_edit: fundModulePermissions.can_edit || false,
