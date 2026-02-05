@@ -54,89 +54,74 @@ const FundListPage = () => {
           }
         }
 
-        if (!userAuthToken) {
-          console.warn('⚠️ Fund page - No userAuthToken found in cookies')
-          if (!ignore) {
-            setPermissions([])
-            setLoadingPermissions(false)
-          }
-          return
-        }
-
-        console.log('✅ Fund page - Found userAuthToken, length:', userAuthToken.length)
-
-        // Decode userAuthToken to get user_id
-        let tokenData = null
-        try {
-          tokenData = jwtDecode(userAuthToken)
-          console.log('🔍 Fund page - Decoded userAuthToken:', {
-            user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.username || tokenData?.sub,
-            username: tokenData?.username,
-            sub: tokenData?.sub,
-            allKeys: Object.keys(tokenData || {}),
-          })
-        } catch (decodeError) {
-          console.error('❌ Fund page - Error decoding userAuthToken:', decodeError)
-          if (!ignore) {
-            setPermissions([])
-            setLoadingPermissions(false)
-          }
-          return
-        }
-
-        if (!tokenData) {
-          if (!ignore) {
-            setPermissions([])
-            setLoadingPermissions(false)
-          }
-          return
-        }
-
-        // Extract user_id from token - check username and sub fields as well
-        // In Cognito tokens, username or sub often contains the user identifier
-        const userId = tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.username || tokenData?.sub
-
-        if (!userId) {
-          console.warn('⚠️ Fund page - userAuthToken missing user_id:', {
-            tokenData,
-          })
-          if (!ignore) {
-            setPermissions([])
-            setLoadingPermissions(false)
-          }
-          return
-        }
-
         console.log('📡 Fund page - Fetching user data and permissions')
 
         let perms = []
+        let roleId = null
+        let orgId = null
         
-        // Check if permissions are in token first
-        if (tokenData?.permissions && Array.isArray(tokenData.permissions)) {
-          perms = tokenData.permissions
-          console.log('✅ Fund page - Using permissions from token:', perms.length)
-        } else {
-          // Step 1: Use /api/v1/users/me to get current user's role_id and org_id
-          let roleId = null
-          let orgId = null
+        // Step 1: Use /api/v1/me to get current user's role_id and org_id
+        // This endpoint uses authentication from axios interceptor, so we don't need userAuthToken cookie
+        try {
+          console.log('📡 Fund page - Fetching current user data from /api/v1/me')
+          const userResponse = await api.get('/api/v1/me')
+          const userData = userResponse.data?.data || userResponse.data
+          console.log('✅ Fund page - Fetched user data:', userData)
           
-          try {
-            console.log('📡 Fund page - Fetching current user data from /api/v1/users/me')
-            const userResponse = await api.get('/api/v1/me')
-            const userData = userResponse.data?.data || userResponse.data
-            console.log('✅ Fund page - Fetched user data:', userData)
-            
-            roleId = userData?.role_id || userData?.roleId || userData?.role?.role_id || userData?.role?.id
-            orgId = userData?.org_id || userData?.organization_id || userData?.organization?.org_id
-            
-            console.log('✅ Fund page - Extracted role_id and org_id:', { roleId, orgId })
-          } catch (userError) {
-            console.error('❌ Fund page - Error fetching user data from /api/v1/users/me:', userError)
-            console.error('Error details:', userError.response?.data || userError.message)
+          roleId = userData?.role_id || userData?.roleId || userData?.role?.role_id || userData?.role?.id
+          orgId = userData?.org_id || userData?.organization_id || userData?.organization?.org_id
+          
+          console.log('✅ Fund page - Extracted role_id and org_id:', { roleId, orgId })
+          
+          // Check if permissions are in userData
+          if (userData?.permissions && Array.isArray(userData.permissions)) {
+            perms = userData.permissions
+            console.log('✅ Fund page - Using permissions from user data:', perms.length)
+          }
+        } catch (userError) {
+          console.error('❌ Fund page - Error fetching user data from /api/v1/me:', userError)
+          console.error('Error details:', userError.response?.data || userError.message)
+          
+          // If /api/v1/me fails, try to get token from cookies as fallback
+          if (!userAuthToken) {
+            console.warn('⚠️ Fund page - No userAuthToken found in cookies and /api/v1/me failed')
+            if (!ignore) {
+              setPermissions([])
+              setLoadingPermissions(false)
+            }
+            return
           }
 
-          // Step 2: Fetch permissions using role_id and org_id
-          if (roleId && orgId) {
+          console.log('✅ Fund page - Found userAuthToken, length:', userAuthToken.length)
+
+          // Decode userAuthToken to get user_id
+          let tokenData = null
+          try {
+            tokenData = jwtDecode(userAuthToken)
+            console.log('🔍 Fund page - Decoded userAuthToken:', {
+              user_id: tokenData?.user_id || tokenData?.id || tokenData?.userId || tokenData?.username || tokenData?.sub,
+              username: tokenData?.username,
+              sub: tokenData?.sub,
+              allKeys: Object.keys(tokenData || {}),
+            })
+            
+            // Check if permissions are in token
+            if (tokenData?.permissions && Array.isArray(tokenData.permissions)) {
+              perms = tokenData.permissions
+              console.log('✅ Fund page - Using permissions from token:', perms.length)
+            }
+          } catch (decodeError) {
+            console.error('❌ Fund page - Error decoding userAuthToken:', decodeError)
+            if (!ignore) {
+              setPermissions([])
+              setLoadingPermissions(false)
+            }
+            return
+          }
+        }
+        
+        // Step 2: If we don't have permissions yet, fetch them using role_id and org_id
+        if (perms.length === 0 && roleId && orgId) {
             try {
               console.log('📡 Fund page - Fetching role permissions for roleId:', roleId, 'orgId:', orgId)
               const rolesResponse = await api.get(`/api/v1/roles/org/${orgId}/with-permissions`)
@@ -244,12 +229,11 @@ const FundListPage = () => {
               console.error('Error details:', permError?.response?.data || permError?.message)
               perms = []
             }
-          } else {
-            console.warn('⚠️ Fund page - Cannot fetch permissions: missing roleId or orgId', {
-              roleId,
-              orgId,
-            })
-          }
+        } else {
+          console.warn('⚠️ Fund page - Cannot fetch permissions: missing roleId or orgId', {
+            roleId,
+            orgId,
+          })
         }
 
         // Set permissions array
