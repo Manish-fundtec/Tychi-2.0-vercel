@@ -275,25 +275,40 @@ const FundListPage = () => {
   }, [])
 
   // Check if user has can_add permission for fund/funds module
-  // Also check if permission might be at organization level (fund_id is null/undefined)
-  const canAdd = canModuleAction(permissions, ['fund', 'funds'], 'can_add', null) || 
-                 canModuleAction(permissions, ['fund', 'funds'], 'can_add')
+  // Check with both lowercase and uppercase (FUND) to handle all cases
+  const canAdd = canModuleAction(permissions, ['fund', 'funds', 'FUND', 'FUNDS'], 'can_add', null) || 
+                 canModuleAction(permissions, ['fund', 'funds', 'FUND', 'FUNDS'], 'can_add')
   
   // Log permission check for debugging
+  console.log('🔍 Fund page - Permission check result:', {
+    canAdd,
+    loadingPermissions,
+    totalPermissions: permissions.length,
+    permissions: permissions,
+    willShowAddButton: !loadingPermissions && canAdd,
+  })
+  
   if (permissions.length > 0) {
     const fundPerms = permissions.filter(p => {
       const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toString().toLowerCase()
       return moduleKey === 'fund' || moduleKey === 'funds'
     })
-    console.log('🔍 Fund page - Permission check result:', {
-      canAdd,
-      totalPermissions: permissions.length,
+    console.log('🔍 Fund page - Fund permissions details:', {
       fundPermissions: fundPerms.length,
       fundPermsDetails: fundPerms.map(p => ({
         module_key: p?.module_key || p?.moduleKey,
         can_add: p?.can_add,
+        can_view: p?.can_view,
+        can_edit: p?.can_edit,
+        can_delete: p?.can_delete,
         fund_id: p?.fund_id || p?.fundId,
       })),
+    })
+  } else {
+    console.warn('⚠️ Fund page - No permissions found!', {
+      permissionsArray: permissions,
+      permissionsLength: permissions.length,
+      loadingPermissions,
     })
   }
 
