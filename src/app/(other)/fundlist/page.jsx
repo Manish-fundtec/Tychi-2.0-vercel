@@ -123,24 +123,60 @@ const FundListPage = () => {
         // Step 2: If we don't have permissions yet, fetch them using role_id and org_id
         if (perms.length === 0 && roleId && orgId) {
             try {
-              console.log('📡 Fund page - Fetching role permissions for roleId:', roleId, 'orgId:', orgId)
-              const rolesResponse = await api.get(`/api/v1/roles/org/${orgId}/with-permissions`)
-              const roles = rolesResponse.data?.data || rolesResponse.data || []
+              // Try /api/v1/users/me/permissions first (if available)
+              try {
+                console.log('📡 Fund page - Trying /api/v1/users/me/permissions endpoint')
+                const mePermsResponse = await api.get('/api/v1/users/me/permissions')
+                const mePermsData = mePermsResponse.data?.data || mePermsResponse.data
+                console.log('✅ Fund page - Response from /api/v1/users/me/permissions:', mePermsData)
+                
+                // Check if permissions are in modules format or array format
+                if (mePermsData?.modules) {
+                  // If it's in modules format, extract permissions
+                  const modules = mePermsData.modules
+                  if (modules.FUND || modules.fund) {
+                    const fundModule = modules.FUND || modules.fund
+                    if (fundModule.can_add) {
+                      // Create a permission object for FUND module
+                      perms.push({
+                        module_key: 'FUND',
+                        can_add: fundModule.can_add,
+                        can_view: fundModule.can_view || true,
+                        can_edit: fundModule.can_edit || false,
+                        can_delete: fundModule.can_delete || false,
+                        fund_id: null, // Organization-level
+                      })
+                      console.log('✅ Fund page - Added FUND permission from /api/v1/users/me/permissions')
+                    }
+                  }
+                } else if (Array.isArray(mePermsData)) {
+                  perms = mePermsData
+                  console.log('✅ Fund page - Got permissions array from /api/v1/users/me/permissions:', perms.length)
+                }
+              } catch (mePermsError) {
+                console.log('⚠️ Fund page - /api/v1/users/me/permissions not available, trying roles endpoint')
+              }
               
-              // Find the user's role
-              const userRole = Array.isArray(roles) 
-                ? roles.find(r => {
-                    const rId = r.role_id || r.id
-                    return rId == roleId || String(rId) === String(roleId)
-                  })
-                : null
+              // If still no permissions, try roles endpoint
+              if (perms.length === 0) {
+                console.log('📡 Fund page - Fetching role permissions for roleId:', roleId, 'orgId:', orgId)
+                const rolesResponse = await api.get(`/api/v1/roles/org/${orgId}/with-permissions`)
+                const roles = rolesResponse.data?.data || rolesResponse.data || []
+                
+                // Find the user's role
+                const userRole = Array.isArray(roles) 
+                  ? roles.find(r => {
+                      const rId = r.role_id || r.id
+                      return rId == roleId || String(rId) === String(roleId)
+                    })
+                  : null
 
-              if (userRole && userRole.permissions) {
-                perms = Array.isArray(userRole.permissions) ? userRole.permissions : []
-                console.log('✅ Fund page - Fetched permissions from API:', {
-                  count: perms.length,
-                  permissions: perms,
-                })
+                if (userRole && userRole.permissions) {
+                  perms = Array.isArray(userRole.permissions) ? userRole.permissions : []
+                  console.log('✅ Fund page - Fetched permissions from roles API:', {
+                    count: perms.length,
+                    permissions: perms,
+                  })
                 
                 // Log the full role response to see structure
                 console.log('🔍 Fund page - Full role response structure:', {
@@ -150,6 +186,17 @@ const FundListPage = () => {
                   permissionsType: typeof userRole.permissions,
                   permissionsIsArray: Array.isArray(userRole.permissions),
                   roleKeys: Object.keys(userRole || {}),
+                  fullRoleObject: userRole, // Log entire role object to see all fields
+                })
+                
+                // Check if permissions might be in a different field or structure
+                console.log('🔍 Fund page - Checking for permissions in different fields:', {
+                  hasPermissions: !!userRole.permissions,
+                  hasRolePermissions: !!userRole.role_permissions,
+                  hasPermissionList: !!userRole.permission_list,
+                  hasPerms: !!userRole.perms,
+                  permissionsValue: userRole.permissions,
+                  allRoleFields: Object.keys(userRole || {}),
                 })
                 
                 // Log all module keys to see what's available (with case)
@@ -215,14 +262,15 @@ const FundListPage = () => {
                   })
                   console.log('🔍 Fund page - Organization-level fund permissions:', orgLevelPerms.length, orgLevelPerms)
                 }
-              } else {
-                console.warn('⚠️ Fund page - User role found but no permissions:', userRole)
-                console.log('🔍 Fund page - Full role structure:', {
-                  role: userRole,
-                  roleKeys: Object.keys(userRole || {}),
-                  hasPermissions: !!userRole?.permissions,
-                  permissionsType: typeof userRole?.permissions,
-                })
+                } else {
+                  console.warn('⚠️ Fund page - User role found but no permissions:', userRole)
+                  console.log('🔍 Fund page - Full role structure:', {
+                    role: userRole,
+                    roleKeys: Object.keys(userRole || {}),
+                    hasPermissions: !!userRole?.permissions,
+                    permissionsType: typeof userRole?.permissions,
+                  })
+                }
               }
             } catch (permError) {
               console.error('❌ Fund page - Error fetching permissions:', permError)
