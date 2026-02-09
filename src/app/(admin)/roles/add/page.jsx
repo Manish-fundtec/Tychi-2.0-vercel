@@ -320,11 +320,12 @@ const AddRolePage = () => {
     // Build permissions array
     const permissionsArray = []
     
-    // Add fund module permissions (apply to all funds or use null/0 for global)
-    // Since permissions require fund_id, we'll apply fund module permissions to all selected funds
-    if (funds.length > 0) {
-      funds.forEach(fundId => {
-        if (fundModulePermissions.can_add || fundModulePermissions.can_edit || fundModulePermissions.can_delete) {
+    // Add fund module permissions (apply to all funds or use null for organization-level)
+    // If funds are selected, apply to each fund. If no funds, create organization-level permission (fund_id: null)
+    if (fundModulePermissions.can_add || fundModulePermissions.can_edit || fundModulePermissions.can_delete) {
+      if (funds.length > 0) {
+        // Apply to all selected funds
+        funds.forEach(fundId => {
           permissionsArray.push({
             fund_id: fundId,
             module_key: 'FUND', // Use 'FUND' (uppercase) to match database module_key
@@ -333,8 +334,18 @@ const AddRolePage = () => {
             can_edit: fundModulePermissions.can_edit || false,
             can_delete: fundModulePermissions.can_delete || false
           })
-        }
-      })
+        })
+      } else {
+        // No funds in organization - create organization-level permission (fund_id: null)
+        permissionsArray.push({
+          fund_id: null, // Organization-level permission (applies to all funds in the org)
+          module_key: 'FUND', // Use 'FUND' (uppercase) to match database module_key
+          can_view: true, // Always true since fundlist is always visible
+          can_add: fundModulePermissions.can_add || false,
+          can_edit: fundModulePermissions.can_edit || false,
+          can_delete: fundModulePermissions.can_delete || false
+        })
+      }
     }
     
     // Add other module permissions

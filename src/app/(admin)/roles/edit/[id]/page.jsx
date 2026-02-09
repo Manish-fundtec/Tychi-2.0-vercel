@@ -133,6 +133,7 @@ const EditRolePage = () => {
           // Check if this is a fund module permission
           if (moduleKey === 'fund' || moduleKey === 'funds') {
             // Extract fund module permissions (use the first occurrence or combine all)
+            // Handle both fund-specific permissions and organization-level permissions (fund_id: null)
             if (perm.can_add === true || perm.can_add === 1 || perm.can_add === '1' || perm.can_add === 'true') {
               fundModulePerms.can_add = true
             }
@@ -143,6 +144,14 @@ const EditRolePage = () => {
               fundModulePerms.can_delete = true
             }
             // Skip adding fund module to regular permissions - we handle it separately
+            return
+          }
+          
+          // Handle organization-level permissions (fund_id is null/undefined) for other modules
+          // If fund_id is null, this is an organization-level permission
+          if (!fundId || fundId === 'null' || fundId === 'undefined') {
+            // This is an organization-level permission, but we only handle FUND module separately above
+            // Other modules with null fund_id can be added to permissionsObj if needed
             return
           }
           
@@ -445,10 +454,12 @@ const EditRolePage = () => {
     // Build permissions array
     const permissionsArray = []
     
-    // Add fund module permissions (apply to all funds)
-    if (funds.length > 0) {
-      funds.forEach(fundId => {
-        if (fundModulePermissions.can_add || fundModulePermissions.can_edit || fundModulePermissions.can_delete) {
+    // Add fund module permissions (apply to all funds or use null for organization-level)
+    // If funds are selected, apply to each fund. If no funds, create organization-level permission (fund_id: null)
+    if (fundModulePermissions.can_add || fundModulePermissions.can_edit || fundModulePermissions.can_delete) {
+      if (funds.length > 0) {
+        // Apply to all selected funds
+        funds.forEach(fundId => {
           permissionsArray.push({
             fund_id: fundId,
             module_key: 'FUND', // Use 'FUND' (uppercase) to match database module_key
@@ -457,8 +468,18 @@ const EditRolePage = () => {
             can_edit: fundModulePermissions.can_edit || false,
             can_delete: fundModulePermissions.can_delete || false
           })
-        }
-      })
+        })
+      } else {
+        // No funds in organization - create organization-level permission (fund_id: null)
+        permissionsArray.push({
+          fund_id: null, // Organization-level permission (applies to all funds in the org)
+          module_key: 'FUND', // Use 'FUND' (uppercase) to match database module_key
+          can_view: true, // Always true since fundlist is always visible
+          can_add: fundModulePermissions.can_add || false,
+          can_edit: fundModulePermissions.can_edit || false,
+          can_delete: fundModulePermissions.can_delete || false
+        })
+      }
     }
     
     // Add other module permissions
@@ -502,7 +523,9 @@ const EditRolePage = () => {
       return
     }
 
-    if (!formData.funds || formData.funds.length === 0) {
+    // Only validate fund selection if funds are available for the organization
+    // If no funds are available, allow form submission without fund selection
+    if (funds.length > 0 && (!formData.funds || formData.funds.length === 0)) {
       setError('Please select at least one fund')
       return
     }

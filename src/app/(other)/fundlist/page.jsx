@@ -131,7 +131,18 @@ const FundListPage = () => {
                 console.log('✅ Fund page - Response from /api/v1/users/me/permissions:', mePermsData)
                 
                 // Check if permissions are in modules format or array format
-                if (mePermsData?.modules) {
+                console.log('🔍 Fund page - Checking /api/v1/me/permissions response structure:', {
+                  hasModules: !!mePermsData?.modules,
+                  modulesKeys: mePermsData?.modules ? Object.keys(mePermsData.modules) : [],
+                  modulesValue: mePermsData?.modules,
+                  hasPermissions: !!mePermsData?.permissions,
+                  permissionsKeys: mePermsData?.permissions ? Object.keys(mePermsData.permissions) : [],
+                  isArray: Array.isArray(mePermsData),
+                  allKeys: Object.keys(mePermsData || {}),
+                  fullResponse: mePermsData,
+                })
+                
+                if (mePermsData?.modules && Object.keys(mePermsData.modules).length > 0) {
                   // If it's in modules format, extract permissions
                   const modules = mePermsData.modules
                   if (modules.FUND || modules.fund) {
@@ -146,12 +157,14 @@ const FundListPage = () => {
                         can_delete: fundModule.can_delete || false,
                         fund_id: null, // Organization-level
                       })
-                      console.log('✅ Fund page - Added FUND permission from /api/v1/users/me/permissions')
+                      console.log('✅ Fund page - Added FUND permission from /api/v1/me/permissions')
                     }
                   }
                 } else if (Array.isArray(mePermsData)) {
                   perms = mePermsData
-                  console.log('✅ Fund page - Got permissions array from /api/v1/users/me/permissions:', perms.length)
+                  console.log('✅ Fund page - Got permissions array from /api/v1/me/permissions:', perms.length)
+                } else {
+                  console.warn('⚠️ Fund page - /api/v1/me/permissions returned empty modules. Response structure:', mePermsData)
                 }
               } catch (mePermsError) {
                 console.log('⚠️ Fund page - /api/v1/users/me/permissions not available, trying roles endpoint')
