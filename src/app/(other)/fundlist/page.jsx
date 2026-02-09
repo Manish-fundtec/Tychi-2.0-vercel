@@ -260,8 +260,18 @@ const FundListPage = () => {
 
   // Check if user has can_add permission for fund/funds module
   // Check with both lowercase and uppercase (FUND) to handle all cases
-  const canAdd = canModuleAction(permissions, ['fund', 'funds', 'FUND', 'FUNDS'], 'can_add', null) || 
-                 canModuleAction(permissions, ['fund', 'funds', 'FUND', 'FUNDS'], 'can_add')
+  // Check organization-level permissions (fund_id is null/undefined) and fund-specific permissions
+  const canAdd = 
+    // Check for organization-level permissions (fund_id is null/undefined)
+    canModuleAction(permissions, ['fund', 'funds', 'FUND', 'FUNDS'], 'can_add', null) ||
+    // Check for any fund-specific permissions
+    canModuleAction(permissions, ['fund', 'funds', 'FUND', 'FUNDS'], 'can_add') ||
+    // Direct check for FUND module with can_add (explicit check)
+    permissions.some(p => {
+      const moduleKey = (p?.module_key || p?.moduleKey || p?.module || '').toString().toUpperCase()
+      const hasCanAdd = p?.can_add === true || p?.can_add === 1 || p?.can_add === '1' || p?.can_add === 'true'
+      return (moduleKey === 'FUND' || moduleKey === 'FUNDS') && hasCanAdd
+    })
   
   // Log permission check for debugging
   console.log('🔍 Fund page - Permission check result:', {
