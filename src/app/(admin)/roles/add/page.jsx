@@ -380,7 +380,9 @@ const AddRolePage = () => {
       return
     }
 
-    if (!formData.funds || formData.funds.length === 0) {
+    // Only validate fund selection if funds are available for the organization
+    // If no funds are available, allow form submission without fund selection
+    if (funds.length > 0 && (!formData.funds || formData.funds.length === 0)) {
       setError('Please select at least one fund')
       return
     }
