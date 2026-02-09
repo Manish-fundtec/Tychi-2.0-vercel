@@ -126,7 +126,7 @@ const FundListPage = () => {
               // Try /api/v1/users/me/permissions first (if available)
               try {
                 console.log('📡 Fund page - Trying /api/v1/users/me/permissions endpoint')
-                const mePermsResponse = await api.get('/api/v1/users/me/permissions')
+                const mePermsResponse = await api.get('/api/v1/me/permissions')
                 const mePermsData = mePermsResponse.data?.data || mePermsResponse.data
                 console.log('✅ Fund page - Response from /api/v1/users/me/permissions:', mePermsData)
                 
