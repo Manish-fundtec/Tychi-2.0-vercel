@@ -98,13 +98,27 @@ export default function TrialBalanceModalGrouped({
     return numPrecision !== null && !isNaN(numPrecision) ? numPrecision : 2;
   }, [fundDetails, dashboard]);
   
+  // Helper function to round number to specified decimal places (fixes variance in last digit for 3,4,5 decimals)
+  const roundToDecimalPlaces = useCallback((num, decimals) => {
+    if (decimals <= 2) {
+      // For 2 or less decimals, no rounding needed (perfect match)
+      return num
+    }
+    // For 3, 4, 5+ decimals, round to avoid floating point variance
+    const factor = Math.pow(10, decimals)
+    return Math.round(num * factor) / factor
+  }, [])
+
   // Format function using dynamic decimal precision
   const fmt = useCallback((v) => {
-    return Number(v || 0).toLocaleString(undefined, { 
+    const num = Number(v || 0)
+    // Round to decimal precision first (fixes variance for 3,4,5 decimals)
+    const rounded = roundToDecimalPlaces(num, decimalPrecision)
+    return rounded.toLocaleString(undefined, { 
       minimumFractionDigits: decimalPrecision, 
       maximumFractionDigits: decimalPrecision 
     });
-  }, [decimalPrecision]);
+  }, [decimalPrecision, roundToDecimalPlaces]);
   const exportHeaders = useMemo(
     () => [
       { key: 'category', label: 'Category' },

@@ -398,6 +398,17 @@ export default function TradesData() {
     return currency?.symbol || ''
   }, [dashboard])
 
+  // Helper function to round number to specified decimal places (fixes variance in last digit for 3,4,5 decimals)
+  const roundToDecimalPlaces = useCallback((num, decimals) => {
+    if (decimals <= 2) {
+      // For 2 or less decimals, no rounding needed (perfect match)
+      return num
+    }
+    // For 3, 4, 5+ decimals, round to avoid floating point variance
+    const factor = Math.pow(10, decimals)
+    return Math.round(num * factor) / factor
+  }, [])
+
   const refreshTrades = useCallback(async () => {
     const currentFundId = fund_id || fundId
     if (!currentFundId) return
@@ -504,7 +515,9 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            // Round to decimal precision first (fixes variance for 3,4,5 decimals)
+            const rounded = roundToDecimalPlaces(num, decimalPrecision)
+            const formatted = rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -519,7 +532,9 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            return num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            // Round to decimal precision first (fixes variance for 3,4,5 decimals)
+            const rounded = roundToDecimalPlaces(num, decimalPrecision)
+            return rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
           },
         }
       }
@@ -536,7 +551,9 @@ export default function TradesData() {
               if (numMatch) {
                 const num = Number(numMatch[0])
                 if (!Number.isNaN(num)) {
-                  const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+                  // Round to decimal precision first (fixes variance for 3,4,5 decimals)
+                  const rounded = roundToDecimalPlaces(num, decimalPrecision)
+                  const formatted = rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
                   return currencySymbol ? `${currencySymbol}${formatted}` : formatted
                 }
               }
@@ -545,7 +562,9 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            // Round to decimal precision first (fixes variance for 3,4,5 decimals)
+            const rounded = roundToDecimalPlaces(num, decimalPrecision)
+            const formatted = rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -560,7 +579,9 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            // Round to decimal precision first (fixes variance for 3,4,5 decimals)
+            const rounded = roundToDecimalPlaces(num, decimalPrecision)
+            const formatted = rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -575,7 +596,9 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            // Round to decimal precision first (fixes variance for 3,4,5 decimals)
+            const rounded = roundToDecimalPlaces(num, decimalPrecision)
+            const formatted = rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -590,7 +613,9 @@ export default function TradesData() {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            // Round to decimal precision first (fixes variance for 3,4,5 decimals)
+            const rounded = roundToDecimalPlaces(num, decimalPrecision)
+            const formatted = rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -734,10 +759,12 @@ export default function TradesData() {
 
   const formatExportValue = useCallback((key, value) => {
     if (typeof value === 'number') {
-      return value.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+      // Round to decimal precision first (fixes variance for 3,4,5 decimals)
+      const rounded = roundToDecimalPlaces(value, decimalPrecision)
+      return rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
     }
     return value ?? ''
-  }, [decimalPrecision])
+  }, [decimalPrecision, roundToDecimalPlaces])
 
   const escapeCsv = (value) => {
     const stringValue = String(value ?? '')
