@@ -158,17 +158,6 @@ const JournalsPage = () => {
     const numPrecision = precision !== null && precision !== undefined ? Number(precision) : null
     return numPrecision !== null && !isNaN(numPrecision) ? numPrecision : 2
   }, [fundDetails, dashboard])
-
-  // Helper function to round number to specified decimal places (fixes variance in last digit for 3,4,5 decimals)
-  const roundToDecimalPlaces = useCallback((num, decimals) => {
-    if (decimals <= 2) {
-      // For 2 or less decimals, no rounding needed (perfect match)
-      return num
-    }
-    // For 3, 4, 5+ decimals, round to avoid floating point variance
-    const factor = Math.pow(10, decimals)
-    return Math.round(num * factor) / factor
-  }, [])
   
   // Get currency symbol from reporting_currency
   const currencySymbol = useMemo(() => {
@@ -201,9 +190,7 @@ const JournalsPage = () => {
             if (value === null || value === undefined || value === '') return '—'
             const num = Number(value)
             if (Number.isNaN(num)) return value
-            // Round to decimal precision first (fixes variance for 3,4,5 decimals)
-            const rounded = roundToDecimalPlaces(num, decimalPrecision)
-            const formatted = rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+            const formatted = num.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
             return currencySymbol ? `${currencySymbol}${formatted}` : formatted
           },
         }
@@ -211,7 +198,7 @@ const JournalsPage = () => {
       
       return col
     })
-  }, [fmt, decimalPrecision, currencySymbol, roundToDecimalPlaces])
+  }, [fmt, decimalPrecision, currencySymbol])
 
   const fetchData = async () => {
     if (!fundId) return;
@@ -257,13 +244,11 @@ const JournalsPage = () => {
         return raw ? formatYmd(raw, fmt) : ''
       }
       if (key === 'amount' && typeof value === 'number') {
-        // Round to decimal precision first (fixes variance for 3,4,5 decimals)
-        const rounded = roundToDecimalPlaces(value, decimalPrecision)
-        return rounded.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
+        return value.toLocaleString(undefined, { minimumFractionDigits: decimalPrecision, maximumFractionDigits: decimalPrecision })
       }
       return value ?? ''
     },
-    [fmt, decimalPrecision, roundToDecimalPlaces],
+    [fmt, decimalPrecision],
   )
 
   // CSV escape helper
