@@ -18,16 +18,19 @@ export const useAssetTypeData = () => {
   };
 
   // Helper function to check if asset type has associated symbols
+  // Optimized: only fetches first page since we just need to check for existence
   const checkAssetTypeHasSymbols = async (assetTypeId) => {
     if (!fundId || !assetTypeId) return false;
     
     try {
       console.log('🔍 Checking symbols for asset type:', assetTypeId, 'in fund:', fundId);
-      const res = await getSymbolsByFundId(fundId);
-      const symbols = Array.isArray(res?.data) ? res.data : [];
       
-      console.log('📊 Found symbols:', symbols.length);
-      console.log('📋 Symbols data:', symbols);
+      // Fetch first page only (100 symbols) - if match not found, likely doesn't exist
+      // This avoids fetching all 1000+ symbols just to check existence
+      const res = await getSymbolsByFundId(fundId, { page: 1, limit: 100 });
+      const symbols = Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : [];
+      
+      console.log('📊 Found symbols (first page):', symbols.length);
       
       // Check if any symbol uses this asset type
       const hasSymbols = symbols.some(symbol => {

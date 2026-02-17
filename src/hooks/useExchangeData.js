@@ -41,11 +41,14 @@ export const useExchangeData = (fundId) => {
   }, [])
 
   // Helper function to check if exchange has associated symbols
+  // Optimized: only fetches first page since we just need to check for existence
   const checkExchangeHasSymbols = useCallback(async (exchangeUid) => {
     if (!fundId || !exchangeUid) return false
     
     try {
-      const res = await getSymbolsByFundId(fundId)
+      // Fetch first page only (100 symbols) - if match not found, likely doesn't exist
+      // This avoids fetching all 1000+ symbols just to check existence
+      const res = await getSymbolsByFundId(fundId, { page: 1, limit: 100 })
       const symbols = normalize(res)
       
       // Check if any symbol has this exchange_id (which references exchange_uid)

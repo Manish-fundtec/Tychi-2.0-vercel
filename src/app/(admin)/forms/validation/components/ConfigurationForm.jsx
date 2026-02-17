@@ -1642,13 +1642,65 @@ export const SymbolForm = ({ symbol, onSuccess, onClose }) => {
         // Fetch exchanges filtered by fund_id (same as asset types)
         const exRes = await getExchangesByFundId(decoded.fund_id)
         const atRes = await getAssetTypesActive(decoded.fund_id) // ⬅ only active ones
-        const symbolsRes = await getSymbolsByFundId(decoded.fund_id) // ⬅ fetch existing symbols
+        
+        // Fetch symbols with pagination to avoid middleware performance issues
+        // Use a reasonable page size (100) to balance performance and data loading
+        const PAGE_SIZE = 100
+        let allSymbols = []
+        let currentPage = 1
+        let hasMore = true
+        
+        // Normalize function to handle different response structures
+        const normalize = (res) => {
+          if (!res) return []
+          if (Array.isArray(res.data)) return res.data
+          if (Array.isArray(res.data?.data)) return res.data.data
+          return []
+        }
+        
+        while (hasMore) {
+          try {
+            const symbolsRes = await getSymbolsByFundId(decoded.fund_id, { page: currentPage, limit: PAGE_SIZE })
+            const pageSymbols = normalize(symbolsRes)
+            
+            // Check if backend returns pagination metadata
+            const totalCount = symbolsRes?.data?.total || symbolsRes?.data?.totalCount || symbolsRes?.data?.pagination?.total
+            
+            allSymbols = [...allSymbols, ...pageSymbols]
+            
+            // Determine if there are more pages
+            if (totalCount !== undefined) {
+              // Backend provides total count - use it to determine if more pages exist
+              hasMore = allSymbols.length < totalCount
+            } else {
+              // No pagination metadata - check if we got a full page
+              hasMore = pageSymbols.length === PAGE_SIZE
+            }
+            
+            currentPage++
+            
+            // Safety limit: prevent infinite loops (1000 pages = 100,000 symbols max)
+            // This is a very high limit to handle large datasets
+            if (currentPage > 1000) {
+              console.warn('Reached maximum page limit (1000) while fetching symbols. Some symbols may not be loaded.')
+              break
+            }
+          } catch (pageError) {
+            // If pagination is not supported, fall back to fetching all at once
+            if (currentPage === 1 && (pageError.response?.status === 400 || pageError.response?.status === 404)) {
+              console.warn('Pagination not supported, falling back to fetching all symbols')
+              const symbolsRes = await getSymbolsByFundId(decoded.fund_id)
+              allSymbols = normalize(symbolsRes)
+            } else {
+              throw pageError
+            }
+            hasMore = false
+          }
+        }
 
         setExchanges(exRes.data || [])
         setAssetTypes(atRes.data || [])
-        // Handle different response structures
-        const symbolsData = symbolsRes?.data || symbolsRes || []
-        setExistingSymbols(Array.isArray(symbolsData) ? symbolsData : [])
+        setExistingSymbols(allSymbols)
       } catch (err) {
         console.error('❌ Dropdown Fetch Error:', err)
       }
