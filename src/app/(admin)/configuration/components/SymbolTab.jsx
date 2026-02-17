@@ -18,6 +18,7 @@ import {
   Alert,
   Tabs,
   Tab, // NEW: Tabs/Tab
+  Spinner,
 } from 'react-bootstrap'
 import { symbolColDefs } from '@/assets/tychiData/columnDefs'
 import api from '@/lib/api/axios' // NEW: for history fetch
@@ -32,7 +33,7 @@ const normalizeStatusText = (value) => String(value || '')
 
 const SymbolTab = () => {
   const { fund_id } = useDashboardToken() || {}
-  const { symbols, refetchSymbols, editingSymbol, setEditingSymbol, showModal, setShowModal, handleEdit, handleDelete } = useSymbolData(fund_id)
+  const { symbols, loading, refetchSymbols, editingSymbol, setEditingSymbol, showModal, setShowModal, handleEdit, handleDelete } = useSymbolData(fund_id)
 
   // NEW: local state for "Symbol Loader History"
   const [history, setHistory] = useState([])
@@ -399,7 +400,29 @@ const SymbolTab = () => {
                     Selected: {selectedCount} / {symbols.length}
                   </span>
                 </div>
-                <div style={{ height: '100%', width: '100%' }}>
+                <div style={{ height: '100%', width: '100%', position: 'relative' }}>
+                  {loading && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        gap: '12px',
+                      }}>
+                      <Spinner animation="border" variant="primary" />
+                      <div style={{ fontSize: '14px', color: '#666', fontWeight: 500 }}>
+                        Loading symbols...
+                      </div>
+                    </div>
+                  )}
                   <AgGridReact
                     onGridReady={onGridReady}
                     onSelectionChanged={onSelectionChanged}
