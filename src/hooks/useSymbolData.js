@@ -2,77 +2,82 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { getSymbols, getSymbolsByFundId, deleteSymbol } from '@/lib/api/symbol'
 import api from '@/lib/api/axios'
 
-const normalize = (res) => {
-  // Works whether backend returns `{ success, data: [...] }` or just `[ ... ]`
-  if (!res) return []
-  if (Array.isArray(res.data)) return res.data
-  if (Array.isArray(res.data?.data)) return res.data.data
-  return []
-}
-
 export const useSymbolData = (fundId) => {
-  const [symbols, setSymbols] = useState([])
   const [editingSymbol, setEditingSymbol] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
-  const fetchingRef = useRef(false) // Prevent duplicate calls
-  const lastFundIdRef = useRef(null) // Track fundId to reset fetch state
+  const [totalRecords, setTotalRecords] = useState(0)
+  const gridApiRef = useRef(null)
 
-  const refetchSymbols = useCallback(async () => {
-    if (!fundId) {
-      // no fundId = no call (prevents /symbols)
-      setSymbols([])
-      fetchingRef.current = false
-      lastFundIdRef.current = null
-      return
-    }
-    
-    // Prevent duplicate calls if already fetching for the same fundId
-    if (fetchingRef.current && lastFundIdRef.current === fundId) {
-      console.log('[useSymbolData] Skipping duplicate fetch for fundId:', fundId)
-      return
-    }
-    
-    fetchingRef.current = true
-    lastFundIdRef.current = fundId
-    
-    try {
-      setLoading(true)
-      const data = await getSymbolsByFundId(fundId)
-      // Handle both array and object responses (like bank/exchange)
-      const allSymbols = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
-      setSymbols(allSymbols)
-    } catch (err) {
-      console.error('Failed to fetch symbols by fund:', err)
-      setSymbols([])
-    } finally {
-      setLoading(false)
-      fetchingRef.current = false
+  // Create datasource for infinite row model
+  const createDatasource = useCallback((pageSize = 10) => {
+    return {
+      getRows: async (params) => {
+        if (!fundId) {
+          params.successCallback([], 0)
+          return
+        }
+
+        try {
+          setLoading(true)
+          
+          // Calculate page number from startRow
+          const page = Math.floor(params.startRow / pageSize) + 1
+          
+          console.log('[useSymbolData] Fetching page:', page, 'limit:', pageSize, 'startRow:', params.startRow)
+          
+          const response = await getSymbolsByFundId(fundId, page, pageSize)
+          
+          // Handle different response structures
+          let rows = []
+          let total = 0
+          
+          if (Array.isArray(response)) {
+            // Direct array response (fallback)
+            rows = response
+            total = response.length
+          } else if (response?.data && Array.isArray(response.data)) {
+            // Standard paginated response: { data: [], total: number, page: number, limit: number }
+            rows = response.data
+            total = response.total || response.count || response.totalRecords || 0
+          } else if (response?.rows && Array.isArray(response.rows)) {
+            // Alternative structure: { rows: [], total: number }
+            rows = response.rows
+            total = response.total || response.count || response.totalRecords || 0
+          }
+          
+          setTotalRecords(total)
+          
+          // Check if we've reached the end
+          const lastRow = total > 0 ? total : null
+          
+          console.log('[useSymbolData] ✅ Fetched', rows.length, 'rows, total:', total, 'lastRow:', lastRow)
+          
+          // Call success callback with rows and lastRow
+          params.successCallback(rows, lastRow)
+        } catch (err) {
+          console.error('[useSymbolData] Failed to fetch symbols:', err)
+          params.failCallback()
+          setTotalRecords(0)
+        } finally {
+          setLoading(false)
+        }
+      }
     }
   }, [fundId])
 
-  useEffect(() => {
-    // Only fetch when fundId exists
-    if (!fundId) {
-      setSymbols([])
-      fetchingRef.current = false
-      lastFundIdRef.current = null
-      return
+  // Refresh grid data (for after create/update/delete)
+  const refreshGrid = useCallback(() => {
+    if (gridApiRef.current) {
+      // Refresh infinite cache
+      gridApiRef.current.refreshInfiniteCache()
     }
-    
-    // Prevent duplicate calls - only fetch if fundId changed
-    if (lastFundIdRef.current === fundId && fetchingRef.current) {
-      return
-    }
-    
-    // Reset fetch state if fundId changed
-    if (lastFundIdRef.current !== fundId) {
-      fetchingRef.current = false
-    }
-    
-    refetchSymbols()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fundId, refetchSymbols])
+  }, [])
+
+  // Refetch symbols (for compatibility with existing code)
+  const refetchSymbols = useCallback(async () => {
+    refreshGrid()
+  }, [refreshGrid])
 
   // Helper function to check if symbol has associated trades
   const checkSymbolHasTrades = async (symbolId) => {
@@ -134,7 +139,7 @@ export const useSymbolData = (fundId) => {
       }
 
       await deleteSymbol(id)
-      await refetchSymbols()
+      refreshGrid()
       window.alert('Symbol deleted successfully.')
     } catch (err) {
       console.error('Delete symbol failed:', err)
@@ -148,8 +153,10 @@ export const useSymbolData = (fundId) => {
   }
 
   return {
-    symbols,
     loading,
+    totalRecords,
+    createDatasource,
+    refreshGrid,
     refetchSymbols,
     handleEdit,
     handleDelete,
@@ -157,5 +164,6 @@ export const useSymbolData = (fundId) => {
     setShowModal,
     editingSymbol,
     setEditingSymbol,
+    gridApiRef,
   }
 }

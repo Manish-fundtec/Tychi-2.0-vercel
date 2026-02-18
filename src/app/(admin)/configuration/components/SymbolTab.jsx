@@ -33,7 +33,20 @@ const normalizeStatusText = (value) => String(value || '')
 
 const SymbolTab = () => {
   const { fund_id } = useDashboardToken() || {}
-  const { symbols, loading, refetchSymbols, editingSymbol, setEditingSymbol, showModal, setShowModal, handleEdit, handleDelete } = useSymbolData(fund_id)
+  const { 
+    loading, 
+    totalRecords,
+    createDatasource, 
+    refreshGrid,
+    refetchSymbols, 
+    editingSymbol, 
+    setEditingSymbol, 
+    showModal, 
+    setShowModal, 
+    handleEdit, 
+    handleDelete,
+    gridApiRef: hookGridApiRef
+  } = useSymbolData(fund_id)
 
   // NEW: local state for "Symbol Loader History"
   const [history, setHistory] = useState([])
@@ -44,6 +57,7 @@ const SymbolTab = () => {
   // Selection state for bulk delete
   const [selectedRows, setSelectedRows] = useState([])
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
+  const [pageSize, setPageSize] = useState(10)
   const gridApiRef = useRef(null)
   const fetchingHistoryRef = useRef(false) // Prevent duplicate history fetches
   const lastFundIdRef = useRef(null) // Track fund_id to reset fetch state
@@ -244,6 +258,15 @@ const SymbolTab = () => {
     }
   }, [fund_id, announceValidation])
 
+  // Reset grid datasource when fundId or pageSize changes
+  useEffect(() => {
+    if (gridApiRef.current && fund_id) {
+      const datasource = createDatasource(pageSize)
+      gridApiRef.current.setGridOption('datasource', datasource)
+      gridApiRef.current.paginationGoToPage(0) // Reset to first page
+    }
+  }, [fund_id, pageSize, createDatasource])
+
   // Fetch on fund change - only when fund_id exists
   useEffect(() => {
     if (!fund_id) {
@@ -275,7 +298,27 @@ const SymbolTab = () => {
   // Grid selection handlers
   const onGridReady = useCallback((params) => {
     gridApiRef.current = params.api
-  }, [])
+    hookGridApiRef.current = params.api
+    
+    // Set up infinite row model datasource
+    const datasource = createDatasource(pageSize)
+    params.api.setGridOption('datasource', datasource)
+  }, [createDatasource, pageSize, hookGridApiRef])
+
+  // Handle pagination changes (page or page size)
+  const onPaginationChanged = useCallback((params) => {
+    if (!params.api) return
+    
+    const newPageSize = params.api.paginationGetPageSize()
+    // Check if page size changed
+    if (newPageSize !== pageSize) {
+      setPageSize(newPageSize)
+      // Reset to page 1 and refresh datasource with new page size
+      const datasource = createDatasource(newPageSize)
+      params.api.setGridOption('datasource', datasource)
+      params.api.paginationGoToPage(0) // Go to first page (0-indexed)
+    }
+  }, [pageSize, createDatasource])
 
   const updateSelectionState = useCallback(() => {
     if (!gridApiRef.current) return
@@ -288,7 +331,8 @@ const SymbolTab = () => {
 
   const handleSelectAll = useCallback(() => {
     if (!gridApiRef.current) return
-    gridApiRef.current.selectAll()
+    // For infinite row model, select all filtered rows
+    gridApiRef.current.selectAllFiltered()
     updateSelectionState()
   }, [updateSelectionState])
 
@@ -320,7 +364,7 @@ const SymbolTab = () => {
       const response = await bulkDeleteSymbols(symbolIds)
       const responseData = response?.data || {}
       
-      await refetchSymbols()
+      refreshGrid()
       gridApiRef.current?.deselectAll()
       setSelectedRows([])
       
@@ -363,7 +407,7 @@ const SymbolTab = () => {
     } finally {
       setBulkActionLoading(false)
     }
-  }, [selectedRows, refetchSymbols])
+  }, [selectedRows, refreshGrid])
 
   const selectedCount = selectedRows.length
 
@@ -383,7 +427,7 @@ const SymbolTab = () => {
                 symbol={editingSymbol}
                 fundId={fund_id}
                 onSuccess={() => {
-                  refetchSymbols()
+                  refreshGrid()
                   setAnnounceValidation(false)
                   fetchHistory()
                 }}
@@ -397,7 +441,7 @@ const SymbolTab = () => {
                   modalTitle="Upload Symbol"
                   fundId={fund_id}
                   onSuccess={() => {
-                    refetchSymbols()
+                    refreshGrid()
                     setAnnounceValidation(true)
                     fetchHistory({ announce: true })
                   }}
@@ -423,7 +467,7 @@ const SymbolTab = () => {
                   </Alert>
                 )}
                 <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
-                  <Button variant="outline-secondary" size="sm" onClick={handleSelectAll} disabled={!symbols.length}>
+                  <Button variant="outline-secondary" size="sm" onClick={handleSelectAll} disabled={!fund_id || totalRecords === 0}>
                     Select All
                   </Button>
                   <Button variant="outline-secondary" size="sm" onClick={handleClearSelection} disabled={!selectedRows.length}>
@@ -433,44 +477,27 @@ const SymbolTab = () => {
                     {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
                   </Button>
                   <span className="text-muted ms-auto">
-                    Selected: {selectedCount} / {symbols.length}
+                    Selected: {selectedCount} / {totalRecords}
                   </span>
                 </div>
-                <div style={{ height: '100%', width: '100%', position: 'relative' }}>
-                  {loading && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                        gap: '12px',
-                      }}>
-                      <Spinner animation="border" variant="primary" />
-                      <div style={{ fontSize: '14px', color: '#666', fontWeight: 500 }}>
-                        Loading symbols...
-                      </div>
-                    </div>
-                  )}
+                <div style={{ height: '600px', width: '100%' }}>
                   <AgGridReact
                     onGridReady={onGridReady}
                     onSelectionChanged={onSelectionChanged}
-                    rowData={symbols}
+                    onPaginationChanged={onPaginationChanged}
+                    rowModelType="infinite"
                     columnDefs={symbolColDefs}
                     pagination={true}
-                    paginationPageSize={10}
+                    paginationPageSize={pageSize}
+                    paginationPageSizeSelector={[10, 25, 50, 100]}
                     rowSelection="multiple"
                     defaultColDef={{ sortable: true, filter: true, resizable: true }}
-                    domLayout="autoHeight"
+                    cacheBlockSize={pageSize}
+                    maxBlocksInCache={10}
+                    infiniteInitialRowCount={pageSize}
                     context={{ handleEdit, handleDelete }}
                     suppressRowClickSelection={false}
+                    overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">Loading symbols...</span>' : undefined}
                   />
                 </div>
               </CardBody>
