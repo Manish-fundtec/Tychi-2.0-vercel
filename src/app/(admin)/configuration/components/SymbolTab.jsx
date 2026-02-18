@@ -45,6 +45,8 @@ const SymbolTab = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   const gridApiRef = useRef(null)
+  const fetchingHistoryRef = useRef(false) // Prevent duplicate history fetches
+  const lastFundIdRef = useRef(null) // Track fund_id to reset fetch state
 
   // Download error file handler
   const handleDownloadErrorFile = useCallback(async (fileId) => {
@@ -172,8 +174,18 @@ const SymbolTab = () => {
   const fetchHistory = useCallback(async ({ announce = false } = {}) => {
     if (!fund_id) {
       setHistory([])
+      fetchingHistoryRef.current = false
+      lastFundIdRef.current = null
       return
     }
+    
+    // Prevent duplicate calls in the same render cycle
+    if (fetchingHistoryRef.current && lastFundIdRef.current === fund_id) {
+      return
+    }
+    
+    fetchingHistoryRef.current = true
+    lastFundIdRef.current = fund_id
     setLoadingHistory(true)
     setHistoryError('')
     try {
@@ -227,14 +239,27 @@ const SymbolTab = () => {
       setHistory([])
     } finally {
       setLoadingHistory(false)
+      fetchingHistoryRef.current = false
       if (announce || announceValidation) setAnnounceValidation(false)
     }
-  }, [fund_id, announceValidation])
+  }, [fund_id])
 
-  // Fetch on fund change
+  // Fetch on fund change - only when fund_id exists
   useEffect(() => {
+    if (!fund_id) {
+      setHistory([])
+      fetchingHistoryRef.current = false
+      lastFundIdRef.current = null
+      return
+    }
+    
+    // Reset fetch state if fund_id changed
+    if (lastFundIdRef.current !== fund_id) {
+      fetchingHistoryRef.current = false
+    }
+    
     fetchHistory()
-  }, [fetchHistory])
+  }, [fund_id, fetchHistory])
 
   // Grid selection handlers
   const onGridReady = useCallback((params) => {

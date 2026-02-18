@@ -36,10 +36,6 @@ export const useExchangeData = (fundId) => {
     refetchExchanges()
   }, [refetchExchanges])
 
-  useEffect(() => {
-    refetchExchanges()
-  }, [])
-
   // Helper function to check if exchange has associated symbols
   // Optimized: only fetches first page since we just need to check for existence
   const checkExchangeHasSymbols = useCallback(async (exchangeUid) => {

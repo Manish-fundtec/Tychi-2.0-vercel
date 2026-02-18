@@ -17,51 +17,48 @@ import  ExchangeTab  from './ExchangeTab';
 import  SymbolTab  from './SymbolTab';
 import  AssetTypeTab from './AssetTypeTab';
 import  MappingTab  from './MappingTab';
-import { useDashboardToken } from '@/hooks/useDashboardToken';
 
 // Register all Community features
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-// const token = useDashboardToken();
-
-
+// Use component references instead of JSX to prevent instantiation at module load
+// Components will only be instantiated when the tab is actually rendered
 export const tabContents = [{
   id: '1',
   title: 'Basic',
-  description: <BasicForm />,
+  component: BasicForm, // Component reference, not JSX
   icon: 'bx:home'
 }, {
   id: '2',
   title: 'Brokerage Account',
-  description: <BrokerageTab />,
+  component: BrokerageTab,
   icon: 'bx:user'
 }, {
   id: '3',
   title: 'Bank',
-  description: <BankTab/>,
+  component: BankTab,
   icon: 'bx:user'
 }, {
   id: '4',
   title: 'Exchange',
-  description: <ExchangeTab />,
+  component: ExchangeTab,
   icon: 'bx:user'
 }, {
   id: '5',
   title: 'Asset Type',
-  description: <AssetTypeTab />,
+  component: AssetTypeTab,
   icon: 'bx:user'
 }, {
   id: '6',
   title: 'Symbol',
-  description: <SymbolTab/>,
+  component: SymbolTab,
   icon: 'bx:user'
 },
 {
   id: '7',
   title: 'Mapping',
-  // description: <MappingTab fund_id={token?.fund_id} />,
-  // description: <MappingTab/>,
-  description: "MAPPING_TAB", 
+  component: MappingTab, // Will be handled specially in ConfigurationTab
+  isMappingTab: true,
   icon: 'bx:user'
 }
 

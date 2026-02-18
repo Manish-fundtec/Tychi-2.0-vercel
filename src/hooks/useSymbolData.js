@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { getSymbols, getSymbolsByFundId, deleteSymbol } from '@/lib/api/symbol'
 import api from '@/lib/api/axios'
 
@@ -15,13 +15,26 @@ export const useSymbolData = (fundId) => {
   const [editingSymbol, setEditingSymbol] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
+  const fetchingRef = useRef(false) // Prevent duplicate calls
+  const lastFundIdRef = useRef(null) // Track fundId to reset fetch state
 
   const refetchSymbols = useCallback(async () => {
     if (!fundId) {
       // no fundId = no call (prevents /symbols)
       setSymbols([])
+      fetchingRef.current = false
+      lastFundIdRef.current = null
       return
     }
+    
+    // Prevent duplicate calls if already fetching for the same fundId
+    if (fetchingRef.current && lastFundIdRef.current === fundId) {
+      return
+    }
+    
+    fetchingRef.current = true
+    lastFundIdRef.current = fundId
+    
     try {
       setLoading(true)
       
@@ -79,14 +92,26 @@ export const useSymbolData = (fundId) => {
       setSymbols([])
     } finally {
       setLoading(false)
+      fetchingRef.current = false
     }
   }, [fundId])
 
   useEffect(() => {
-    // If you ONLY want to fetch when fundId exists, uncomment this guard:
-    // if (!fundId) return;
+    // Only fetch when fundId exists
+    if (!fundId) {
+      setSymbols([])
+      fetchingRef.current = false
+      lastFundIdRef.current = null
+      return
+    }
+    
+    // Reset fetch state if fundId changed
+    if (lastFundIdRef.current !== fundId) {
+      fetchingRef.current = false
+    }
+    
     refetchSymbols()
-  }, [refetchSymbols])
+  }, [fundId, refetchSymbols])
 
   // Helper function to check if symbol has associated trades
   const checkSymbolHasTrades = async (symbolId) => {
