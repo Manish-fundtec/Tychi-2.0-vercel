@@ -33,30 +33,7 @@ const normalizeStatusText = (value) => String(value || '')
 
 const SymbolTab = () => {
   const { fund_id } = useDashboardToken() || {}
-  
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  
-  // Use server-side pagination hook
-  const { 
-    symbols, 
-    loading, 
-    totalRecords, 
-    totalPages,
-    refetchSymbols, 
-    fetchSymbols,
-    editingSymbol, 
-    setEditingSymbol, 
-    showModal, 
-    setShowModal, 
-    handleEdit, 
-    handleDelete 
-  } = useSymbolData(fund_id, { 
-    page: currentPage, 
-    pageSize: pageSize, 
-    autoFetch: true 
-  })
+  const { symbols, loading, refetchSymbols, editingSymbol, setEditingSymbol, showModal, setShowModal, handleEdit, handleDelete } = useSymbolData(fund_id)
 
   // NEW: local state for "Symbol Loader History"
   const [history, setHistory] = useState([])
@@ -298,60 +275,7 @@ const SymbolTab = () => {
   // Grid selection handlers
   const onGridReady = useCallback((params) => {
     gridApiRef.current = params.api
-    // Set initial pagination
-    if (params.api) {
-      params.api.paginationGoToPage(currentPage - 1) // AgGrid uses 0-based page index
-      params.api.paginationSetPageSize(pageSize)
-    }
-  }, [currentPage, pageSize])
-  
-  // Update grid pagination when total records change
-  useEffect(() => {
-    if (gridApiRef.current && totalRecords > 0) {
-      // AgGrid client-side pagination needs all data, but we're doing server-side
-      // So we need to update the grid's internal state to reflect the total
-      // This is a workaround - ideally we'd use infinite row model, but this is simpler
-      const gridApi = gridApiRef.current
-      // Force grid to recalculate pagination
-      gridApi.refreshCells()
-    }
-  }, [totalRecords])
-  
-  // Handle pagination changes
-  const onPaginationChanged = useCallback(() => {
-    if (!gridApiRef.current) return
-    
-    const newPage = gridApiRef.current.paginationGetCurrentPage() + 1 // AgGrid uses 0-based, we use 1-based
-    const newPageSize = gridApiRef.current.paginationGetPageSize()
-    
-    // Only update if changed to prevent infinite loops
-    if (newPage !== currentPage || newPageSize !== pageSize) {
-      console.log('[SymbolTab] Pagination changed: page', newPage, 'pageSize', newPageSize)
-      
-      // If page size changed, reset to page 1
-      if (newPageSize !== pageSize) {
-        setPageSize(newPageSize)
-        setCurrentPage(1)
-        // Update grid to page 1
-        gridApiRef.current.paginationGoToPage(0)
-        fetchSymbols(1, newPageSize)
-      } else if (newPage !== currentPage) {
-        setCurrentPage(newPage)
-        fetchSymbols(newPage, newPageSize)
-      }
-    }
-  }, [currentPage, pageSize, fetchSymbols])
-  
-  // Sync grid pagination with our state when data loads
-  useEffect(() => {
-    if (gridApiRef.current && !loading && symbols.length > 0) {
-      const gridPage = gridApiRef.current.paginationGetCurrentPage() + 1
-      if (gridPage !== currentPage) {
-        // Grid is out of sync, update it
-        gridApiRef.current.paginationGoToPage(currentPage - 1)
-      }
-    }
-  }, [currentPage, loading, symbols.length])
+  }, [])
 
   const updateSelectionState = useCallback(() => {
     if (!gridApiRef.current) return
@@ -396,8 +320,7 @@ const SymbolTab = () => {
       const response = await bulkDeleteSymbols(symbolIds)
       const responseData = response?.data || {}
       
-      // Refetch current page after bulk delete
-      await fetchSymbols(currentPage, pageSize)
+      await refetchSymbols()
       gridApiRef.current?.deselectAll()
       setSelectedRows([])
       
@@ -440,7 +363,7 @@ const SymbolTab = () => {
     } finally {
       setBulkActionLoading(false)
     }
-  }, [selectedRows, fetchSymbols, currentPage, pageSize])
+  }, [selectedRows, refetchSymbols])
 
   const selectedCount = selectedRows.length
 
@@ -460,8 +383,7 @@ const SymbolTab = () => {
                 symbol={editingSymbol}
                 fundId={fund_id}
                 onSuccess={() => {
-                  // Refetch current page after symbol add/edit
-                  fetchSymbols(currentPage, pageSize)
+                  refetchSymbols()
                   setAnnounceValidation(false)
                   fetchHistory()
                 }}
@@ -475,8 +397,7 @@ const SymbolTab = () => {
                   modalTitle="Upload Symbol"
                   fundId={fund_id}
                   onSuccess={() => {
-                    // Refetch current page after upload
-                    fetchSymbols(currentPage, pageSize)
+                    refetchSymbols()
                     setAnnounceValidation(true)
                     fetchHistory({ announce: true })
                   }}
@@ -512,12 +433,7 @@ const SymbolTab = () => {
                     {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
                   </Button>
                   <span className="text-muted ms-auto">
-                    Selected: {selectedCount} / {totalRecords || symbols.length}
-                    {totalRecords > 0 && (
-                      <span className="ms-2">
-                        | Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalRecords)} of {totalRecords} (Page {currentPage} of {totalPages})
-                      </span>
-                    )}
+                    Selected: {selectedCount} / {symbols.length}
                   </span>
                 </div>
                 <div style={{ height: '100%', width: '100%', position: 'relative' }}>
@@ -546,21 +462,15 @@ const SymbolTab = () => {
                   <AgGridReact
                     onGridReady={onGridReady}
                     onSelectionChanged={onSelectionChanged}
-                    onPaginationChanged={onPaginationChanged}
                     rowData={symbols}
                     columnDefs={symbolColDefs}
                     pagination={true}
-                    paginationPageSize={pageSize}
-                    paginationPageSizeSelector={[10, 25, 50, 100]}
+                    paginationPageSize={10}
                     rowSelection="multiple"
                     defaultColDef={{ sortable: true, filter: true, resizable: true }}
                     domLayout="autoHeight"
                     context={{ handleEdit, handleDelete }}
                     suppressRowClickSelection={false}
-                    // For server-side pagination, we need to suppress some client-side features
-                    suppressPaginationPanel={false}
-                    paginationAutoPageSize={false}
-                    // Custom pagination info - we'll handle this manually via onPaginationChanged
                   />
                 </div>
               </CardBody>

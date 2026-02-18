@@ -10,152 +10,69 @@ const normalize = (res) => {
   return []
 }
 
-export const useSymbolData = (fundId, options = {}) => {
-  const { page = 1, pageSize = 10, autoFetch = true } = options
-  
+export const useSymbolData = (fundId) => {
   const [symbols, setSymbols] = useState([])
   const [editingSymbol, setEditingSymbol] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [totalRecords, setTotalRecords] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
-  
   const fetchingRef = useRef(false) // Prevent duplicate calls
-  const lastRequestRef = useRef({ fundId: null, page: null, pageSize: null }) // Track last request
-  const abortControllerRef = useRef(null) // For cancelling in-flight requests
-  const requestIdRef = useRef(0) // Unique request ID to track calls
+  const lastFundIdRef = useRef(null) // Track fundId to reset fetch state
 
-  // Server-side pagination: fetch only the current page
-  const fetchSymbols = useCallback(async (requestedPage = page, requestedPageSize = pageSize) => {
+  const refetchSymbols = useCallback(async () => {
     if (!fundId) {
+      // no fundId = no call (prevents /symbols)
       setSymbols([])
-      setTotalRecords(0)
-      setTotalPages(0)
       fetchingRef.current = false
-      lastRequestRef.current = { fundId: null, page: null, pageSize: null }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
+      lastFundIdRef.current = null
       return
     }
     
-    // Check if this is a duplicate request
-    const requestKey = `${fundId}-${requestedPage}-${requestedPageSize}`
-    const lastRequestKey = `${lastRequestRef.current.fundId}-${lastRequestRef.current.page}-${lastRequestRef.current.pageSize}`
-    
-    if (fetchingRef.current && requestKey === lastRequestKey) {
-      console.log('[useSymbolData] Skipping duplicate request:', requestKey)
+    // Prevent duplicate calls if already fetching for the same fundId
+    if (fetchingRef.current && lastFundIdRef.current === fundId) {
+      console.log('[useSymbolData] Skipping duplicate fetch for fundId:', fundId)
       return
     }
     
-    // Cancel any in-flight request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    
-    // Create new abort controller for this request
-    const abortController = new AbortController()
-    abortControllerRef.current = abortController
-    const currentRequestId = ++requestIdRef.current
-    
-    // Mark as fetching
     fetchingRef.current = true
-    lastRequestRef.current = { fundId, page: requestedPage, pageSize: requestedPageSize }
-    
-    console.log('[useSymbolData] Fetching page', requestedPage, 'pageSize', requestedPageSize, 'for fundId:', fundId, 'Request ID:', currentRequestId)
+    lastFundIdRef.current = fundId
     
     try {
       setLoading(true)
-      
-      // Fetch only the current page
-      const res = await getSymbolsByFundId(fundId, { page: requestedPage, limit: requestedPageSize })
-      
-      // Check if request was aborted
-      if (abortController.signal.aborted || requestIdRef.current !== currentRequestId) {
-        console.log('[useSymbolData] Request aborted, ignoring response')
-        return
-      }
-      
-      // Extract data and pagination metadata
-      const totalCount = res?.data?.total || res?.data?.totalCount || 0
-      const currentPageData = res?.data?.data || res?.data?.rows || normalize(res)
-      const limit = res?.data?.limit || res?.data?.pageSize || requestedPageSize
-      const calculatedTotalPages = totalCount > 0 ? Math.ceil(totalCount / limit) : 0
-      
-      // Only update state if this is still the current request
-      if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
-        setSymbols(currentPageData)
-        setTotalRecords(totalCount)
-        setTotalPages(calculatedTotalPages)
-        console.log('[useSymbolData] ✅ Fetched page', requestedPage, 'of', calculatedTotalPages, 'Total records:', totalCount, 'Records in page:', currentPageData.length)
-      }
+      const data = await getSymbolsByFundId(fundId)
+      // Handle both array and object responses (like bank/exchange)
+      const allSymbols = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+      setSymbols(allSymbols)
     } catch (err) {
-      // Don't log error if request was aborted
-      if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
-        console.error('[useSymbolData] Failed to fetch symbols:', err)
-        setSymbols([])
-        setTotalRecords(0)
-        setTotalPages(0)
-      }
+      console.error('Failed to fetch symbols by fund:', err)
+      setSymbols([])
     } finally {
-      // Only reset if this is still the current request
-      if (requestIdRef.current === currentRequestId) {
-        setLoading(false)
-        fetchingRef.current = false
-        if (abortControllerRef.current === abortController) {
-          abortControllerRef.current = null
-        }
-      }
+      setLoading(false)
+      fetchingRef.current = false
     }
-  }, [fundId, page, pageSize])
-  
-  // Legacy refetchSymbols for backward compatibility (refetches current page)
-  const refetchSymbols = useCallback(() => {
-    return fetchSymbols(page, pageSize)
-  }, [fetchSymbols, page, pageSize])
+  }, [fundId])
 
-  // Auto-fetch on mount or when fundId/page/pageSize changes (if autoFetch is enabled)
   useEffect(() => {
-    if (!autoFetch) {
-      return
-    }
-    
     // Only fetch when fundId exists
     if (!fundId) {
       setSymbols([])
-      setTotalRecords(0)
-      setTotalPages(0)
       fetchingRef.current = false
-      lastRequestRef.current = { fundId: null, page: null, pageSize: null }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
+      lastFundIdRef.current = null
       return
     }
     
-    // Check if this is a duplicate request
-    const requestKey = `${fundId}-${page}-${pageSize}`
-    const lastRequestKey = `${lastRequestRef.current.fundId}-${lastRequestRef.current.page}-${lastRequestRef.current.pageSize}`
-    
-    if (requestKey === lastRequestKey && fetchingRef.current) {
-      console.log('[useSymbolData] Already fetching same request, skipping')
+    // Prevent duplicate calls - only fetch if fundId changed
+    if (lastFundIdRef.current === fundId && fetchingRef.current) {
       return
     }
     
-    // Fetch the current page
-    fetchSymbols(page, pageSize)
-    
-    // Cleanup function to cancel request on unmount or dependency change
-    return () => {
-      if (abortControllerRef.current) {
-        console.log('[useSymbolData] Cleanup: aborting request')
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
+    // Reset fetch state if fundId changed
+    if (lastFundIdRef.current !== fundId) {
+      fetchingRef.current = false
     }
-  }, [fundId, page, pageSize, autoFetch, fetchSymbols])
+    
+    refetchSymbols()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fundId, refetchSymbols])
 
   // Helper function to check if symbol has associated trades
   const checkSymbolHasTrades = async (symbolId) => {
@@ -233,10 +150,7 @@ export const useSymbolData = (fundId, options = {}) => {
   return {
     symbols,
     loading,
-    totalRecords,
-    totalPages,
     refetchSymbols,
-    fetchSymbols, // New function for server-side pagination
     handleEdit,
     handleDelete,
     showModal,
