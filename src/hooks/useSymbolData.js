@@ -17,6 +17,7 @@ export const useSymbolData = (fundId) => {
   const [loading, setLoading] = useState(false)
   const fetchingRef = useRef(false) // Prevent duplicate calls
   const lastFundIdRef = useRef(null) // Track fundId to reset fetch state
+  const hasFetchedRef = useRef(false) // Track if we've fetched for current fundId
 
   const refetchSymbols = useCallback(async () => {
     if (!fundId) {
@@ -24,16 +25,21 @@ export const useSymbolData = (fundId) => {
       setSymbols([])
       fetchingRef.current = false
       lastFundIdRef.current = null
+      hasFetchedRef.current = false
       return
     }
     
     // Prevent duplicate calls if already fetching for the same fundId
+    // Check BEFORE setting the ref to avoid race conditions
     if (fetchingRef.current && lastFundIdRef.current === fundId) {
+      console.log('[useSymbolData] Skipping duplicate fetch for fundId:', fundId)
       return
     }
     
+    // Set refs atomically to prevent race conditions
     fetchingRef.current = true
     lastFundIdRef.current = fundId
+    hasFetchedRef.current = true // Mark that we're fetching/fetched
     
     try {
       setLoading(true)
@@ -102,16 +108,34 @@ export const useSymbolData = (fundId) => {
       setSymbols([])
       fetchingRef.current = false
       lastFundIdRef.current = null
+      hasFetchedRef.current = false
       return
     }
     
-    // Reset fetch state if fundId changed
-    if (lastFundIdRef.current !== fundId) {
-      fetchingRef.current = false
+    // Prevent duplicate calls - only fetch if fundId changed
+    if (lastFundIdRef.current === fundId) {
+      // Same fundId - check if we're already fetching
+      if (fetchingRef.current) {
+        console.log('[useSymbolData] Already fetching for fundId:', fundId, '- skipping')
+        return
+      }
+      // Already fetched for this fundId - don't auto-fetch again on re-render
+      // Only fetch when fundId changes or when explicitly called via refetchSymbols()
+      if (hasFetchedRef.current) {
+        console.log('[useSymbolData] Already fetched for fundId:', fundId, '- skipping auto-fetch')
+        return
+      }
     }
     
+    // fundId changed or first time - reset state and fetch
+    console.log('[useSymbolData] Fetching symbols for fundId:', fundId)
+    fetchingRef.current = false // Reset to allow new fetch
+    hasFetchedRef.current = false // Reset fetch flag
+    
+    // Call refetchSymbols
     refetchSymbols()
-  }, [fundId, refetchSymbols])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fundId]) // Only depend on fundId, not refetchSymbols to avoid infinite loops
 
   // Helper function to check if symbol has associated trades
   const checkSymbolHasTrades = async (symbolId) => {

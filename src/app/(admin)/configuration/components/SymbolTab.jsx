@@ -253,13 +253,24 @@ const SymbolTab = () => {
       return
     }
     
+    // Prevent duplicate calls - only fetch if fund_id changed or hasn't been fetched yet
+    if (lastFundIdRef.current === fund_id && fetchingHistoryRef.current) {
+      // Already fetching or fetched for this fund_id, skip
+      return
+    }
+    
     // Reset fetch state if fund_id changed
     if (lastFundIdRef.current !== fund_id) {
       fetchingHistoryRef.current = false
     }
     
+    // Mark that we're about to fetch for this fund_id
+    lastFundIdRef.current = fund_id
+    
+    // Call fetchHistory
     fetchHistory()
-  }, [fund_id, fetchHistory])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fund_id]) // Only depend on fund_id, not fetchHistory to avoid infinite loops
 
   // Grid selection handlers
   const onGridReady = useCallback((params) => {
