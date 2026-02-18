@@ -242,7 +242,7 @@ const SymbolTab = () => {
       fetchingHistoryRef.current = false
       if (announce || announceValidation) setAnnounceValidation(false)
     }
-  }, [fund_id])
+  }, [fund_id, announceValidation])
 
   // Fetch on fund change - only when fund_id exists
   useEffect(() => {

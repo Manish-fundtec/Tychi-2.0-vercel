@@ -54,6 +54,16 @@ export const NavPills = () => {
     fetchAndFilterTabs();
   }, [token, userToken, fundId]);
 
+  // Get default active key from first available tab
+  const defaultActiveKey = filteredTabs.length > 0 ? filteredTabs[0].id : '1';
+
+  // Initialize active tab on mount - MUST be before any early returns
+  useEffect(() => {
+    if (!activeTab && defaultActiveKey) {
+      setActiveTab(defaultActiveKey);
+    }
+  }, [activeTab, defaultActiveKey]);
+
   // If no tabs after filtering, show message
   if (!loading && filteredTabs.length === 0) {
     return (
@@ -62,16 +72,6 @@ export const NavPills = () => {
       </div>
     );
   }
-
-  // Get default active key from first available tab
-  const defaultActiveKey = filteredTabs.length > 0 ? filteredTabs[0].id : '1';
-
-  // Initialize active tab on mount
-  useEffect(() => {
-    if (!activeTab && defaultActiveKey) {
-      setActiveTab(defaultActiveKey);
-    }
-  }, [activeTab, defaultActiveKey]);
 
   // Handle tab change - use controlled component pattern
   const handleTabSelect = (eventKey) => {
