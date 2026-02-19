@@ -58,6 +58,7 @@ const SymbolTab = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   const [pageSize, setPageSize] = useState(10)
+  const [initialLoading, setInitialLoading] = useState(true) // Initial loading state
   const gridApiRef = useRef(null)
   const fetchingHistoryRef = useRef(false) // Prevent duplicate history fetches
   const lastFundIdRef = useRef(null) // Track fund_id to reset fetch state
@@ -258,12 +259,26 @@ const SymbolTab = () => {
     }
   }, [fund_id, announceValidation])
 
+  // Sync initialLoading with loading state from hook
+  useEffect(() => {
+    if (!loading && initialLoading) {
+      // When loading finishes, turn off initialLoading after a small delay
+      const timer = setTimeout(() => {
+        setInitialLoading(false)
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [loading, initialLoading])
+
   // Reset grid datasource when fundId or pageSize changes
   useEffect(() => {
     if (gridApiRef.current && fund_id) {
+      setInitialLoading(true) // Show loading when fund_id changes
       const datasource = createDatasource(pageSize)
       gridApiRef.current.setGridOption('datasource', datasource)
       gridApiRef.current.paginationGoToPage(0) // Reset to first page
+    } else if (!fund_id) {
+      setInitialLoading(false)
     }
   }, [fund_id, pageSize, createDatasource])
 
@@ -303,6 +318,9 @@ const SymbolTab = () => {
     // Set up infinite row model datasource
     const datasource = createDatasource(pageSize)
     params.api.setGridOption('datasource', datasource)
+    
+    // Reset initial loading after grid is ready
+    setInitialLoading(false)
   }, [createDatasource, pageSize, hookGridApiRef])
 
   // Handle pagination changes (page or page size)
@@ -480,7 +498,28 @@ const SymbolTab = () => {
                     Selected: {selectedCount} / {totalRecords}
                   </span>
                 </div>
-                <div style={{ height: '600px', width: '100%' }}>
+                <div style={{ height: '600px', width: '100%', position: 'relative' }}>
+                  {(loading || initialLoading) && (
+                    <div 
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10,
+                        flexDirection: 'column',
+                        gap: '10px'
+                      }}
+                    >
+                      <Spinner animation="border" variant="primary" />
+                      <span className="text-muted">Loading symbols...</span>
+                    </div>
+                  )}
                   <AgGridReact
                     onGridReady={onGridReady}
                     onSelectionChanged={onSelectionChanged}
