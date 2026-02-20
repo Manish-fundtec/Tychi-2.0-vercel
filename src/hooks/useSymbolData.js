@@ -14,7 +14,6 @@ export const useSymbolData = (fundId) => {
     return {
       getRows: async (params) => {
         if (!fundId) {
-          setTotalRecords(0)
           params.successCallback([], 0)
           return
         }
@@ -41,25 +40,16 @@ export const useSymbolData = (fundId) => {
             // Standard paginated response: { data: [], total: number, page: number, limit: number }
             rows = response.data
             total = response.total || response.count || response.totalRecords || 0
-            // Ensure total matches actual data if data is empty
-            if (rows.length === 0 && total > 0) {
-              total = 0
-            }
           } else if (response?.rows && Array.isArray(response.rows)) {
             // Alternative structure: { rows: [], total: number }
             rows = response.rows
             total = response.total || response.count || response.totalRecords || 0
-            // Ensure total matches actual data if data is empty
-            if (rows.length === 0 && total > 0) {
-              total = 0
-            }
           }
           
           setTotalRecords(total)
           
           // Check if we've reached the end
-          // For empty data, set lastRow to 0 (not null) to prevent showing placeholder rows
-          const lastRow = total > 0 && rows.length > 0 ? total : 0
+          const lastRow = total > 0 ? total : null
           
           console.log('[useSymbolData] ✅ Fetched', rows.length, 'rows, total:', total, 'lastRow:', lastRow)
           
