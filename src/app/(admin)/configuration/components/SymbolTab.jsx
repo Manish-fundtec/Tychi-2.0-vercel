@@ -279,6 +279,10 @@ const SymbolTab = () => {
       gridApiRef.current.paginationGoToPage(0) // Reset to first page
     } else if (!fund_id) {
       setInitialLoading(false)
+      // Clear grid when no fund is selected
+      if (gridApiRef.current) {
+        gridApiRef.current.setGridOption('datasource', null)
+      }
     }
   }, [fund_id, pageSize, createDatasource])
 
@@ -340,40 +344,61 @@ const SymbolTab = () => {
 
   const updateSelectionState = useCallback(() => {
     if (!gridApiRef.current) return
-    setSelectedRows(gridApiRef.current.getSelectedRows())
+    // For infinite row model, get all selected nodes (across all pages)
+    const selectedNodes = gridApiRef.current.getSelectedNodes()
+    const selectedRowsData = selectedNodes.map(node => node.data).filter(Boolean)
+    setSelectedRows(selectedRowsData)
   }, [])
 
   const onSelectionChanged = useCallback(() => {
-    updateSelectionState()
+    // Use setTimeout to ensure selection is fully processed
+    setTimeout(() => {
+      updateSelectionState()
+    }, 0)
   }, [updateSelectionState])
 
   const handleSelectAll = useCallback(() => {
     if (!gridApiRef.current) return
-    // For infinite row model, select all filtered rows
-    gridApiRef.current.selectAllFiltered()
-    updateSelectionState()
+    // For infinite row model, use selectAll() to select all rows across all pages
+    gridApiRef.current.selectAll()
+    // Update selection state after a brief delay to ensure selection is processed
+    setTimeout(() => {
+      updateSelectionState()
+    }, 100)
   }, [updateSelectionState])
 
   const handleClearSelection = useCallback(() => {
     if (!gridApiRef.current) return
     gridApiRef.current.deselectAll()
-    updateSelectionState()
+    // Update selection state after a brief delay
+    setTimeout(() => {
+      updateSelectionState()
+    }, 0)
   }, [updateSelectionState])
 
   // Bulk delete handler
   const handleBulkDelete = useCallback(async () => {
-    if (!selectedRows.length) {
+    if (!gridApiRef.current) {
+      alert('Grid not ready.')
+      return
+    }
+
+    // Get all selected rows from the grid (including across all pages)
+    const selectedNodes = gridApiRef.current.getSelectedNodes()
+    const allSelectedRows = selectedNodes.map(node => node.data).filter(Boolean)
+    
+    if (!allSelectedRows.length) {
       alert('No symbols selected for deletion.')
       return
     }
 
-    if (!confirm(`Delete ${selectedRows.length} symbol(s)? This cannot be undone.`)) {
+    if (!confirm(`Delete ${allSelectedRows.length} symbol(s)? This cannot be undone.`)) {
       return
     }
 
     setBulkActionLoading(true)
     try {
-      const symbolIds = selectedRows.map((row) => row.symbol_uid).filter(Boolean)
+      const symbolIds = allSelectedRows.map((row) => row.symbol_uid).filter(Boolean)
       if (!symbolIds.length) {
         alert('No valid symbols to delete.')
         return
@@ -394,7 +419,7 @@ const SymbolTab = () => {
         const deletedCount = responseData.deleted?.length || 0
         
         // Get skipped symbol names for display
-        const skippedNames = selectedRows
+        const skippedNames = allSelectedRows
           .filter((row) => responseData.skipped.includes(row.symbol_uid))
           .map((row) => row.symbol_name || row.symbol_uid)
           .join(', ')
@@ -413,7 +438,10 @@ const SymbolTab = () => {
       // Check if response includes skipped symbols info even in error
       if (error?.response?.data?.skipped && error.response.data.skipped.length > 0) {
         const skippedCount = error.response.data.skipped.length
-        const skippedNames = selectedRows
+        // Get selected rows again in case grid state changed
+        const currentSelectedNodes = gridApiRef.current?.getSelectedNodes() || []
+        const currentSelectedRows = currentSelectedNodes.map(node => node.data).filter(Boolean)
+        const skippedNames = currentSelectedRows
           .filter((row) => error.response.data.skipped.includes(row.symbol_uid))
           .map((row) => row.symbol_name || row.symbol_uid)
           .join(', ')
@@ -425,7 +453,7 @@ const SymbolTab = () => {
     } finally {
       setBulkActionLoading(false)
     }
-  }, [selectedRows, refreshGrid])
+  }, [refreshGrid])
 
   const selectedCount = selectedRows.length
 
@@ -533,10 +561,11 @@ const SymbolTab = () => {
                     defaultColDef={{ sortable: true, filter: true, resizable: true }}
                     cacheBlockSize={pageSize}
                     maxBlocksInCache={10}
-                    infiniteInitialRowCount={pageSize}
+                    infiniteInitialRowCount={totalRecords > 0 ? Math.min(pageSize, totalRecords) : 0}
                     context={{ handleEdit, handleDelete }}
                     suppressRowClickSelection={false}
                     overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">Loading symbols...</span>' : undefined}
+                    overlayNoRowsTemplate={!loading && !initialLoading && totalRecords === 0 ? '<span class="ag-overlay-loading-center">No symbols found</span>' : undefined}
                   />
                 </div>
               </CardBody>
