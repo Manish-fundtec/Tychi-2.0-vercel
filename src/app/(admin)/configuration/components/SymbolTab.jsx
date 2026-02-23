@@ -350,8 +350,12 @@ const SymbolTab = () => {
   const handleSelectAll = useCallback(() => {
     if (!gridApiRef.current) return
     // For infinite row model, select all filtered rows
+    // Note: selectAllFiltered() selects all rows currently loaded in cache
     gridApiRef.current.selectAllFiltered()
-    updateSelectionState()
+    // Use setTimeout to ensure selection state updates after grid processes the selection
+    setTimeout(() => {
+      updateSelectionState()
+    }, 100)
   }, [updateSelectionState])
 
   const handleClearSelection = useCallback(() => {
