@@ -350,8 +350,9 @@ const SymbolTab = () => {
   const handleSelectAll = useCallback(() => {
     if (!gridApiRef.current) return
     // For infinite row model, select all filtered rows
-    // Note: selectAllFiltered() selects all rows currently loaded in cache
-    gridApiRef.current.selectAllFiltered()
+    // Note: selectAll("filtered") selects all rows currently loaded in cache
+    // Updated to use new AG Grid v33+ API (selectAllFiltered() is deprecated)
+    gridApiRef.current.selectAll('filtered')
     // Use setTimeout to ensure selection state updates after grid processes the selection
     setTimeout(() => {
       updateSelectionState()
