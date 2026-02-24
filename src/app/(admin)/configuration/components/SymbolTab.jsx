@@ -349,10 +349,10 @@ const SymbolTab = () => {
 
   const handleSelectAll = useCallback(() => {
     if (!gridApiRef.current) return
-    // For infinite row model, manually select all loaded nodes
-    // This is more reliable than selectAll('filtered') for infinite row model
+    // For infinite row model, use forEachNode (works with all row models)
+    // forEachNodeAfterFilterAndSort only works with clientSide row model
     let selectedCount = 0
-    gridApiRef.current.forEachNodeAfterFilterAndSort((node) => {
+    gridApiRef.current.forEachNode((node) => {
       if (node.data) {
         node.setSelected(true)
         selectedCount++
