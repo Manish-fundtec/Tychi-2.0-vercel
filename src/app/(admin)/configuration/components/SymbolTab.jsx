@@ -24,6 +24,7 @@ import { symbolColDefs } from '@/assets/tychiData/columnDefs'
 import api from '@/lib/api/axios' // NEW: for history fetch
 import Cookies from 'js-cookie'
 import { bulkDeleteSymbols } from '@/lib/api/symbol'
+import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx'
 
 const normalizeStatusText = (value) => String(value || '')
   .replace(/<[^>]+>/g, '')
@@ -440,6 +441,89 @@ const SymbolTab = () => {
 
   const selectedCount = selectedRows.length
 
+  // Export headers for symbols
+  const symbolExportHeaders = useMemo(
+    () => [
+      { key: 'symbol_uid', label: 'Symbol UID' },
+      { key: 'symbol_id', label: 'Symbol ID' },
+      { key: 'symbol_name', label: 'Symbol Name' },
+      { key: 'isin', label: 'ISIN' },
+      { key: 'cusip', label: 'CUSIP' },
+      { key: 'asset_type_name', label: 'Asset Type' },
+      { key: 'exchange_name', label: 'Exchange' },
+      { key: 'contract_size', label: 'Contract Size' },
+    ],
+    [],
+  )
+
+  const formatExportValue = useCallback((key, value) => {
+    if (typeof value === 'number') {
+      return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    }
+    return value ?? ''
+  }, [])
+
+  const escapeCsv = (value) => {
+    const stringValue = String(value ?? '')
+    if (/[",\n]/.test(stringValue)) {
+      return `"${stringValue.replace(/"/g, '""')}"`
+    }
+    return stringValue
+  }
+
+  // Export selected or all loaded rows (for infinite row model)
+  const handleExport = useCallback(
+    (format) => {
+      let rowsToExport = []
+
+      if (selectedRows.length > 0) {
+        // User selected specific rows - export only selected
+        rowsToExport = selectedRows
+      } else {
+        // No selection - export all currently loaded nodes in infinite row model
+        if (gridApiRef.current) {
+          gridApiRef.current.forEachNode((node) => {
+            if (node.data) {
+              rowsToExport.push(node.data)
+            }
+          })
+        }
+      }
+
+      if (!rowsToExport.length) {
+        alert('No symbols to export. Please select rows or ensure data is loaded.')
+        return
+      }
+
+      // Convert to export format using headers and formatter
+      const aoa = buildAoaFromHeaders(symbolExportHeaders, rowsToExport, formatExportValue)
+
+      // Export based on format
+      const exportDate = new Date().toISOString().slice(0, 10)
+      if (format === 'xlsx') {
+        exportAoaToXlsx({
+          fileName: selectedRows.length > 0 ? `symbols-selected-${exportDate}` : `symbols-filtered-${exportDate}`,
+          sheetName: 'Symbols',
+          aoa,
+        })
+        return
+      }
+
+      // Create CSV file and download
+      const csvContent = aoa.map((row) => row.map((cell) => escapeCsv(cell)).join(',')).join('\n')
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = selectedRows.length > 0 ? `symbols-selected-${exportDate}.csv` : `symbols-filtered-${exportDate}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    },
+    [selectedRows, symbolExportHeaders, formatExportValue],
+  )
+
   return (
     <Row>
       <Col xl={12}>
@@ -504,6 +588,12 @@ const SymbolTab = () => {
                   </Button>
                   <Button variant="outline-danger" size="sm" onClick={handleBulkDelete} disabled={!selectedRows.length || bulkActionLoading}>
                     {bulkActionLoading ? 'Deleting…' : `Delete Selected (${selectedCount})`}
+                  </Button>
+                  <Button variant="outline-success" size="sm" onClick={() => handleExport('csv')} disabled={totalRecords === 0 || loading || initialLoading}>
+                    {selectedRows.length > 0 ? `Export Selected CSV (${selectedRows.length})` : 'Export Filtered CSV'}
+                  </Button>
+                  <Button variant="outline-primary" size="sm" onClick={() => handleExport('xlsx')} disabled={totalRecords === 0 || loading || initialLoading}>
+                    {selectedRows.length > 0 ? `Export Selected XLSX (${selectedRows.length})` : 'Export Filtered XLSX'}
                   </Button>
                   <span className="text-muted ms-auto">
                     Selected: {selectedCount} / {totalRecords}
