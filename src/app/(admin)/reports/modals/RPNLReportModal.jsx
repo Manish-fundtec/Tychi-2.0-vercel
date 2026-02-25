@@ -191,7 +191,23 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       exportHeaders.map(({ key }) => escapeCsv(formatExportValue(key, row[key]))).join(','),
     );
 
-    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    // Add totals row
+    const totalsRow = [
+      'Totals',
+      '', // Trade ID
+      '', // Lot ID
+      '', // Open Date
+      '', // Open Price
+      '', // Close Date
+      '', // Close Price
+      escapeCsv(formatExportValue('closingProceeds', totals.closingProceeds)),
+      escapeCsv(formatExportValue('quantity', totals.quantity)),
+      escapeCsv(formatExportValue('longTermRpnl', totals.longTermRpnl)),
+      escapeCsv(formatExportValue('shortTermRpnl', totals.shortTermRpnl)),
+      escapeCsv(formatExportValue('totalRpnl', totals.totalRpnl)),
+    ].join(',');
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows, totalsRow].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
 
@@ -211,6 +227,24 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
     }
 
     const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    
+    // Add totals row
+    const totalsRow = [
+      'Totals',
+      '', // Trade ID
+      '', // Lot ID
+      '', // Open Date
+      '', // Open Price
+      '', // Close Date
+      '', // Close Price
+      formatExportValue('closingProceeds', totals.closingProceeds),
+      formatExportValue('quantity', totals.quantity),
+      formatExportValue('longTermRpnl', totals.longTermRpnl),
+      formatExportValue('shortTermRpnl', totals.shortTermRpnl),
+      formatExportValue('totalRpnl', totals.totalRpnl),
+    ];
+    aoa.push(totalsRow);
+    
     exportAoaToXlsx({
       fileName: `realized-pnl-${fundId}-${new Date().toISOString().slice(0, 10)}`,
       sheetName: 'RPNL',

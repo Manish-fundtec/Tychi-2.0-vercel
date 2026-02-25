@@ -127,7 +127,17 @@ export default function SalesPurchaseModal({
         .join(','),
     );
 
-    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    // Add totals row
+    const totalsRow = [
+      'TOTAL',
+      '', // Symbol
+      escapeCsv(formatExportValue('open_long', totals.open_long)),
+      escapeCsv(formatExportValue('close_long', totals.close_long)),
+      escapeCsv(formatExportValue('open_short', totals.open_short)),
+      escapeCsv(formatExportValue('close_short', totals.close_short)),
+    ].join(',');
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows, totalsRow].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -147,6 +157,18 @@ export default function SalesPurchaseModal({
     }
 
     const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    
+    // Add totals row
+    const totalsRow = [
+      'TOTAL',
+      '', // Symbol
+      formatExportValue('open_long', totals.open_long),
+      formatExportValue('close_long', totals.close_long),
+      formatExportValue('open_short', totals.open_short),
+      formatExportValue('close_short', totals.close_short),
+    ];
+    aoa.push(totalsRow);
+    
     exportAoaToXlsx({
       fileName: `sales-purchase-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
       sheetName: 'Sales & Purchase',

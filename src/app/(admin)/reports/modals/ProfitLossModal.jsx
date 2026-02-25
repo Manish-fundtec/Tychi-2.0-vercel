@@ -224,7 +224,45 @@ export default function ProfitLossModal({
         .join(','),
     );
 
-    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    // Add totals rows (Income Total, Expense Total, Net Total)
+    const amountColumns = exportHeaders.filter(h => 
+      ['ptd_amount', 'mtd_amount', 'qtd_amount', 'ytd_amount'].includes(h.key)
+    );
+    
+    const buildTotalsRow = (label) => {
+      const row = [label, '', '']; // Category, GL Number, GL Name
+      amountColumns.forEach((col) => {
+        const key = col.key;
+        let value = 0;
+        if (key === 'ptd_amount') {
+          if (label === 'Income Total') value = incPTD;
+          else if (label === 'Expense Total') value = expPTD;
+          else if (label === 'Net Total') value = netPTD;
+        } else if (key === 'mtd_amount') {
+          if (label === 'Income Total') value = incMTD;
+          else if (label === 'Expense Total') value = expMTD;
+          else if (label === 'Net Total') value = netMTD;
+        } else if (key === 'qtd_amount') {
+          if (label === 'Income Total') value = incQTD;
+          else if (label === 'Expense Total') value = expQTD;
+          else if (label === 'Net Total') value = netQTD;
+        } else if (key === 'ytd_amount') {
+          if (label === 'Income Total') value = incYTD;
+          else if (label === 'Expense Total') value = expYTD;
+          else if (label === 'Net Total') value = netYTD;
+        }
+        row.push(escapeCsv(formatExportValue(key, value)));
+      });
+      return row.join(',');
+    };
+
+    const totalsRows = [
+      buildTotalsRow('Income Total'),
+      buildTotalsRow('Expense Total'),
+      buildTotalsRow('Net Total'),
+    ];
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows, ...totalsRows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -243,6 +281,43 @@ export default function ProfitLossModal({
       return;
     }
     const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    
+    // Add totals rows (Income Total, Expense Total, Net Total)
+    const amountColumns = exportHeaders.filter(h => 
+      ['ptd_amount', 'mtd_amount', 'qtd_amount', 'ytd_amount'].includes(h.key)
+    );
+    
+    const buildTotalsRow = (label) => {
+      const row = [label, '', '']; // Category, GL Number, GL Name
+      amountColumns.forEach((col) => {
+        const key = col.key;
+        let value = 0;
+        if (key === 'ptd_amount') {
+          if (label === 'Income Total') value = incPTD;
+          else if (label === 'Expense Total') value = expPTD;
+          else if (label === 'Net Total') value = netPTD;
+        } else if (key === 'mtd_amount') {
+          if (label === 'Income Total') value = incMTD;
+          else if (label === 'Expense Total') value = expMTD;
+          else if (label === 'Net Total') value = netMTD;
+        } else if (key === 'qtd_amount') {
+          if (label === 'Income Total') value = incQTD;
+          else if (label === 'Expense Total') value = expQTD;
+          else if (label === 'Net Total') value = netQTD;
+        } else if (key === 'ytd_amount') {
+          if (label === 'Income Total') value = incYTD;
+          else if (label === 'Expense Total') value = expYTD;
+          else if (label === 'Net Total') value = netYTD;
+        }
+        row.push(formatExportValue(key, value));
+      });
+      return row;
+    };
+
+    aoa.push(buildTotalsRow('Income Total'));
+    aoa.push(buildTotalsRow('Expense Total'));
+    aoa.push(buildTotalsRow('Net Total'));
+    
     exportAoaToXlsx({
       fileName: `profit-loss-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
       sheetName: 'P&L',

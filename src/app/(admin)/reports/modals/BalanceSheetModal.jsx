@@ -151,7 +151,15 @@ export default function BalanceSheetModal({
         .join(','),
     );
 
-    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    // Add totals rows
+    const totalsRows = [
+      ['Assets Total', '', '', escapeCsv(formatExportValue('amount', totA))].join(','),
+      ['Liabilities Total', '', '', escapeCsv(formatExportValue('amount', totL))].join(','),
+      ['Equity Total', '', '', escapeCsv(formatExportValue('amount', totE))].join(','),
+      ['Total Liabilities & Equity', '', '', escapeCsv(formatExportValue('amount', totalLiabilitiesAndEquity))].join(','),
+    ];
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows, ...totalsRows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -169,6 +177,13 @@ export default function BalanceSheetModal({
       return;
     }
     const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    
+    // Add totals rows
+    aoa.push(['Assets Total', '', '', formatExportValue('amount', totA)]);
+    aoa.push(['Liabilities Total', '', '', formatExportValue('amount', totL)]);
+    aoa.push(['Equity Total', '', '', formatExportValue('amount', totE)]);
+    aoa.push(['Total Liabilities & Equity', '', '', formatExportValue('amount', totalLiabilitiesAndEquity)]);
+    
     exportAoaToXlsx({
       fileName: `balance-sheet-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
       sheetName: 'Balance Sheet',

@@ -198,7 +198,33 @@ export default function LotSummaryModal({
         .join(','),
     );
 
-    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    // Calculate totals - use grand if available, otherwise calculate from rows
+    let totals;
+    if (grand && (grand.balance_quantity !== undefined || grand.amount !== undefined || grand.market_value !== undefined || grand.upnl !== undefined)) {
+      totals = grand;
+    } else {
+      // Fallback: calculate totals from rows if grand is not available
+      totals = rows.reduce((acc, row) => ({
+        balance_quantity: acc.balance_quantity + Number(row.balance_quantity || 0),
+        amount: acc.amount + Number(row.amount || 0),
+        market_value: acc.market_value + Number(row.market_value || 0),
+        upnl: acc.upnl + Number(row.upnl || 0),
+      }), { balance_quantity: 0, amount: 0, market_value: 0, upnl: 0 });
+    }
+
+    // Add totals row
+    const totalsRow = [
+      'TOTAL',
+      '', // Lot ID
+      escapeCsv(formatValue('balance_quantity', totals.balance_quantity || 0)),
+      '', // Cost/Unit
+      escapeCsv(formatValue('amount', totals.amount || 0)),
+      '', // Market Price
+      escapeCsv(formatValue('market_value', totals.market_value || 0)),
+      escapeCsv(formatValue('upnl', totals.upnl || 0)),
+    ].join(',');
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows, totalsRow].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -218,6 +244,34 @@ export default function LotSummaryModal({
     }
 
     const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    
+    // Calculate totals - use grand if available, otherwise calculate from rows
+    let totals;
+    if (grand && (grand.balance_quantity !== undefined || grand.amount !== undefined || grand.market_value !== undefined || grand.upnl !== undefined)) {
+      totals = grand;
+    } else {
+      // Fallback: calculate totals from rows if grand is not available
+      totals = rows.reduce((acc, row) => ({
+        balance_quantity: acc.balance_quantity + Number(row.balance_quantity || 0),
+        amount: acc.amount + Number(row.amount || 0),
+        market_value: acc.market_value + Number(row.market_value || 0),
+        upnl: acc.upnl + Number(row.upnl || 0),
+      }), { balance_quantity: 0, amount: 0, market_value: 0, upnl: 0 });
+    }
+    
+    // Add totals row
+    const totalsRow = [
+      'TOTAL',
+      '', // Lot ID
+      formatExportValue('balance_quantity', totals.balance_quantity || 0),
+      '', // Cost/Unit
+      formatExportValue('amount', totals.amount || 0),
+      '', // Market Price
+      formatExportValue('market_value', totals.market_value || 0),
+      formatExportValue('upnl', totals.upnl || 0),
+    ];
+    aoa.push(totalsRow);
+
     exportAoaToXlsx({
       fileName: `lot-summary-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
       sheetName: 'Lot Summary',
