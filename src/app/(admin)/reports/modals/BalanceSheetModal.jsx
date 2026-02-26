@@ -7,6 +7,7 @@ import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 import { useDashboardToken } from '@/hooks/useDashboardToken';
 import { getFundDetails } from '@/lib/api/fund';
+import currencies from 'currency-formatter/currencies';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -73,6 +74,14 @@ export default function BalanceSheetModal({
       maximumFractionDigits: decimalPrecision 
     });
   }, [decimalPrecision]);
+
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || '';
+    if (!reportingCurrency) return '';
+    const currency = currencies.find((c) => c.code === reportingCurrency);
+    return currency?.symbol || '';
+  }, [dashboard]);
   const exportHeaders = useMemo(
     () => [
       { key: 'category', label: 'Category' },
@@ -231,7 +240,7 @@ const {
         <tr key={`${title}-${idx}`}>
           <td style={{ width: 120 }}>{r.gl_code || r.glNumber || r.glnumber}</td>
           <td>{r.gl_name || r.glName}</td>
-          <td className="text-end">{fmt(r.amount)}</td>
+          <td className="text-end">{currencySymbol}{fmt(r.amount)}</td>
         </tr>
       ))}
     </>
@@ -268,26 +277,26 @@ const {
                 {renderSection('ASSETS', assets)}
                 <tr className="fw-semibold">
                   <td colSpan={2}>Total Assets</td>
-                  <td className="text-end">{fmt(totA)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totA)}</td>
                 </tr>
 
                 {/* LIABILITIES */}
                 {renderSection('LIABILITIES', liabilities)}
                 <tr className="fw-semibold">
                   <td colSpan={2}>Total Liabilities</td>
-                  <td className="text-end">{fmt(totL)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totL)}</td>
                 </tr>
 
                 {/* EQUITY */}
                 {renderSection('EQUITY', equity)}
                 <tr className="fw-semibold">
                   <td colSpan={2}>Total Equity</td>
-                  <td className="text-end">{fmt(totE)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totE)}</td>
                 </tr>
 
                 <tr className="table-light fw-bold">
                   <td colSpan={2}>Total Liabilities &amp; Equities</td>
-                  <td className="text-end">{fmt(totalLiabilitiesAndEquity)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totalLiabilitiesAndEquity)}</td>
                 </tr>
               </tbody>
             </Table>

@@ -7,6 +7,7 @@ import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 import { useDashboardToken } from '@/hooks/useDashboardToken';
 import { getFundDetails } from '@/lib/api/fund';
+import currencies from 'currency-formatter/currencies';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -68,6 +69,14 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
       maximumFractionDigits: decimalPrecision 
     });
   }, [decimalPrecision]);
+
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || '';
+    if (!reportingCurrency) return '';
+    const currency = currencies.find((c) => c.code === reportingCurrency);
+    return currency?.symbol || '';
+  }, [dashboard]);
   
   // Set default scope based on frequency
   const getDefaultScope = useCallback(() => {
@@ -331,25 +340,25 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
           <Col md={3}>
             <div className="p-3 rounded-3 border bg-light">
               <div className="text-muted small">Opening Balance</div>
-              <div className="fw-bold fs-5">₹ {fmt(opening)}</div>
+              <div className="fw-bold fs-5">{currencySymbol}{fmt(opening)}</div>
             </div>
           </Col>
           <Col md={3}>
             <div className="p-3 rounded-3 border bg-light">
               <div className="text-muted small">Total Debit</div>
-              <div className="fw-bold fs-5 text-success">₹ {fmt(drTotal)}</div>
+              <div className="fw-bold fs-5 text-success">{currencySymbol}{fmt(drTotal)}</div>
             </div>
           </Col>
           <Col md={3}>
             <div className="p-3 rounded-3 border bg-light">
               <div className="text-muted small">Total Credit</div>
-              <div className="fw-bold fs-5 text-danger">₹ {fmt(crTotal)}</div>
+              <div className="fw-bold fs-5 text-danger">{currencySymbol}{fmt(crTotal)}</div>
             </div>
           </Col>
           <Col md={3}>
             <div className="p-3 rounded-3 border bg-light">
               <div className="text-muted small">Closing Balance</div>
-              <div className="fw-bold fs-5">₹ {fmt(closing)}</div>
+              <div className="fw-bold fs-5">{currencySymbol}{fmt(closing)}</div>
             </div>
           </Col>
         </Row>
@@ -371,7 +380,7 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
             <tbody>
               <tr className="fw-semibold">
                 <td colSpan={6}>Opening Balance</td>
-                <td className="text-end">₹ {fmt(opening)}</td>
+                <td className="text-end">{currencySymbol}{fmt(opening)}</td>
               </tr>
 
               {loading && (
@@ -394,9 +403,9 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
                   <td>{r.journalid}</td>
                   <td>{r.accountname}</td>
                   <td style={{ whiteSpace: 'pre-wrap' }}>{r.description}</td>
-                  <td className="text-end">{r.dramount ? `₹ ${fmt(r.dramount)}` : ''}</td>
-                  <td className="text-end">{r.cramount ? `₹ ${fmt(r.cramount)}` : ''}</td>
-                  <td className="text-end">{r.runningbalance != null ? `₹ ${fmt(r.runningbalance)}` : ''}</td>
+                  <td className="text-end">{r.dramount ? `${currencySymbol}${fmt(r.dramount)}` : ''}</td>
+                  <td className="text-end">{r.cramount ? `${currencySymbol}${fmt(r.cramount)}` : ''}</td>
+                  <td className="text-end">{r.runningbalance != null ? `${currencySymbol}${fmt(r.runningbalance)}` : ''}</td>
                 </tr>
               ))}
 
@@ -405,13 +414,13 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
                 <>
                   <tr className="fw-semibold">
                     <td colSpan={4}>Total</td>
-                    <td className="text-end">₹ {fmt(drTotal)}</td>
-                    <td className="text-end">₹ {fmt(crTotal)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(drTotal)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(crTotal)}</td>
                     <td />
                   </tr>
                   <tr className="fw-semibold">
                     <td colSpan={6}>Closing Balance</td>
-                    <td className="text-end">₹ {fmt(closing)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(closing)}</td>
                   </tr>
                 </>
               )}

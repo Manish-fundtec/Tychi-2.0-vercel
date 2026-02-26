@@ -7,6 +7,7 @@ import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 import { useDashboardToken } from '@/hooks/useDashboardToken';
 import { getFundDetails } from '@/lib/api/fund';
+import currencies from 'currency-formatter/currencies';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -69,6 +70,14 @@ export default function ProfitLossModal({
       maximumFractionDigits: decimalPrecision 
     });
   }, [decimalPrecision]);
+
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || '';
+    if (!reportingCurrency) return '';
+    const currency = currencies.find((c) => c.code === reportingCurrency);
+    return currency?.symbol || '';
+  }, [dashboard]);
   
   // Dynamic columns based on reporting frequency
   const exportHeaders = useMemo(() => {
@@ -416,7 +425,7 @@ export default function ProfitLossModal({
             <td style={{ width: 120 }}>{r.gl_code || r.glNumber || r.glnumber}</td>
             <td>{r.gl_name || r.glName}</td>
             {amountColumns.map((col) => (
-              <td key={col.key} className="text-end">{fmt(r[col.key] || 0)}</td>
+              <td key={col.key} className="text-end">{currencySymbol}{fmt(r[col.key] || 0)}</td>
             ))}
           </tr>
         ))}
@@ -473,7 +482,7 @@ export default function ProfitLossModal({
                       else if (key === 'qtd_amount') value = incQTD;
                       else if (key === 'ytd_amount') value = incYTD;
                       return (
-                        <td key={col.key} className="text-end">{fmt(value)}</td>
+                        <td key={col.key} className="text-end">{currencySymbol}{fmt(value)}</td>
                       );
                     })}
                 </tr>
@@ -492,7 +501,7 @@ export default function ProfitLossModal({
                       else if (key === 'qtd_amount') value = expQTD;
                       else if (key === 'ytd_amount') value = expYTD;
                       return (
-                        <td key={col.key} className="text-end">{fmt(value)}</td>
+                        <td key={col.key} className="text-end">{currencySymbol}{fmt(value)}</td>
                       );
                     })}
                 </tr>
@@ -510,7 +519,7 @@ export default function ProfitLossModal({
                       else if (key === 'qtd_amount') value = netQTD;
                       else if (key === 'ytd_amount') value = netYTD;
                       return (
-                        <td key={col.key} className="text-end">{fmt(value)}</td>
+                        <td key={col.key} className="text-end">{currencySymbol}{fmt(value)}</td>
                       );
                     })}
                 </tr>

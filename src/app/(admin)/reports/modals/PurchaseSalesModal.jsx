@@ -7,6 +7,7 @@ import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 import { useDashboardToken } from '@/hooks/useDashboardToken';
 import { getFundDetails } from '@/lib/api/fund';
+import currencies from 'currency-formatter/currencies';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -67,6 +68,14 @@ export default function SalesPurchaseModal({
       maximumFractionDigits: decimalPrecision 
     });
   }, [decimalPrecision]);
+
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || '';
+    if (!reportingCurrency) return '';
+    const currency = currencies.find((c) => c.code === reportingCurrency);
+    return currency?.symbol || '';
+  }, [dashboard]);
   const exportHeaders = useMemo(
     () => [
       { key: 'symbol', label: 'Symbol' },
@@ -217,18 +226,18 @@ export default function SalesPurchaseModal({
                 {rows.map((r, i) => (
                   <tr key={i}>
                     <td style={{ textAlign: 'left' }}>{r.symbol}</td>
-                    <td className="text-end">{fmt(r.open_long)}</td>
-                    <td className="text-end">{fmt(r.close_long)}</td>
-                    <td className="text-end">{fmt(r.open_short)}</td>
-                    <td className="text-end">{fmt(r.close_short)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(r.open_long)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(r.close_long)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(r.open_short)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(r.close_short)}</td>
                   </tr>
                 ))}
                 <tr className="table-light fw-semibold">
                   <td>Total</td>
-                  <td className="text-end">{fmt(totals.open_long)}</td>
-                  <td className="text-end">{fmt(totals.close_long)}</td>
-                  <td className="text-end">{fmt(totals.open_short)}</td>
-                  <td className="text-end">{fmt(totals.close_short)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totals.open_long)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totals.close_long)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totals.open_short)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totals.close_short)}</td>
                 </tr>
               </tbody>
             </Table>

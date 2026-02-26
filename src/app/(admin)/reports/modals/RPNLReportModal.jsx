@@ -7,6 +7,7 @@ import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 import { useDashboardToken } from '@/hooks/useDashboardToken';
 import { getFundDetails } from '@/lib/api/fund';
+import currencies from 'currency-formatter/currencies';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -67,6 +68,14 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
       maximumFractionDigits: decimalPrecision 
     });
   }, [decimalPrecision]);
+
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || '';
+    if (!reportingCurrency) return '';
+    const currency = currencies.find((c) => c.code === reportingCurrency);
+    return currency?.symbol || '';
+  }, [dashboard]);
 
   const exportHeaders = useMemo(
     () => [
@@ -299,24 +308,24 @@ export default function RPNLReportModal({ show, handleClose, fundId, date, orgId
                     <td>{r.tradeId}</td>
                     <td>{r.lotId}</td>
                     <td>{r.openDate}</td>
-                    <td>{fmt(r.openPrice)}</td>
+                    <td>{currencySymbol}{fmt(r.openPrice)}</td>
                     <td>{r.closeDate}</td>
-                    <td>{fmt(r.closePrice)}</td>
-                    <td className="text-end">{fmt(r.closingProceeds)}</td>
+                    <td>{currencySymbol}{fmt(r.closePrice)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(r.closingProceeds)}</td>
                     <td className="text-end">{fmt(r.quantity)}</td>
-                    <td className="text-end">{fmt(r.longTermRpnl)}</td>
-                    <td className="text-end">{fmt(r.shortTermRpnl)}</td>
-                    <td className="text-end">{fmt(r.totalRpnl)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(r.longTermRpnl)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(r.shortTermRpnl)}</td>
+                    <td className="text-end">{currencySymbol}{fmt(r.totalRpnl)}</td>
                   </tr>
                 ))}
 
                 <tr className="table-light fw-semibold">
                   <td colSpan={7}>Totals</td>
-                  <td className="text-end">{fmt(totals.closingProceeds)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totals.closingProceeds)}</td>
                   <td className="text-end">{fmt(totals.quantity)}</td>
-                  <td className="text-end">{fmt(totals.longTermRpnl)}</td>
-                  <td className="text-end">{fmt(totals.shortTermRpnl)}</td>
-                  <td className="text-end">{fmt(totals.totalRpnl)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totals.longTermRpnl)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totals.shortTermRpnl)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(totals.totalRpnl)}</td>
                 </tr>
               </tbody>
             </Table>

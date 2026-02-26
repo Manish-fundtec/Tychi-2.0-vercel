@@ -7,6 +7,7 @@ import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 import { useDashboardToken } from '@/hooks/useDashboardToken';
 import { getFundDetails } from '@/lib/api/fund';
+import currencies from 'currency-formatter/currencies';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -105,6 +106,14 @@ export default function TrialBalanceModalGrouped({
       maximumFractionDigits: decimalPrecision 
     });
   }, [decimalPrecision]);
+
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || '';
+    if (!reportingCurrency) return '';
+    const currency = currencies.find((c) => c.code === reportingCurrency);
+    return currency?.symbol || '';
+  }, [dashboard]);
   const exportHeaders = useMemo(
     () => [
       { key: 'category', label: 'Category' },
@@ -324,20 +333,20 @@ export default function TrialBalanceModalGrouped({
                       <tr key={`${sec.category}-${r.glNumber}-${i}`}>
                         <td>{r.glNumber}</td>
                         <td>{r.glName}</td>
-                        <td className="text-end">{fmt(r.opening)}</td>
-                        <td className="text-end">{fmt(r.debit)}</td>
-                        <td className="text-end">{fmt(r.credit)}</td>
-                        <td className="text-end">{fmt(r.closing)}</td>
+                        <td className="text-end">{currencySymbol}{fmt(r.opening)}</td>
+                        <td className="text-end">{currencySymbol}{fmt(r.debit)}</td>
+                        <td className="text-end">{currencySymbol}{fmt(r.credit)}</td>
+                        <td className="text-end">{currencySymbol}{fmt(r.closing)}</td>
                       </tr>
                     ))}
 
                     {/* Section totals */}
                     <tr className="fw-semibold">
                       <td colSpan={2}>Total {sec.category}</td>
-                      <td className="text-end">{fmt(sec.totals.opening)}</td>
-                      <td className="text-end">{fmt(sec.totals.debit)}</td>
-                      <td className="text-end">{fmt(sec.totals.credit)}</td>
-                      <td className="text-end">{fmt(sec.totals.closing)}</td>
+                      <td className="text-end">{currencySymbol}{fmt(sec.totals.opening)}</td>
+                      <td className="text-end">{currencySymbol}{fmt(sec.totals.debit)}</td>
+                      <td className="text-end">{currencySymbol}{fmt(sec.totals.credit)}</td>
+                      <td className="text-end">{currencySymbol}{fmt(sec.totals.closing)}</td>
                     </tr>
                   </Fragment>
                 ))}
@@ -345,10 +354,10 @@ export default function TrialBalanceModalGrouped({
                 {/* Grand total (all categories) */}
                 <tr className="table-light fw-bold">
                   <td colSpan={2}>TOTAL</td>
-                  <td className="text-end">{fmt(groups.grand.opening)}</td>
-                  <td className="text-end">{fmt(groups.grand.debit)}</td>
-                  <td className="text-end">{fmt(groups.grand.credit)}</td>
-                  <td className="text-end">{fmt(groups.grand.closing)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(groups.grand.opening)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(groups.grand.debit)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(groups.grand.credit)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(groups.grand.closing)}</td>
                 </tr>
               </tbody>
             </Table>

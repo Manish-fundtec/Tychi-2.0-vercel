@@ -7,6 +7,7 @@ import { Eye } from 'lucide-react';
 import { buildAoaFromHeaders, exportAoaToXlsx } from '@/lib/exporters/xlsx';
 import { useDashboardToken } from '@/hooks/useDashboardToken';
 import { getFundDetails } from '@/lib/api/fund';
+import currencies from 'currency-formatter/currencies';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -104,6 +105,14 @@ export default function LotSummaryModal({
       maximumFractionDigits: decimalPrecision 
     });
   }, [decimalPrecision]);
+
+  // Get currency symbol from reporting_currency
+  const currencySymbol = useMemo(() => {
+    const reportingCurrency = dashboard?.reporting_currency || dashboard?.fund?.reporting_currency || '';
+    if (!reportingCurrency) return '';
+    const currency = currencies.find((c) => c.code === reportingCurrency);
+    return currency?.symbol || '';
+  }, [dashboard]);
   const exportHeaders = useMemo(
     () => [
       { key: 'symbol_name', label: 'Symbol' },
@@ -362,21 +371,21 @@ export default function LotSummaryModal({
           <td style={{ minWidth: 120 }}>{sec.symbol_name}</td>
           <td style={{ minWidth: 160 }}>{r.lot_id}</td>
           <td className="text-end">{fmt(r.balance_quantity)}</td>
-          <td className="text-end">{fmt(r.cost_per_unit)}</td>
-          <td className="text-end">{fmt(r.amount)}</td>
-          <td className="text-end">{fmt(r.market_price)}</td>
-          <td className="text-end">{fmt(r.market_value)}</td>
-          <td className="text-end">{fmt(r.upnl)}</td>
+          <td className="text-end">{currencySymbol}{fmt(r.cost_per_unit)}</td>
+          <td className="text-end">{currencySymbol}{fmt(r.amount)}</td>
+          <td className="text-end">{currencySymbol}{fmt(r.market_price)}</td>
+          <td className="text-end">{currencySymbol}{fmt(r.market_value)}</td>
+          <td className="text-end">{currencySymbol}{fmt(r.upnl)}</td>
         </tr>
       ))}
       <tr className="fw-semibold">
         <td colSpan={2}>Total</td>
         <td className="text-end">{fmt(sec.totals.balance_quantity)}</td>
         <td className="text-end">—</td>
-        <td className="text-end">{fmt(sec.totals.amount)}</td>
+        <td className="text-end">{currencySymbol}{fmt(sec.totals.amount)}</td>
         <td className="text-end">—</td>
-        <td className="text-end">{fmt(sec.totals.market_value)}</td>
-        <td className="text-end">{fmt(sec.totals.upnl)}</td>
+        <td className="text-end">{currencySymbol}{fmt(sec.totals.market_value)}</td>
+        <td className="text-end">{currencySymbol}{fmt(sec.totals.upnl)}</td>
       </tr>
     </Fragment>
   );
@@ -419,10 +428,10 @@ export default function LotSummaryModal({
                   <td colSpan={2}>TOTAL</td>
                   <td className="text-end">{fmt(grand.balance_quantity)}</td>
                   <td className="text-end">—</td>
-                  <td className="text-end">{fmt(grand.amount)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(grand.amount)}</td>
                   <td className="text-end">—</td>
-                  <td className="text-end">{fmt(grand.market_value)}</td>
-                  <td className="text-end">{fmt(grand.upnl)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(grand.market_value)}</td>
+                  <td className="text-end">{currencySymbol}{fmt(grand.upnl)}</td>
                 </tr>
 
                 {!sections.length && (
