@@ -243,13 +243,40 @@ export default function TrialBalanceModalGrouped({
     };
 
     const headerRow = exportHeaders.map(({ label }) => escapeCsv(label)).join(',');
-    const dataRows = flatRows.map((row) =>
-      exportHeaders
-        .map(({ key }) => escapeCsv(formatExportValue(key, row[key])))
-        .join(','),
-    );
+    const dataRows = [];
+    
+    // Add rows with section totals
+    for (const sec of groups.sections) {
+      // Add section rows
+      for (const row of sec.rows) {
+        dataRows.push(
+          exportHeaders
+            .map(({ key }) => escapeCsv(formatExportValue(key, { ...row, category: sec.category }[key])))
+            .join(',')
+        );
+      }
+      // Add section total row
+      dataRows.push(
+        exportHeaders
+          .map(({ key }) => {
+            if (key === 'category') return escapeCsv(`Total ${sec.category}`);
+            if (key === 'glNumber' || key === 'glName') return escapeCsv('');
+            return escapeCsv(formatExportValue(key, sec.totals[key]));
+          })
+          .join(',')
+      );
+    }
+    
+    // Add grand total row
+    const grandTotalRow = exportHeaders
+      .map(({ key }) => {
+        if (key === 'category') return escapeCsv('TOTAL');
+        if (key === 'glNumber' || key === 'glName') return escapeCsv('');
+        return escapeCsv(formatExportValue(key, groups.grand[key]));
+      })
+      .join(',');
 
-    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    const csvContent = ['\ufeff' + headerRow, ...dataRows, grandTotalRow].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -269,7 +296,39 @@ export default function TrialBalanceModalGrouped({
       alert('No trial balance rows to export.');
       return;
     }
-    const aoa = buildAoaFromHeaders(exportHeaders, flatRows, formatExportValue);
+    
+    const aoa = [];
+    
+    // Add header row
+    aoa.push(exportHeaders.map(({ label }) => label));
+    
+    // Add rows with section totals
+    for (const sec of groups.sections) {
+      // Add section rows
+      for (const row of sec.rows) {
+        aoa.push(
+          exportHeaders.map(({ key }) => formatExportValue(key, { ...row, category: sec.category }[key]))
+        );
+      }
+      // Add section total row
+      aoa.push(
+        exportHeaders.map(({ key }) => {
+          if (key === 'category') return `Total ${sec.category}`;
+          if (key === 'glNumber' || key === 'glName') return '';
+          return formatExportValue(key, sec.totals[key]);
+        })
+      );
+    }
+    
+    // Add grand total row
+    aoa.push(
+      exportHeaders.map(({ key }) => {
+        if (key === 'category') return 'TOTAL';
+        if (key === 'glNumber' || key === 'glName') return '';
+        return formatExportValue(key, groups.grand[key]);
+      })
+    );
+    
     exportAoaToXlsx({
       fileName: `trial-balance-${scope}-${fundId || 'fund'}-${new Date().toISOString().slice(0, 10)}`,
       sheetName: 'Trial Balance',

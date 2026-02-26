@@ -253,7 +253,29 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
         .join(','),
     );
 
-    const csvContent = ['\ufeff' + headerRow, ...dataRows].join('\n');
+    // Add totals row
+    const totalsRow = exportHeaders
+      .map(({ key }) => {
+        if (key === 'date' || key === 'journalid' || key === 'accountname') return escapeCsv('Total');
+        if (key === 'description') return escapeCsv('');
+        if (key === 'dramount') return escapeCsv(formatExportValue(key, drTotal));
+        if (key === 'cramount') return escapeCsv(formatExportValue(key, crTotal));
+        if (key === 'runningbalance') return escapeCsv('');
+        return escapeCsv('');
+      })
+      .join(',');
+
+    // Add closing balance row
+    const closingRow = exportHeaders
+      .map(({ key }) => {
+        if (key === 'date' || key === 'journalid' || key === 'accountname' || key === 'description') return escapeCsv('Closing Balance');
+        if (key === 'dramount' || key === 'cramount') return escapeCsv('');
+        if (key === 'runningbalance') return escapeCsv(formatExportValue(key, closing));
+        return escapeCsv('');
+      })
+      .join(',');
+
+    const csvContent = ['\ufeff' + headerRow, ...dataRows, totalsRow, closingRow].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -273,6 +295,27 @@ export default function GLReportsModal({ show, handleClose, fundId, date }) {
     }
 
     const aoa = buildAoaFromHeaders(exportHeaders, rows, formatExportValue);
+    
+    // Add totals row
+    const totalsRow = exportHeaders.map(({ key }) => {
+      if (key === 'date' || key === 'journalid' || key === 'accountname') return 'Total';
+      if (key === 'description') return '';
+      if (key === 'dramount') return formatExportValue(key, drTotal);
+      if (key === 'cramount') return formatExportValue(key, crTotal);
+      if (key === 'runningbalance') return '';
+      return '';
+    });
+    aoa.push(totalsRow);
+    
+    // Add closing balance row
+    const closingRow = exportHeaders.map(({ key }) => {
+      if (key === 'date' || key === 'journalid' || key === 'accountname' || key === 'description') return 'Closing Balance';
+      if (key === 'dramount' || key === 'cramount') return '';
+      if (key === 'runningbalance') return formatExportValue(key, closing);
+      return '';
+    });
+    aoa.push(closingRow);
+    
     exportAoaToXlsx({
       fileName: `gl-report-${scope}-${fundId || 'fund'}-${date || new Date().toISOString().slice(0, 10)}`,
       sheetName: 'GL Report',
