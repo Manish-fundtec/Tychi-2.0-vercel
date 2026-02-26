@@ -986,18 +986,7 @@ export const ToggleBetweenModals = ({
   // Manual grid
   const manualCols = useMemo(
     () => [
-      { 
-        headerName: 'Symbol', 
-        field: 'name', 
-        editable: false, 
-        flex: 1, 
-        sortable: true, 
-        filter: true,
-        checkboxSelection: true,
-        headerCheckboxSelection: true,
-        pinned: 'left',
-        width: 200,
-      },
+      { headerName: 'Symbol', field: 'name', editable: false, flex: 1, sortable: true, filter: true },
       {
         headerName: 'Price',
         field: 'price',
@@ -1014,7 +1003,7 @@ export const ToggleBetweenModals = ({
           return Number.isFinite(n) && n >= 0 ? n : p.oldValue // keep old if invalid
         },
 
-        // optional visual cue (shouldn't happen with parser above)
+        // optional visual cue (shouldn’t happen with parser above)
         cellClassRules: { 'bg-light text-danger': (p) => p.value !== '' && Number(p.value) < 0 },
       },
     ],
@@ -2041,8 +2030,6 @@ export const ToggleBetweenModals = ({
               suppressMovableColumns
               singleClickEdit
               stopEditingWhenCellsLoseFocus={true}
-              rowSelection="multiple"
-              suppressRowClickSelection={false}
             />
           </div>
           {!!manualError && <div className="text-danger small mt-2">{manualError}</div>}
