@@ -79,7 +79,7 @@ export default function SalesPurchaseModal({
   );
   const formatExportValue = (key, value) =>
     ['open_long', 'close_long', 'open_short', 'close_short'].includes(String(key))
-      ? `${reportingCurrency}${fmt(value)}`
+      ? fmt(value) // Remove currency symbol from exports
       : value ?? '';
 
   useEffect(() => {
@@ -217,18 +217,18 @@ export default function SalesPurchaseModal({
                 {rows.map((r, i) => (
                   <tr key={i}>
                     <td style={{ textAlign: 'left' }}>{r.symbol}</td>
-                    <td className="text-end">{reportingCurrency}{fmt(r.open_long)}</td>
-                    <td className="text-end">{reportingCurrency}{fmt(r.close_long)}</td>
-                    <td className="text-end">{reportingCurrency}{fmt(r.open_short)}</td>
-                    <td className="text-end">{reportingCurrency}{fmt(r.close_short)}</td>
+                    <td className="text-end">{fmt(r.open_long)}</td>
+                    <td className="text-end">{fmt(r.close_long)}</td>
+                    <td className="text-end">{fmt(r.open_short)}</td>
+                    <td className="text-end">{fmt(r.close_short)}</td>
                   </tr>
                 ))}
                 <tr className="table-light fw-semibold">
                   <td>Total</td>
-                  <td className="text-end">{reportingCurrency}{fmt(totals.open_long)}</td>
-                  <td className="text-end">{reportingCurrency}{fmt(totals.close_long)}</td>
-                  <td className="text-end">{reportingCurrency}{fmt(totals.open_short)}</td>
-                  <td className="text-end">{reportingCurrency}{fmt(totals.close_short)}</td>
+                  <td className="text-end">{fmt(totals.open_long)}</td>
+                  <td className="text-end">{fmt(totals.close_long)}</td>
+                  <td className="text-end">{fmt(totals.open_short)}</td>
+                  <td className="text-end">{fmt(totals.close_short)}</td>
                 </tr>
               </tbody>
             </Table>
